@@ -318,6 +318,9 @@ class AppWindow(QMainWindow):
                 event.ignore()
                 return
         event.accept()
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
 
     def _quit(self) -> None:
         cfg = self._settings_vm.config

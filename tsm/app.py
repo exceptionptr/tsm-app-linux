@@ -28,7 +28,38 @@ from tsm.workers.async_runner import AsyncRunner
 
 logger = logging.getLogger(__name__)
 
+_INSTANCE_KEY = "tsm-app-single-instance"
+
 DATA_DIR = Path.home() / ".local" / "share" / "tsm-app"
+
+
+def _ensure_single_instance(qt_app: QApplication) -> None:
+    """Exit with a message if another instance is already running."""
+    from PySide6.QtNetwork import QLocalServer, QLocalSocket
+    from PySide6.QtWidgets import QMessageBox
+
+    server = QLocalServer(qt_app)  # parent = qt_app keeps it alive for process lifetime
+    if server.listen(_INSTANCE_KEY):
+        return  # We are the first instance
+
+    # listen() failed — check whether the socket is live or stale (crash remnant)
+    sock = QLocalSocket()
+    sock.connectToServer(_INSTANCE_KEY)
+    alive = sock.waitForConnected(500)
+    sock.disconnectFromServer()
+
+    if not alive:
+        # Stale socket from a previous crash — clean it up and claim the lock
+        QLocalServer.removeServer(_INSTANCE_KEY)
+        if server.listen(_INSTANCE_KEY):
+            return
+
+    QMessageBox.information(
+        None,
+        "TSM Already Running",
+        "TSM Desktop App is already running.\nCheck the system tray.",
+    )
+    sys.exit(0)
 DB_PATH = DATA_DIR / "data.db"
 
 
@@ -46,6 +77,8 @@ def create_app(
 
     load_theme(qt_app, "tsm_dark")
     qt_app.setWindowIcon(_make_window_icon())
+
+    _ensure_single_instance(qt_app)
 
     # AsyncRunner must start before any async work
     async_runner = AsyncRunner()
