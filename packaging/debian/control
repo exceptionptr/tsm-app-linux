@@ -1,0 +1,19 @@
+Source: tsm-app
+Section: games
+Priority: optional
+Maintainer: exceptionptr <https://github.com/exceptionptr>
+Build-Depends: debhelper-compat (= 13), python3-all, python3-build, python3-installer, python3-hatchling
+Standards-Version: 4.6.2
+Homepage: https://github.com/exceptionptr/tsm-app-linux
+Rules-Requires-Root: no
+
+Package: tsm-app
+Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends},
+ python3 (>= 3.11),
+ python3-pyside6,
+ python3-aiohttp,
+ python3-keyring
+Description: TradeSkillMaster Desktop App for Linux
+ Downloads auction house data from the TSM API and writes Lua files for
+ the TradeSkillMaster WoW addon running under Wine, Lutris, or Steam.

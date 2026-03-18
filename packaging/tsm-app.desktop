@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=TSM Desktop App
+Comment=TradeSkillMaster auction data downloader for Linux
+Exec=/usr/bin/tsm-app
+Icon=tsm-app
+Terminal=false
+Type=Application
+Categories=Game;Utility;
+StartupWMClass=tsm-app
+Keywords=WoW;TradeSkillMaster;TSM;auction;

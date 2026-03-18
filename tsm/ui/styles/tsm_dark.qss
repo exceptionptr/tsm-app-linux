@@ -1,0 +1,279 @@
+/* TSM Desktop App — dark theme matching original */
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+QMainWindow, QDialog, QWidget {
+    background-color: #1a1a1a;
+    color: #d0d0d0;
+    font-family: "Segoe UI", "Ubuntu", "Noto Sans", sans-serif;
+    font-size: 13px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+QWidget#header {
+    background-color: #1a1a1a;
+    border-bottom: 1px solid #2e2e2e;
+}
+QLabel#welcome-title {
+    color: #00e5ff;
+    font-size: 16px;
+    font-weight: bold;
+}
+QLabel#welcome-sub {
+    color: #00e5ff;
+    font-size: 12px;
+}
+
+/* ── Tab bar (custom button row) ──────────────────────────────────── */
+QWidget#tabbar {
+    background-color: #1e1e1e;
+    border-bottom: 1px solid #2e2e2e;
+}
+QPushButton#tab {
+    background-color: #1e1e1e;
+    color: #aaaaaa;
+    border: none;
+    border-right: 1px solid #2e2e2e;
+    border-radius: 0px;
+    padding: 8px 0px;
+    font-size: 13px;
+    font-weight: normal;
+}
+QPushButton#tab:hover {
+    background-color: #2a2a2a;
+    color: #ffffff;
+}
+QPushButton#tab:checked {
+    background-color: #2a2a2a;
+    color: #ffffff;
+    font-weight: bold;
+    border-bottom: 2px solid #f26522;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+QPushButton {
+    background-color: #f26522;
+    color: #ffffff;
+    border: none;
+    border-radius: 3px;
+    padding: 6px 14px;
+    font-weight: bold;
+}
+QPushButton:hover {
+    background-color: #ff7733;
+}
+QPushButton:pressed {
+    background-color: #cc5511;
+}
+QPushButton:disabled {
+    background-color: #444444;
+    color: #888888;
+}
+QPushButton#twitter {
+    background-color: #1da1f2;
+    color: #ffffff;
+}
+QPushButton#twitter:hover {
+    background-color: #3bbff5;
+}
+QPushButton#secondary {
+    background-color: #2e2e2e;
+    color: #d0d0d0;
+    font-weight: normal;
+}
+QPushButton#secondary:hover {
+    background-color: #3a3a3a;
+}
+QPushButton#secondary:pressed {
+    background-color: #252525;
+}
+
+/* ── Tables ───────────────────────────────────────────────────────── */
+QTableWidget, QTableView {
+    background-color: #1a1a1a;
+    alternate-background-color: #222222;
+    gridline-color: #2e2e2e;
+    border: none;
+    selection-background-color: #f26522;
+    selection-color: #ffffff;
+    outline: none;
+}
+QTableWidget::item, QTableView::item {
+    padding: 4px 8px;
+    border: none;
+}
+QTableWidget::item:selected, QTableView::item:selected {
+    background-color: #f26522;
+    color: #ffffff;
+}
+QHeaderView {
+    background-color: #252525;
+}
+QHeaderView::section {
+    background-color: #252525;
+    color: #d0d0d0;
+    border: none;
+    border-right: 1px solid #2e2e2e;
+    border-bottom: 1px solid #2e2e2e;
+    padding: 5px 8px;
+    font-weight: bold;
+}
+QHeaderView::section:last {
+    border-right: none;
+}
+
+/* ── Footer ───────────────────────────────────────────────────────── */
+QWidget#footer {
+    background-color: #1a1a1a;
+    border-top: 1px solid #2e2e2e;
+}
+
+/* ── Inputs ───────────────────────────────────────────────────────── */
+QLineEdit {
+    background-color: #252525;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 4px 8px;
+}
+QLineEdit:focus {
+    border-color: #f26522;
+}
+QComboBox {
+    background-color: #252525;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 4px 8px;
+    min-width: 120px;
+}
+QComboBox:hover {
+    border-color: #555555;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 20px;
+}
+QComboBox::down-arrow {
+    width: 10px;
+    height: 10px;
+}
+QComboBox QAbstractItemView {
+    background-color: #252525;
+    border: 1px solid #3a3a3a;
+    selection-background-color: #f26522;
+    selection-color: #ffffff;
+    outline: none;
+}
+
+/* ── CheckBox ─────────────────────────────────────────────────────── */
+QCheckBox {
+    spacing: 6px;
+    color: #d0d0d0;
+}
+QCheckBox::indicator {
+    width: 14px;
+    height: 14px;
+    border: 1px solid #555555;
+    border-radius: 2px;
+    background-color: #252525;
+}
+QCheckBox::indicator:checked {
+    background-color: #f26522;
+    border-color: #f26522;
+}
+
+/* ── Scroll bars ──────────────────────────────────────────────────── */
+QScrollBar:vertical {
+    background-color: #1a1a1a;
+    width: 10px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background-color: #3a3a3a;
+    border-radius: 5px;
+    min-height: 20px;
+}
+QScrollBar::handle:vertical:hover {
+    background-color: #555555;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+QScrollBar:horizontal {
+    background-color: #1a1a1a;
+    height: 10px;
+    margin: 0;
+}
+QScrollBar::handle:horizontal {
+    background-color: #3a3a3a;
+    border-radius: 5px;
+    min-width: 20px;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0px;
+}
+
+/* ── Misc labels ──────────────────────────────────────────────────── */
+QLabel#hint {
+    color: #888888;
+    font-size: 11px;
+}
+QLabel#section-title {
+    color: #f26522;
+    font-weight: bold;
+    font-size: 13px;
+}
+QLabel#info {
+    color: #c0c0c0;
+    font-size: 12px;
+}
+
+/* ── Dialog tabs — no QTabWidget used; settings uses custom #tabbar ── */
+
+/* ── Realm data bottom bar ────────────────────────────────────────── */
+QWidget#realm-bottom {
+    background-color: #1a1a1a;
+    border-top: 1px solid #2e2e2e;
+}
+QWidget#realm-bottom QLabel {
+    background-color: transparent;
+}
+
+/* ── Refresh button ───────────────────────────────────────────────── */
+QPushButton#refresh-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+/* ── GroupBox ─────────────────────────────────────────────────────── */
+QGroupBox {
+    border: 1px solid #2e2e2e;
+    border-radius: 3px;
+    margin-top: 8px;
+    padding-top: 6px;
+    color: #aaaaaa;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 8px;
+    padding: 0 4px;
+}
+
+/* ── Status bar ───────────────────────────────────────────────────── */
+QStatusBar {
+    background-color: #1a1a1a;
+    color: #666666;
+    border-top: 1px solid #2e2e2e;
+    font-size: 10px;
+    padding: 2px 10px;
+}
+QStatusBar::item {
+    border: none;
+    background: transparent;
+}
+QStatusBar QLabel {
+    font-size: 10px;
+    color: #666666;
+    background: transparent;
+    padding: 2px 10px;
+}

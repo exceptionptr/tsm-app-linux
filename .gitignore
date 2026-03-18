@@ -1,0 +1,119 @@
+# Python
+tsm/_version.py
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+wheels/
+pip-wheel-metadata/
+.installed.cfg
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-link
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+.env.*
+
+# Distribution / packaging
+*.whl
+*.tar.gz
+*.deb
+*.rpm
+rpmbuild/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+.nox/
+nosetests.xml
+test-results/
+junit.xml
+
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+
+# Linting
+.ruff_cache/
+
+# IDEs & editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-project
+*.sublime-workspace
+.ropeproject/
+
+# AI agent instructions
+CLAUDE.md
+AGENT.md
+AGENTS.md
+.cursorrules
+.cursorignore
+.cursor/
+.aider*
+.continue/
+.copilot/
+copilot-instructions.md
+.github/copilot-instructions.md
+GEMINI.md
+CODEIUM.md
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux desktop
+*.desktop.bak
+Thumbs.db
+
+# Nuitka build output
+*.build/
+*.dist/
+tsm-app.bin
+
+# App runtime data (local only)
+*.db
+*.db-shm
+*.db-wal
+*.toml.bak
+
+# Logs
+*.log
+logs/
+
+# Secrets & credentials (never commit these)
+*.pem
+*.key
+*.p12
+secrets.json

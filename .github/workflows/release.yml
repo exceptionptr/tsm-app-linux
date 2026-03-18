@@ -1,0 +1,190 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  # ── 1. Build Python wheel ─────────────────────────────────────────────────
+  build-wheel:
+    name: Build wheel
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # hatch-vcs needs full tag history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Extract version from tag
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build wheel
+        run: |
+          pip install build hatch-vcs
+          python -m build --wheel
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel
+          path: dist/*.whl
+
+  # ── 2. Build .deb ─────────────────────────────────────────────────────────
+  build-deb:
+    name: Build .deb
+    needs: build-wheel
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.build-wheel.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+
+      - name: Install wheel into staging tree
+        run: |
+          pip install installer
+          python -m installer --destdir=staging dist/*.whl
+
+      - name: Add desktop entry and license
+        run: |
+          install -Dm644 packaging/tsm-app.desktop \
+            staging/usr/share/applications/tsm-app.desktop
+          install -Dm644 LICENSE \
+            staging/usr/share/doc/tsm-app/copyright
+
+      - name: Write DEBIAN/control
+        run: |
+          mkdir -p staging/DEBIAN
+          cat > staging/DEBIAN/control << EOF
+          Package: tsm-app
+          Version: ${VERSION}
+          Architecture: all
+          Maintainer: exceptionptr <https://github.com/exceptionptr>
+          Depends: python3 (>= 3.11), python3-pyside6, python3-aiohttp, python3-keyring
+          Homepage: https://github.com/exceptionptr/tsm-app-linux
+          Description: TradeSkillMaster Desktop App for Linux
+           Downloads auction house data from the TSM API and writes Lua files for
+           the TradeSkillMaster WoW addon running under Wine, Lutris, or Steam.
+          EOF
+
+      - name: Build .deb
+        run: |
+          dpkg-deb --root-owner-group --build staging \
+            "dist/tsm-app_${VERSION}_all.deb"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/*.deb
+
+  # ── 3. Build .rpm ─────────────────────────────────────────────────────────
+  build-rpm:
+    name: Build .rpm
+    needs: build-wheel
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.build-wheel.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel
+          path: dist/
+
+      - name: Install fpm
+        run: |
+          sudo apt-get install -y ruby ruby-dev rpm
+          sudo gem install fpm --no-document
+
+      - name: Install wheel into staging tree
+        run: |
+          pip install installer
+          python -m installer --destdir=staging dist/*.whl
+          install -Dm644 packaging/tsm-app.desktop \
+            staging/usr/share/applications/tsm-app.desktop
+          install -Dm644 LICENSE \
+            staging/usr/share/licenses/tsm-app/LICENSE
+
+      - name: Build .rpm with fpm
+        run: |
+          fpm -s dir -t rpm \
+            --name tsm-app \
+            --version "${VERSION}" \
+            --architecture noarch \
+            --maintainer "exceptionptr" \
+            --url "https://github.com/exceptionptr/tsm-app-linux" \
+            --description "TradeSkillMaster Desktop App for Linux" \
+            --license MIT \
+            --depends "python3 >= 3.11" \
+            --depends python3-pyside6 \
+            --depends python3-aiohttp \
+            --depends python3-keyring \
+            --package "dist/tsm-app-${VERSION}-1.noarch.rpm" \
+            -C staging .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: dist/*.rpm
+
+  # ── 4. Create GitHub Release ──────────────────────────────────────────────
+  github-release:
+    name: GitHub Release
+    needs: [build-wheel, build-deb, build-rpm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: "TSM App ${{ github.ref_name }}"
+          generate_release_notes: true
+          files: |
+            artifacts/wheel/*.whl
+            artifacts/deb/*.deb
+            artifacts/rpm/*.rpm
+
+  # ── 5. Publish to AUR ─────────────────────────────────────────────────────
+  publish-aur:
+    name: Publish to AUR
+    needs: [build-wheel, github-release]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.build-wheel.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update PKGBUILD version
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/PKGBUILD
+          sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/PKGBUILD
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
+        with:
+          pkgname: tsm-app
+          pkgbuild: packaging/PKGBUILD
+          commit_username: exceptionptr
+          commit_email: ${{ secrets.AUR_EMAIL }}
+          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
+          commit_message: "Update to ${{ github.ref_name }}"
+          updpkgsums: true
+          allow_empty_commits: false
