@@ -8,7 +8,7 @@ url="https://github.com/exceptionptr/tsm-app-linux"
 license=('MIT')
 depends=(
     'python>=3.11'
-    'python-pyside6'
+    'pyside6'
     'python-aiohttp'
     'python-pydantic'
     'python-aiosqlite'
