@@ -1,4 +1,4 @@
-"""Settings dialog — matches original TSM settings window."""
+"""Settings dialog: matches original TSM settings window."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ class SettingsDialog(QDialog):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        # Custom tab bar — same style as main window
+        # Custom tab bar, same style as main window
         tabbar = QWidget()
         tabbar.setObjectName("tabbar")
         tabbar.setFixedHeight(36)

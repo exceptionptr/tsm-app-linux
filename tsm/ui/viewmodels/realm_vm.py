@@ -12,7 +12,7 @@ from tsm.workers.bridge import AsyncBridge
 
 logger = logging.getLogger(__name__)
 
-# Data older than this is shown as "Outdated" — 1.5× the normal 60 min refresh interval.
+# Data older than this is shown as "Outdated", 1.5× the normal 60 min refresh interval.
 _STALE_SECONDS = 90 * 60
 
 
@@ -124,6 +124,14 @@ class RealmViewModel(QObject):
     def _on_data_received(self, data: object) -> None:
         # data is AuctionData
         statuses = getattr(data, "realm_statuses", [])
+        if not statuses:
+            # Service returned no realms, WoW install or AppHelper not detected yet.
+            # Keep existing rows visible; reset any "Updating..." labels.
+            for s in self._summaries:
+                if s.auctiondb_status == "Updating...":
+                    s.auctiondb_status = "Up to date"
+            self.data_updated.emit()
+            return
         self._summaries = [
             RealmSummary(
                 display_name=s.display_name,

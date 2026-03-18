@@ -28,7 +28,7 @@ class LoginView(QDialog):
         self._app_vm = app_vm
         self._auth_service = auth_service
         self._setup_ui()
-        self.setWindowTitle("TSM — Login")
+        self.setWindowTitle("TSM - Login")
         self.setMinimumWidth(360)
         self.setModal(True)
 

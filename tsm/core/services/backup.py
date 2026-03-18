@@ -63,7 +63,7 @@ class BackupService:
 
         accounts = self._find_accounts(extra_installs=extra_installs)
         if not accounts:
-            logger.info("BackupService: no TSM accounts found — nothing to back up")
+            logger.info("BackupService: no TSM accounts found, nothing to back up")
             return created
         logger.info("BackupService: found %d account(s): %s", len(accounts), list(accounts.keys()))
 

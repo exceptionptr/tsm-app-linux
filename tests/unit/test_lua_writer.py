@@ -1,4 +1,4 @@
-"""Tests for LuaWriter — verifies the real AppData.lua LoadData() format."""
+"""Tests for LuaWriter: verifies the real AppData.lua LoadData() format."""
 
 from __future__ import annotations
 

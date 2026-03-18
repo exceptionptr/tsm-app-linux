@@ -42,14 +42,14 @@ def _ensure_single_instance(qt_app: QApplication) -> None:
     if server.listen(_INSTANCE_KEY):
         return  # We are the first instance
 
-    # listen() failed — check whether the socket is live or stale (crash remnant)
+    # listen() failed, check whether the socket is live or stale (crash remnant)
     sock = QLocalSocket()
     sock.connectToServer(_INSTANCE_KEY)
     alive = sock.waitForConnected(500)
     sock.disconnectFromServer()
 
     if not alive:
-        # Stale socket from a previous crash — clean it up and claim the lock
+        # Stale socket from a previous crash, clean it up and claim the lock
         QLocalServer.removeServer(_INSTANCE_KEY)
         if server.listen(_INSTANCE_KEY):
             return

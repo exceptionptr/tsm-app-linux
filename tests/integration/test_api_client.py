@@ -9,7 +9,7 @@ from aioresponses import aioresponses
 
 from tsm.api.client import OIDC_URL, TSMApiClient
 
-# Regex helpers — match base URL regardless of dynamic query params (time, token)
+# Regex helpers, match base URL regardless of dynamic query params (time, token)
 RE_AUTH = re.compile(r"http://app-server\.tradeskillmaster\.com/v2/auth.*")
 RE_STATUS = re.compile(r"http://app-server\.tradeskillmaster\.com/v2/status.*")
 RE_CDN = re.compile(r"https://cdn\.tradeskillmaster\.com/data/test\.txt.*")

@@ -67,7 +67,7 @@ class JobScheduler:
                         kwargs={"services": svc},
                     )
                 else:
-                    # Delay first run by the full interval — realm_vm.refresh_all() handles
+                    # Delay first run by the full interval, realm_vm.refresh_all() handles
                     # the startup auction fetch; we just authenticated so no auth refresh needed.
                     await scheduler.add_schedule(
                         job_auction_refresh,
@@ -75,7 +75,7 @@ class JobScheduler:
                         id="auction_refresh",
                         kwargs={"services": svc},
                     )
-                    # Delay first backup check — BackupService has its own period guard but
+                    # Delay first backup check, BackupService has its own period guard but
                     # we don't want a backup attempt on every startup.
                     await scheduler.add_schedule(
                         job_backup,
@@ -89,7 +89,7 @@ class JobScheduler:
                     id="auth_refresh",
                     kwargs={"services": svc},
                 )
-                # Fire immediately — we want WoW install detection and config persistence ASAP.
+                # Fire immediately, we want WoW install detection and config persistence ASAP.
                 await scheduler.add_schedule(
                     job_wow_monitor,
                     IntervalTrigger(minutes=5),

@@ -76,7 +76,7 @@ class AuthService:
             logger.info("Session restored")
             return True
         except Exception:
-            logger.warning("Stored credentials invalid — need to re-login")
+            logger.warning("Stored credentials invalid, need to re-login")
             return False
 
     async def refresh_token(self) -> None:
@@ -100,7 +100,7 @@ class AuthService:
             return
         restored = await self.restore_session()
         if not restored:
-            raise RuntimeError("Not authenticated — please log in")
+            raise RuntimeError("Not authenticated, please log in")
 
     async def logout(self) -> None:
         self._session = None

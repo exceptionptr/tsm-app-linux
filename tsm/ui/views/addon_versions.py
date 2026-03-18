@@ -1,4 +1,4 @@
-"""Addon Versions tab — addon list from API + installed version from TOC files."""
+"""Addon Versions tab: addon list from API + installed version from TOC files."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ class AddonVersionsView(QWidget):
 
         self._table.doubleClicked.connect(self._on_double_click)
 
-        # Bottom bar — fixed height so it matches realm-data and backups bars
+        # Bottom bar, fixed height so it matches realm-data and backups bars
         bottom = QWidget()
         bottom.setObjectName("realm-bottom")
         bottom.setFixedHeight(39)

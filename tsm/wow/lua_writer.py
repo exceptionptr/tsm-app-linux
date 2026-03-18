@@ -6,7 +6,7 @@ Real format from AppData.pyc (decompiled):
 
 - One line per entry.
 - The trailing --<...> comment is parsed back by AppData.__init__ to read timestamps.
-- APP_INFO uses store_raw=True (no [[return ...]]) — it's a raw Lua call.
+- APP_INFO uses store_raw=True (no [[return ...]]), it's a raw Lua call.
 - All other types use [[return data]] wrapping.
 """
 
@@ -153,7 +153,7 @@ class AppDataFile:
 
 def _extract_blob(data_part: str, tag: str, realm: str, store_raw: bool) -> str:
     """Extract the inner data blob from a LoadData() line."""
-    # data_part ends with ) — the closing paren of LoadData(tag, realm, data)
+    # data_part ends with ) - the closing paren of LoadData(tag, realm, data)
     prefix = f'select(2, ...).LoadData("{tag}","{realm}",'
     if not data_part.startswith(prefix):
         return data_part  # can't parse, store as-is
@@ -179,7 +179,7 @@ class LuaWriter:
         # Write APP_INFO
         now = int(time.time())
         app_info = data.app_info or AppInfo(version=APP_VERSION, last_sync=now)
-        # APP_INFO blob — stored as the raw inner blob (without [[return ...]]),
+        # APP_INFO blob, stored as the raw inner blob (without [[return ...]]),
         # AppDataEntry.render() wraps it correctly based on store_raw=False
         app_info_blob = (
             f"{{version={app_info.version},lastSync={app_info.last_sync},"

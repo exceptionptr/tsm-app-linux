@@ -1,4 +1,4 @@
-"""Accounting Export tab — reads WoW SavedVariables for accounting data."""
+"""Accounting Export tab: reads WoW SavedVariables for accounting data."""
 
 from __future__ import annotations
 

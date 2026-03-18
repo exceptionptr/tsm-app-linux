@@ -70,7 +70,7 @@ def main() -> None:
             session = auth_svc.current_session
             if session:
                 window._app_vm.on_login_success(session)
-                window._app_vm.set_status("Connected — loading data...")
+                window._app_vm.set_status("Connected, loading data...")
                 if not window._settings_vm.config.start_minimized:
                     window.show()
                 window._realm_vm.load_snapshot()
