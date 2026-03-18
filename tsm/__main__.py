@@ -3,23 +3,49 @@
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import signal
 import sys
+from pathlib import Path
 
 import structlog
 
+_LOG_DIR = Path.home() / ".local" / "share" / "tsm-app" / "logs"
+_LOG_FILE = _LOG_DIR / "tsm-app.log"
+
 
 def _setup_logging() -> None:
+    _LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+    fmt = logging.Formatter(
+        fmt="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    # Rotating file handler: 5 backups, 1 MB each
+    file_handler = logging.handlers.RotatingFileHandler(
+        _LOG_FILE,
+        maxBytes=1_000_000,
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(fmt)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setFormatter(fmt)
+
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, stderr_handler])
+
     structlog.configure(
         processors=[
             structlog.stdlib.add_log_level,
             structlog.stdlib.add_logger_name,
+            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S", utc=False),
             structlog.dev.ConsoleRenderer(),
         ],
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
     )
-    logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
 
 def main() -> None:
@@ -70,7 +96,7 @@ def main() -> None:
             session = auth_svc.current_session
             if session:
                 window._app_vm.on_login_success(session)
-                window._app_vm.set_status("Connected — loading data...")
+                window._app_vm.set_status("Connected, loading data...")
                 if not window._settings_vm.config.start_minimized:
                     window.show()
                 window._realm_vm.load_snapshot()

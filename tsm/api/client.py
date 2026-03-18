@@ -1,4 +1,4 @@
-"""TSM API aiohttp client — reverse-engineered from AppAPI.pyc.
+"""TSM API aiohttp client: reverse-engineered from AppAPI.pyc.
 
 Authentication flow (from decompiled source):
 1. POST https://id.tradeskillmaster.com/realms/app/protocol/openid-connect/token
@@ -114,7 +114,7 @@ class TSMApiClient:
         sub = self._endpoint_subdomains.get(endpoint)
         if not sub:
             raise RuntimeError(
-                f"Endpoint '{endpoint}' not in endpointSubdomains — not authenticated?"
+                f"Endpoint '{endpoint}' not in endpointSubdomains, not authenticated?"
             )
         return sub
 
@@ -232,7 +232,7 @@ class AuthAPI:
         from urllib.parse import urlencode
 
         session = await self._c._get_session()
-        # Must be sent as application/x-www-form-urlencoded — aiohttp's data=dict
+        # Must be sent as application/x-www-form-urlencoded, aiohttp's data=dict
         # sends multipart/form-data which Keycloak rejects with 401.
         payload = urlencode(
             {

@@ -33,7 +33,7 @@ def _lutris_base_paths() -> list[Path]:
     if not LUTRIS_GAMES_DIR.is_dir():
         return paths
     try:
-        import yaml  # noqa: F401 — checked at runtime
+        import yaml  # noqa: F401 - checked at runtime
     except ImportError:
         logger.debug("PyYAML not installed; skipping Lutris config parsing")
         return paths

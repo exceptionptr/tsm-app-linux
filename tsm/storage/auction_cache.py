@@ -89,7 +89,7 @@ class AuctionCache:
             statuses = [RealmStatus(**item) for item in json.loads(row["statuses_json"])]
             return statuses, int(row["saved_at"])
         except Exception:
-            logger.warning("Failed to deserialise realm snapshot — ignoring")
+            logger.warning("Failed to deserialise realm snapshot, ignoring")
             return [], 0
 
     async def delete_old(self, older_than_seconds: int = 86400 * 7) -> int:

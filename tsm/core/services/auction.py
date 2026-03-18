@@ -2,7 +2,7 @@
 
 Real flow (from MainThread.pyc):
 1. Call status endpoint → returns dict with "realms", "regions", etc.
-2. Get AppData per game version — only show realms if AppHelper is installed.
+2. Get AppData per game version, only show realms if AppHelper is installed.
 3. For each TAG where lastModified > local last_update, raw_download(url).
 4. Write downloaded blob into AppData.lua via AppDataFile.
 
@@ -85,15 +85,15 @@ class AuctionDataService:
 
         # Guard: if no AppHelper installed at all, return early with no realms
         if not any(existing.values()):
-            logger.info("No TSM_AppHelper AppData.lua found — realm list will be empty")
+            logger.info("No TSM_AppHelper AppData.lua found, realm list will be empty")
             return data
 
         for realms_key, regions_key, gv_dir, api_gv, region_transform in _REALM_CONFIGS:
             app_data = existing.get(gv_dir)
             if not app_data:
-                continue  # AppHelper not installed for this game version — skip
+                continue  # AppHelper not installed for this game version, skip
 
-            # Process realms — dynamic key access requires cast (key is a runtime variable)
+            # Process realms, dynamic key access requires cast (key is a runtime variable)
             for realm in cast(list[RealmEntry], result.get(realms_key, [])):
                 name = realm["name"]
                 region = realm.get("region", "")
@@ -124,7 +124,7 @@ class AuctionDataService:
                         else max(info["lastModified"] for info in pending.values())
                     )
 
-            # Process regions — dynamic key access requires cast (key is a runtime variable)
+            # Process regions, dynamic key access requires cast (key is a runtime variable)
             for region_rec in cast(list[RealmEntry], result.get(regions_key, [])):
                 name = region_rec.get("name", "")
                 strings = region_rec.get("appDataStrings", {})
@@ -197,7 +197,7 @@ class AuctionDataService:
             wow_root = Path(install.path).parent  # install.path is the _retail_ dir
             for gv in result:
                 path = wow_root / gv / "Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua"
-                # Use the addon directory as the indicator — AppData.lua may not
+                # Use the addon directory as the indicator, AppData.lua may not
                 # exist yet on first run but AppDataFile handles that gracefully.
                 if path.parent.exists():
                     result[gv] = AppDataFile(path)
@@ -212,7 +212,7 @@ class AuctionDataService:
         """Load last-known realm list from DB for immediate display at startup.
 
         Returns (statuses, saved_at) where saved_at is the unix timestamp of the
-        last successful sync — use this for staleness, not per-realm last_updated.
+        last successful sync, use this for staleness, not per-realm last_updated.
         """
         if self._cache is None:
             return [], 0

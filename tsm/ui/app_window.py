@@ -1,4 +1,4 @@
-"""Main application window — matches original TSM Desktop App layout."""
+"""Main application window: matches original TSM Desktop App layout."""
 
 from __future__ import annotations
 
@@ -63,6 +63,7 @@ class AppWindow(QMainWindow):
         self._api_client = api_client
         self._backup_service = backup_service
         self._realm_tree_cache: dict | None = None
+        self._quitting = False
 
         from tsm import __version__
         self.setWindowTitle(f"TradeSkillMaster Application - v{__version__}")
@@ -299,6 +300,9 @@ class AppWindow(QMainWindow):
             self.activateWindow()
 
     def closeEvent(self, event) -> None:
+        if self._quitting:
+            event.accept()
+            return
         cfg = self._settings_vm.config
         if cfg.minimize_to_tray:
             event.ignore()
@@ -336,7 +340,7 @@ class AppWindow(QMainWindow):
             )
             if reply != QMessageBox.StandardButton.Yes:
                 return
-        cfg.minimize_to_tray = False
+        self._quitting = True
         app = QApplication.instance()
         if app is not None:
             app.quit()
@@ -357,7 +361,7 @@ class AppWindow(QMainWindow):
         self.show()
         self.raise_()
         self.activateWindow()
-        self._app_vm.set_status("Connected — syncing data…")
+        self._app_vm.set_status("Connected, syncing data…")
         self._realm_vm.load_snapshot()
         self._realm_vm.refresh_all()
         self._prefetch_realm_list()

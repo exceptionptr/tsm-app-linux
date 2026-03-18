@@ -1,3 +1,22 @@
+tsm-app (1.0.3-1) stable; urgency=low
+
+  * Fix: realm list no longer clears when WoW install or AppHelper is not detected during refresh
+  * Fix: closing via tray Quit no longer shows double confirmation dialog
+  * Fix: config no longer silently mutated when quitting via tray
+  * Add: timestamps on all log output
+  * Add: log file with rotation at ~/.local/share/tsm-app/logs/tsm-app.log, keeps last 5 backups
+  * Chore: remove em dashes from source comments and strings
+  * Chore: clean up PKGBUILD comments
+
+ -- exceptionptr <https://github.com/exceptionptr>  Wed, 18 Mar 2026 21:00:00 +0100
+
+tsm-app (1.0.2-1) stable; urgency=low
+
+  * Fix: CI workflows now only trigger on main branch
+  * Fix: revert softprops/action-gh-release to v2 to fix GitHub Release upload crash
+
+ -- exceptionptr <https://github.com/exceptionptr>  Wed, 18 Mar 2026 20:30:00 +0100
+
 tsm-app (1.0.1-1) stable; urgency=low
 
   * Fix: closing window with confirmation now quits the app instead of hiding to tray

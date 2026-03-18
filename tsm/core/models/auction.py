@@ -4,16 +4,16 @@ The real AppData.lua format uses LoadData() calls:
     select(2, ...).LoadData("TAG","RealmOrRegion",[[return {downloadTime=N,...}]])
 
 Data tags observed from a real AppData.lua:
-    APP_INFO                        — Global version/sync metadata
-    AUCTIONDB_NON_COMMODITY_DATA    — Per-realm item price data
-    AUCTIONDB_NON_COMMODITY_HISTORICAL — Per-realm historical prices
-    AUCTIONDB_NON_COMMODITY_SCAN_STAT  — Per-realm scan stats
-    AUCTIONDB_COMMODITY_DATA        — Region-wide commodity prices
-    AUCTIONDB_COMMODITY_HISTORICAL  — Region-wide commodity historical
-    AUCTIONDB_COMMODITY_SCAN_STAT   — Region-wide commodity scan stats
-    AUCTIONDB_REGION_STAT           — Region-wide item stats
-    AUCTIONDB_REGION_SALE           — Region-wide sale data
-    AUCTIONDB_REGION_HISTORICAL     — Region-wide historical
+    APP_INFO                        - Global version/sync metadata
+    AUCTIONDB_NON_COMMODITY_DATA    - Per-realm item price data
+    AUCTIONDB_NON_COMMODITY_HISTORICAL - Per-realm historical prices
+    AUCTIONDB_NON_COMMODITY_SCAN_STAT  - Per-realm scan stats
+    AUCTIONDB_COMMODITY_DATA        - Region-wide commodity prices
+    AUCTIONDB_COMMODITY_HISTORICAL  - Region-wide commodity historical
+    AUCTIONDB_COMMODITY_SCAN_STAT   - Region-wide commodity scan stats
+    AUCTIONDB_REGION_STAT           - Region-wide item stats
+    AUCTIONDB_REGION_SALE           - Region-wide sale data
+    AUCTIONDB_REGION_HISTORICAL     - Region-wide historical
 """
 
 from __future__ import annotations
@@ -28,13 +28,13 @@ class AppHelperEntry(BaseModel):
 
     tag: str  # e.g. "AUCTIONDB_NON_COMMODITY_DATA"
     realm_or_region: str  # e.g. "Blackhand" or "EU"
-    # Raw Lua string blob as returned by the API — written verbatim inside [[...]]
+    # Raw Lua string blob as returned by the API, written verbatim inside [[...]]
     data_blob: str
     download_time: int  # unix timestamp, extracted from data_blob for display
 
 
 class AppInfo(BaseModel):
-    """APP_INFO entry — application version and last sync time."""
+    """APP_INFO entry: application version and last sync time."""
 
     version: int
     last_sync: int  # unix timestamp
@@ -88,7 +88,7 @@ class RealmData(BaseModel):
 
     realm_slug: str
     region: str
-    # Raw data blobs keyed by tag — stored as-is from API, written verbatim to Lua
+    # Raw data blobs keyed by tag, stored as-is from API, written verbatim to Lua
     blobs: dict[str, str] = Field(default_factory=dict)
     last_updated: int  # unix timestamp of most recent blob
 

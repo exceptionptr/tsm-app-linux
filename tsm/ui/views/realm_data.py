@@ -1,4 +1,4 @@
-"""Realm Data tab — matches original TSM layout."""
+"""Realm Data tab: matches original TSM layout."""
 
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.0.1
+Version:        1.0.3
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -57,6 +57,18 @@ install -Dm644 LICENSE \
 %{_datadir}/licenses/%{name}/
 
 %changelog
+* Wed Mar 18 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.3-1
+- Fix: realm list no longer clears when WoW install or AppHelper is not detected during refresh
+- Fix: closing via tray Quit no longer shows double confirmation dialog
+- Fix: config no longer silently mutated when quitting via tray
+- Add: timestamps on all log output
+- Add: log file with rotation at ~/.local/share/tsm-app/logs/tsm-app.log, keeps last 5 backups
+- Chore: clean up PKGBUILD comments
+
+* Wed Mar 18 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.2-1
+- Fix: CI workflows now only trigger on main branch
+- Fix: revert softprops/action-gh-release to v2 to fix GitHub Release upload crash
+
 * Wed Mar 18 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.1-1
 - Fix: closing window with confirmation now quits the app instead of hiding to tray
 - Fix: prevent multiple simultaneous instances; second launch shows "already running" dialog
