@@ -1,3 +1,13 @@
+tsm-app (1.0.1-1) stable; urgency=low
+
+  * Fix: closing window with confirmation now quits the app instead of hiding to tray
+  * Fix: prevent multiple simultaneous instances; second launch shows "already running" dialog
+  * Fix: APScheduler 4.x (AsyncScheduler) bundled correctly for Arch; system package is 3.x
+  * Fix: app icon now installed to hicolor theme so it appears in desktop launchers
+  * CI: bump GitHub Actions to Node.js 24 runtime
+
+ -- exceptionptr <https://github.com/exceptionptr>  Wed, 18 Mar 2026 20:00:00 +0100
+
 tsm-app (1.0.0-1) unstable; urgency=medium
 
   * Initial release.

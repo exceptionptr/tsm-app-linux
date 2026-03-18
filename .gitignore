@@ -102,6 +102,12 @@ Thumbs.db
 *.dist/
 tsm-app.bin
 
+# makepkg artifacts
+packaging/pkg/
+packaging/src/
+packaging/*.pkg.tar.zst
+packaging/*.pkg.tar.xz
+
 # App runtime data (local only)
 *.db
 *.db-shm
