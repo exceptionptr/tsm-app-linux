@@ -61,6 +61,8 @@ install -Dm644 LICENSE \
 - Fix: realm list no longer clears when WoW install or AppHelper is not detected during refresh
 - Fix: closing via tray Quit no longer shows double confirmation dialog
 - Fix: config no longer silently mutated when quitting via tray
+- Add: timestamps on all log output
+- Add: log file with rotation at ~/.local/share/tsm-app/logs/tsm-app.log, keeps last 5 backups
 - Chore: clean up PKGBUILD comments
 
 * Wed Mar 18 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.2-1
