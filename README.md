@@ -60,7 +60,7 @@ sudo dpkg -i tsm-app_*_all.deb
 ```
 
 > **Note:** Requires `python3-pyside6` and Python 3.11+. On older Ubuntu releases some
-> Python dependencies may not be packaged — use the "From source" method in that case.
+> Python dependencies may not be packaged. Use the "From source" method in that case.
 
 ### Fedora / RHEL / openSUSE
 
@@ -70,7 +70,7 @@ Download the `.rpm` from the [latest release](https://github.com/exceptionptr/ts
 sudo dnf install tsm-app-*.noarch.rpm
 ```
 
-### Any distro — from source
+### Any distro / From source
 
 ```bash
 git clone https://github.com/exceptionptr/tsm-app-linux
@@ -134,7 +134,7 @@ python -m build --wheel
 
 ## Acknowledgements
 
-Big thanks to the [TradeSkillMaster](https://tradeskillmaster.com/) team for building and maintaining the TSM ecosystem — the addon, the API, and the auction data infrastructure that makes all of this possible.
+Big thanks to the [TradeSkillMaster](https://tradeskillmaster.com/) team for building and maintaining the TSM ecosystem: the addon, the API, and the auction data infrastructure that makes all of this possible.
 
 ## License
 

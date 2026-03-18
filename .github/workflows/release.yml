@@ -16,11 +16,11 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # hatch-vcs needs full tag history
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -33,7 +33,7 @@ jobs:
           pip install build hatch-vcs
           python -m build --wheel
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: wheel
           path: dist/*.whl
@@ -46,9 +46,9 @@ jobs:
     env:
       VERSION: ${{ needs.build-wheel.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
@@ -85,7 +85,7 @@ jobs:
           dpkg-deb --root-owner-group --build staging \
             "dist/tsm-app_${VERSION}_all.deb"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: deb
           path: dist/*.deb
@@ -98,9 +98,9 @@ jobs:
     env:
       VERSION: ${{ needs.build-wheel.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: wheel
           path: dist/
@@ -136,7 +136,7 @@ jobs:
             --package "dist/tsm-app-${VERSION}-1.noarch.rpm" \
             -C staging .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: rpm
           path: dist/*.rpm
@@ -149,11 +149,11 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts/
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2.3.0
         with:
           name: "TSM App ${{ github.ref_name }}"
           generate_release_notes: true
@@ -170,7 +170,7 @@ jobs:
     env:
       VERSION: ${{ needs.build-wheel.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Update PKGBUILD version
         run: |

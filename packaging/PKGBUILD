@@ -16,13 +16,14 @@ depends=(
     'python-structlog'
     'python-tomli-w'
     'python-yaml'
-    'python-apscheduler'
+    # APScheduler 4.x (AsyncScheduler) is not yet in Arch repos; bundled below
 )
 makedepends=(
     'python-build'
     'python-installer'
     'python-hatchling'
     'python-hatch-vcs'
+    'python-pip'
     'git'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
@@ -36,6 +37,8 @@ build() {
 package() {
     cd "$srcdir/tsm-app-linux-$pkgver"
     python -m installer --destdir="$pkgdir" dist/*.whl
+    # Bundle APScheduler 4.x — not yet packaged in Arch official repos
+    pip install --no-deps --prefix=/usr --root="$pkgdir" "apscheduler>=4.0.0a5,<5"
     install -Dm644 packaging/tsm-app.desktop \
         "$pkgdir/usr/share/applications/tsm-app.desktop"
     install -Dm644 LICENSE \
