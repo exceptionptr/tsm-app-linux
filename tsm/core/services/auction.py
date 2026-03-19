@@ -118,11 +118,12 @@ class AuctionDataService:
                 await self._process_entry(name, pending, data)
                 if pending:
                     rs.auctiondb_status = "Up to date"
-                    rs.last_updated = (
-                        pending[_REALM_LAST_UPDATED_TAG]["lastModified"]
-                        if _REALM_LAST_UPDATED_TAG in pending
-                        else max(info["lastModified"] for info in pending.values())
-                    )
+                    # Only update the display timestamp when the primary display tag was
+                    # actually downloaded.  If other tags updated (e.g. SCAN_STAT) but
+                    # NON_COMMODITY_DATA was unchanged, keep the existing _local_timestamp
+                    # value so the column matches what is stored in AppData.lua.
+                    if _REALM_LAST_UPDATED_TAG in pending:
+                        rs.last_updated = pending[_REALM_LAST_UPDATED_TAG]["lastModified"]
 
             # Process regions, dynamic key access requires cast (key is a runtime variable)
             for region_rec in cast(list[RealmEntry], result.get(regions_key, [])):
@@ -146,11 +147,9 @@ class AuctionDataService:
                 await self._process_entry(name, pending, data)
                 if pending:
                     rg.auctiondb_status = "Up to date"
-                    rg.last_updated = (
-                        pending[_REGION_LAST_UPDATED_TAG]["lastModified"]
-                        if _REGION_LAST_UPDATED_TAG in pending
-                        else max(info["lastModified"] for info in pending.values())
-                    )
+                    # Mirror realm logic: only update when REGION_STAT itself was downloaded.
+                    if _REGION_LAST_UPDATED_TAG in pending:
+                        rg.last_updated = pending[_REGION_LAST_UPDATED_TAG]["lastModified"]
 
         if self._addon_writer:
             await self._addon_writer.write_data(data)

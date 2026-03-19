@@ -1,3 +1,16 @@
+tsm-app (1.0.4-1) stable; urgency=low
+
+  * Fix: Last Updated column now correctly shows the primary tag timestamp
+    (AUCTIONDB_NON_COMMODITY_DATA for realms, AUCTIONDB_REGION_STAT for regions);
+    previously a max() fallback could store a wrong timestamp in the snapshot
+    when secondary tags were downloaded but the primary tag was not
+  * Fix: tray notification text trimmed to "{n} realm(s)/region(s) updated."
+  * Add: reverse-engineered TSM API reference document (API.md)
+  * CI: softprops/action-gh-release bumped to v2.3.2 (Node.js 24)
+  * CI: AUR publishing extracted to a separate manual workflow_dispatch workflow
+
+ -- exceptionptr <https://github.com/exceptionptr>  Thu, 19 Mar 2026 12:00:00 +0100
+
 tsm-app (1.0.3-1) stable; urgency=low
 
   * Fix: realm list no longer clears when WoW install or AppHelper is not detected during refresh

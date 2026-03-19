@@ -24,7 +24,7 @@ calls are routed to the subdomain assigned to each endpoint.
 
 Authentication is a two-step process.
 
-### Step 1 — Keycloak OIDC token
+### Step 1 - Keycloak OIDC token
 
 ```
 POST https://id.tradeskillmaster.com/realms/app/protocol/openid-connect/token
@@ -57,7 +57,7 @@ Response (JSON):
 }
 ```
 
-### Step 2 — TSM session exchange
+### Step 2 - TSM session exchange
 
 Exchange the OIDC access token for a TSM session token and user info.
 
@@ -103,7 +103,7 @@ Every API call (except the OIDC step) includes these query parameters:
 | `session`     | string | Session token from the auth exchange  |
 | `version`     | int    | App version integer (`41402`)         |
 | `time`        | int    | Current Unix timestamp (seconds)      |
-| `token`       | string | HMAC token — see below                |
+| `token`       | string | HMAC token - see below                |
 | `channel`     | string | _(optional)_ `"release"` or `"beta"`  |
 | `tsm_version` | string | _(optional)_ TSM addon version string |
 
@@ -168,31 +168,31 @@ Response structure:
   "addonMessage": { "id": 0, "msg": "" },
 
   "realms": [
-    /* RealmEntry[] — retail realms */
+    /* RealmEntry[] - retail realms */
   ],
   "regions": [
-    /* RealmEntry[] — retail regions */
+    /* RealmEntry[] - retail regions */
   ],
 
   "realms-Progression": [
-    /* RealmEntry[] — Classic Era Progression */
+    /* RealmEntry[] - Classic Era Progression */
   ],
   "regions-Progression": [
-    /* RealmEntry[] — Classic Era Progression */
+    /* RealmEntry[] - Classic Era Progression */
   ],
 
   "extraClassicRealms": [
-    /* RealmEntry[] — Classic Era */
+    /* RealmEntry[] - Classic Era */
   ],
   "extraClassicRegions": [
-    /* RealmEntry[] — Classic Era */
+    /* RealmEntry[] - Classic Era */
   ],
 
   "extraAnniversaryRealms": [
-    /* RealmEntry[] — Anniversary */
+    /* RealmEntry[] - Anniversary */
   ],
   "extraAnniversaryRegions": [
-    /* RealmEntry[] — Anniversary */
+    /* RealmEntry[] - Anniversary */
   ]
 }
 ```
@@ -244,7 +244,7 @@ Download an addon zip file.
 | `channel`     | _(optional)_ `"release"` or `"beta"` |
 | `tsm_version` | _(optional)_ Current addon version   |
 
-Response: `application/zip` — raw bytes of the zip archive.
+Response: `application/zip` - raw bytes of the zip archive.
 
 ---
 
@@ -356,9 +356,9 @@ Tags observed in real `AppData.lua` files:
 
 The key tags used for staleness detection:
 
-- **Realm data:** `AUCTIONDB_NON_COMMODITY_DATA` — `lastModified` is used as the
+- **Realm data:** `AUCTIONDB_NON_COMMODITY_DATA` - `lastModified` is used as the
   realm's "last updated" display timestamp.
-- **Region data:** `AUCTIONDB_REGION_STAT` — same purpose for region rows.
+- **Region data:** `AUCTIONDB_REGION_STAT` - same purpose for region rows.
 
 ---
 

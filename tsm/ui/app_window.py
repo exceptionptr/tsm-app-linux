@@ -193,7 +193,7 @@ class AppWindow(QMainWindow):
     def _notify_realm_data(self) -> None:
         if self._settings_vm.config.notify_realm_data and self._realm_vm.had_new_data:
             n = len(self._realm_vm.summaries)
-            self.notify(f"Auction data synced — {n} realm(s)/region(s) updated.")
+            self.notify(f"{n} realm(s)/region(s) updated.")
 
     def _notify_backup(self, message: str) -> None:
         if self._settings_vm.config.notify_backup:
