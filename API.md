@@ -166,36 +166,19 @@ Response structure:
   "appVersion": 41402,
   "addons": [{ "name": "TradeSkillMaster", "version_str": "4.13.5" }],
   "addonMessage": { "id": 0, "msg": "" },
-
-  "realms": [
-    /* RealmEntry[] - retail realms */
-  ],
-  "regions": [
-    /* RealmEntry[] - retail regions */
-  ],
-
-  "realms-Progression": [
-    /* RealmEntry[] - Classic Era Progression */
-  ],
-  "regions-Progression": [
-    /* RealmEntry[] - Classic Era Progression */
-  ],
-
-  "extraClassicRealms": [
-    /* RealmEntry[] - Classic Era */
-  ],
-  "extraClassicRegions": [
-    /* RealmEntry[] - Classic Era */
-  ],
-
-  "extraAnniversaryRealms": [
-    /* RealmEntry[] - Anniversary */
-  ],
-  "extraAnniversaryRegions": [
-    /* RealmEntry[] - Anniversary */
-  ]
+  "realms": [ ... ],
+  "regions": [ ... ],
+  "realms-Progression": [ ... ],
+  "regions-Progression": [ ... ],
+  "extraClassicRealms": [ ... ],
+  "extraClassicRegions": [ ... ],
+  "extraAnniversaryRealms": [ ... ],
+  "extraAnniversaryRegions": [ ... ]
 }
 ```
+
+All array values are `RealmEntry[]`. See the game version mapping table below for
+which key corresponds to which WoW version.
 
 **RealmEntry** (realm or region object):
 
@@ -256,14 +239,12 @@ Response:
 
 ```json
 {
-  "retail": [
-    /* RealmEntry[] */
-  ],
-  "bcc": [
-    /* RealmEntry[] */
-  ]
+  "retail": [ ... ],
+  "bcc": [ ... ]
 }
 ```
+
+Both arrays contain `RealmEntry[]`.
 
 ---
 
