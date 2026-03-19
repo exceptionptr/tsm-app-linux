@@ -43,7 +43,7 @@ TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloa
 
 ```bash
 # Via AUR helper (recommended)
-yay -S tsm-app
+paru -S tsm-app
 
 # Or manually
 git clone https://aur.archlinux.org/tsm-app.git
@@ -77,7 +77,7 @@ git clone https://github.com/exceptionptr/tsm-app-linux
 cd tsm-app-linux
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ### Run
@@ -88,19 +88,35 @@ python -m tsm
 tsm-app
 ```
 
+## File Locations
+
+| Purpose       | Path                                          |
+| ------------- | --------------------------------------------- |
+| Config        | `~/.config/tsm-app/config.toml`               |
+| Database      | `~/.local/share/tsm-app/data.db`              |
+| Log file      | `~/.local/share/tsm-app/logs/tsm-app.log`     |
+| Backups       | `~/.local/share/tsm-app/backups/`             |
+
+Logs rotate automatically; the last 5 files are kept. To reset the app to a clean
+state, remove `~/.config/tsm-app/` and `~/.local/share/tsm-app/`.
+
 ## WoW Detection
 
 The app scans the following paths automatically on startup and every 5 minutes:
 
-| Source                  | Path                                                      |
-| ----------------------- | --------------------------------------------------------- |
-| Wine (default prefix)   | `~/.wine/drive_c/Program Files (x86)/World of Warcraft`   |
-| Lutris                  | `~/Games/world-of-warcraft`                               |
-| Steam                   | `~/.local/share/Steam/steamapps/common/World of Warcraft` |
-| Mount (games partition) | `/mnt/games/World of Warcraft`                            |
-| System opt              | `/opt/games/World of Warcraft`                            |
+| Source                  | Path                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| Wine (default prefix)   | `~/.wine/drive_c/Program Files (x86)/World of Warcraft`                                      |
+| Wine (default prefix)   | `~/.wine/drive_c/Program Files/World of Warcraft`                                             |
+| Lutris (common)         | `~/Games/world-of-warcraft`                                                                   |
+| Lutris (common)         | `~/Games/World of Warcraft`                                                                   |
+| Lutris (config)         | Wine prefix read from `~/.local/share/lutris/games/*.yml`, both Program Files variants        |
+| Steam                   | `~/.local/share/Steam/steamapps/common/World of Warcraft`                                    |
+| Snap Wine               | `~/snap/wine-platform-5-stable/common/.wine/drive_c/Program Files (x86)/World of Warcraft`   |
+| Mount (games partition) | `/mnt/games/World of Warcraft`                                                                |
+| System opt              | `/opt/games/World of Warcraft`                                                                |
 
-If your WoW installation isn't detected automatically, add the path manually via **Settings → WoW Installations**.
+If your WoW installation isn't detected automatically, add the path manually via **Settings -> WoW Installations**.
 
 ## Architecture
 
@@ -119,6 +135,9 @@ If your WoW installation isn't detected automatically, add the path manually via
 ## Development
 
 ```bash
+# Install with dev dependencies
+pip install -e ".[dev]"
+
 # Run tests
 pytest tests/ -v
 
