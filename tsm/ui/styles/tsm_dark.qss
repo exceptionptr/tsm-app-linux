@@ -1,4 +1,4 @@
-/* TSM Desktop App — dark theme matching original */
+/* TSM Desktop App - dark theme matching original */
 
 /* ── Base ─────────────────────────────────────────────────────────── */
 QMainWindow, QDialog, QWidget {
@@ -228,7 +228,7 @@ QLabel#info {
     font-size: 12px;
 }
 
-/* ── Dialog tabs — no QTabWidget used; settings uses custom #tabbar ── */
+/* ── Dialog tabs - no QTabWidget used; settings uses custom #tabbar ── */
 
 /* ── Realm data bottom bar ────────────────────────────────────────── */
 QWidget#realm-bottom {

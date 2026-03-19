@@ -153,7 +153,7 @@ jobs:
         with:
           path: artifacts/
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2.3.2
         with:
           name: "TSM App ${{ github.ref_name }}"
           generate_release_notes: true
@@ -162,29 +162,3 @@ jobs:
             artifacts/deb/*.deb
             artifacts/rpm/*.rpm
 
-  # ── 5. Publish to AUR ─────────────────────────────────────────────────────
-  publish-aur:
-    name: Publish to AUR
-    needs: [build-wheel, github-release]
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.build-wheel.outputs.version }}
-    steps:
-      - uses: actions/checkout@v5
-
-      - name: Update PKGBUILD version
-        run: |
-          sed -i "s/^pkgver=.*/pkgver=${VERSION}/" packaging/PKGBUILD
-          sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/PKGBUILD
-
-      - name: Publish to AUR
-        uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
-        with:
-          pkgname: tsm-app
-          pkgbuild: packaging/PKGBUILD
-          commit_username: exceptionptr
-          commit_email: ${{ secrets.AUR_EMAIL }}
-          ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
-          commit_message: "Update to ${{ github.ref_name }}"
-          updpkgsums: true
-          allow_empty_commits: false
