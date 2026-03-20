@@ -31,5 +31,9 @@ class WoWDetectorService:
             await self.scan()
         return self._installs
 
+    def set_installs(self, installs: list[WoWInstall]) -> None:
+        """Pre-populate the install list (e.g. validated entries from config)."""
+        self._installs = list(installs)
+
     def add_custom_path(self, path: str) -> None:
         self._custom_paths.append(path)

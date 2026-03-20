@@ -4,15 +4,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
 
 async def job_auction_refresh(*, services) -> None:
-    """Fetch region+realm auction data, update SQLite cache, write Lua files.
-    Also checks and installs any outdated TSM addon files."""
-    logger.info("job_auction_refresh: starting")
+    """Poll every 5 min; only fetch from TSM API when data is older than the
+    configured interval (default 60 min).  Also checks for addon updates."""
     try:
+        _, saved_at = await services.auction.get_snapshot()
+        threshold = getattr(services, "auction_interval_minutes", 60)
+        age_minutes = (time.time() - saved_at) / 60 if saved_at else float("inf")
+        if age_minutes < threshold:
+            logger.debug(
+                "job_auction_refresh: data is %.0f min old (threshold %d min), skipping",
+                age_minutes,
+                threshold,
+            )
+            return
+        logger.info(
+            "job_auction_refresh: data is %.0f min old, fetching from API", age_minutes
+        )
         data = await services.auction.refresh_all_realms()
         addon_versions = getattr(data, "addon_versions", [])
         if addon_versions:
@@ -33,20 +46,6 @@ async def job_auth_refresh(*, services) -> None:
         await services.auth.refresh_token()
     except Exception:
         logger.exception("job_auth_refresh: failed")
-
-
-async def job_wow_monitor(*, services) -> None:
-    """Scan filesystem for WoW installs, detect game running state."""
-    logger.info("job_wow_monitor: starting")
-    try:
-        installs = await services.wow_detector.scan()
-        if installs and services.config_store:
-            cfg = services.config_store.load()
-            if not cfg.wow_installs:
-                cfg.wow_installs = installs
-                services.config_store.save(cfg)
-    except Exception:
-        logger.exception("job_wow_monitor: failed")
 
 
 async def job_backup(*, services) -> None:

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QDateTime, QLocale, Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -148,4 +147,5 @@ class RealmDataView(QWidget):
 def _fmt_ts(ts: int) -> str:
     if not ts:
         return "Never"
-    return datetime.fromtimestamp(ts).strftime("%-m/%-d/%Y %-I:%M %p")
+    dt = QDateTime.fromSecsSinceEpoch(ts)
+    return QLocale.system().toString(dt, QLocale.FormatType.ShortFormat)
