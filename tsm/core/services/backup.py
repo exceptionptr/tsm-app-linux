@@ -24,6 +24,8 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tsm.wow.utils import iter_wow_gv_roots
+
 logger = logging.getLogger(__name__)
 
 _BACKUP_DIR = Path.home() / ".local" / "share" / "tsm-app" / "backups"
@@ -31,7 +33,6 @@ _KEEP_DIR = _BACKUP_DIR / "keep"
 _TIME_FORMAT = "%Y%m%d%H%M%S"
 _SEPARATOR = "_"
 _TSM_ADDON_PREFIX = "TradeSkillMaster"
-_GAME_VERSIONS = ("_retail_", "_classic_era_", "_classic_", "_anniversary_")
 _SUFFIX_BY_GV = {
     "_retail_": "",
     "_classic_era_": "-Classic",
@@ -82,7 +83,7 @@ class BackupService:
                         b["path"].unlink()
                         logger.info("Purged old backup: %s", b["path"].name)
                     except Exception:
-                        pass
+                        logger.warning("Failed to purge backup: %s", b["path"])
                 else:
                     surviving.append(b)
             acct_backups = surviving
@@ -162,6 +163,16 @@ class BackupService:
             logger.exception("Failed to restore backup %s", backup_path)
             return False
 
+    def delete(self, zip_path: Path) -> bool:
+        """Delete a backup file. Returns True on success."""
+        try:
+            zip_path.unlink()
+            logger.info("Deleted backup: %s", zip_path.name)
+            return True
+        except Exception:
+            logger.exception("Failed to delete backup: %s", zip_path)
+            return False
+
     # ── Internals ──────────────────────────────────────────────────────
 
     def _find_accounts(self, extra_installs=None) -> dict[str, Path]:
@@ -171,7 +182,7 @@ class BackupService:
         result: dict[str, Path] = {}
 
         # Collect installs: detector cache + user-configured extras
-        installs = list(getattr(self._detector, "_installs", []) or [])
+        installs = list(self._detector.installs) if self._detector is not None else []
         if extra_installs:
             existing = {i.path for i in installs}
             for i in extra_installs:
@@ -185,27 +196,22 @@ class BackupService:
             installs = find_wow_installs()
 
         logger.info("BackupService: scanning %d WoW install(s)", len(installs))
-        for install in installs:
-            wow_path = Path(install.path)
-            # Detector stores the version subdir (e.g. .../WoW/_retail_); user-configured
-            # paths may be the WoW base dir directly.
-            wow_root = wow_path.parent if wow_path.name in _GAME_VERSIONS else wow_path
-            for gv in _GAME_VERSIONS:
-                suffix = _SUFFIX_BY_GV.get(gv, "")
-                wtf_accounts = wow_root / gv / "WTF" / "Account"
-                if not wtf_accounts.is_dir():
-                    logger.debug("BackupService: no WTF/Account at %s", wtf_accounts)
+        for wow_root, gv in iter_wow_gv_roots(installs):
+            suffix = _SUFFIX_BY_GV.get(gv, "")
+            wtf_accounts = wow_root / gv / "WTF" / "Account"
+            if not wtf_accounts.is_dir():
+                logger.debug("BackupService: no WTF/Account at %s", wtf_accounts)
+                continue
+            logger.info("BackupService: checking accounts at %s", wtf_accounts)
+            for acct_dir in wtf_accounts.iterdir():
+                if not acct_dir.is_dir() or acct_dir.name == "SavedVariables":
                     continue
-                logger.info("BackupService: checking accounts at %s", wtf_accounts)
-                for acct_dir in wtf_accounts.iterdir():
-                    if not acct_dir.is_dir() or acct_dir.name == "SavedVariables":
-                        continue
-                    sv_dir = acct_dir / "SavedVariables"
-                    if not sv_dir.is_dir():
-                        continue
-                    if any(sv_dir.glob(f"{_TSM_ADDON_PREFIX}*.lua")):
-                        account_key = acct_dir.name + suffix
-                        result[account_key] = sv_dir
+                sv_dir = acct_dir / "SavedVariables"
+                if not sv_dir.is_dir():
+                    continue
+                if any(sv_dir.glob(f"{_TSM_ADDON_PREFIX}*.lua")):
+                    account_key = acct_dir.name + suffix
+                    result[account_key] = sv_dir
         return result
 
     def _find_sv_files(self, sv_dir: Path) -> list[Path]:

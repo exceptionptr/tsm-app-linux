@@ -21,24 +21,6 @@ CREATE TABLE IF NOT EXISTS auction_cache (
 );
 """
 
-CREATE_ADDON_VERSIONS = """
-CREATE TABLE IF NOT EXISTS addon_versions (
-    addon_name TEXT PRIMARY KEY,
-    installed_version TEXT,
-    latest_version TEXT,
-    last_check INTEGER
-);
-"""
-
-CREATE_SYNC_HISTORY = """
-CREATE TABLE IF NOT EXISTS sync_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    realm_slug TEXT,
-    synced_at INTEGER,
-    status TEXT
-);
-"""
-
 CREATE_SCHEMA_VERSION = """
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
@@ -72,11 +54,10 @@ class Database:
             self._db = None
 
     async def _run_migrations(self) -> None:
-        assert self._db is not None
+        if self._db is None:
+            raise RuntimeError("Database not connected")
         await self._db.execute(CREATE_SCHEMA_VERSION)
         await self._db.execute(CREATE_AUCTION_CACHE)
-        await self._db.execute(CREATE_ADDON_VERSIONS)
-        await self._db.execute(CREATE_SYNC_HISTORY)
         await self._db.execute(CREATE_REALM_SNAPSHOT)
         await self._db.commit()
 

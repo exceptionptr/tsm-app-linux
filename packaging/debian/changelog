@@ -1,3 +1,13 @@
+tsm-app (1.0.5-1) stable; urgency=low
+
+  * Add: Protocol types for ServiceContainer fields in scheduler.py
+    (mypy now validates method calls in jobs.py and scheduler.py)
+  * Add: unit tests for ConfigStore, WoWDetectorService, BackupService,
+    AddonWriterService, and AuctionCache snapshot round-trip
+  * CI: Python 3.13 added to the test matrix
+
+ -- exceptionptr <https://github.com/exceptionptr>  Fri, 20 Mar 2026 12:00:00 +0100
+
 tsm-app (1.0.4-1) stable; urgency=low
 
   * Fix: Last Updated column now correctly shows the primary tag timestamp

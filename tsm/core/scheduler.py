@@ -4,30 +4,64 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any, Protocol
 
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
+from tsm.workers.jobs import job_auction_refresh, job_auth_refresh, job_backup
+
 logger = logging.getLogger(__name__)
+
+
+class AuctionServiceProtocol(Protocol):
+    async def get_snapshot(self) -> tuple[Any, float]: ...
+    async def refresh_all_realms(self) -> Any: ...
+
+
+class AuthServiceProtocol(Protocol):
+    async def refresh_token(self) -> None: ...
+
+
+class UpdateServiceProtocol(Protocol):
+    async def check_and_update(self, addon_versions: list[Any]) -> list[str]: ...
+
+
+class ConfigStoreProtocol(Protocol):
+    def load(self) -> Any: ...
+    def save(self, config: Any) -> None: ...
+
+
+class WoWDetectorProtocol(Protocol):
+    async def scan(self) -> list[Any]: ...
+    async def get_installs(self) -> list[Any]: ...
+    def set_installs(self, installs: list[Any]) -> None: ...
+
+
+class BackupServiceProtocol(Protocol):
+    def run(
+        self, period_minutes: int, retain_days: int, extra_installs: Any = None
+    ) -> list[Any]: ...
 
 
 @dataclass
 class ServiceContainer:
     """Holds references to all services needed by scheduled jobs."""
 
-    auth: object
-    auction: object
-    wow_detector: object
-    updater: object
-    backup: object = None
-    config_store: object = None
-    backup_notify_fn: object = None  # callable(message: str) | None
-    addon_notify_fn: object = None  # callable(message: str) | None
-    auction_data_fn: object = None  # callable(AuctionData) | None
-    wow_warn_fn: object = None  # callable(message: str) | None - called when no WoW install found
+    auth: AuthServiceProtocol
+    auction: AuctionServiceProtocol
+    wow_detector: WoWDetectorProtocol
+    updater: UpdateServiceProtocol
+    backup: BackupServiceProtocol | None = None
+    config_store: ConfigStoreProtocol | None = None
+    backup_notify_fn: Callable[[str], None] | None = None
+    addon_notify_fn: Callable[[str], None] | None = None
+    auction_data_fn: Callable[[Any], None] | None = None
+    wow_warn_fn: Callable[[str], None] | None = None
     auction_interval_minutes: int = 60  # staleness threshold for the 5-min auction poller
 
 
@@ -86,8 +120,11 @@ class JobScheduler:
                         kwargs={"services": svc},
                     )
                     # Backup: schedule at the user-configured period, not a fixed 15 min.
-                    cfg = svc.config_store.load()
-                    backup_minutes = cfg.backup_period_minutes
+                    backup_minutes = (
+                        svc.config_store.load().backup_period_minutes
+                        if svc.config_store is not None
+                        else 60
+                    )
                     await scheduler.add_schedule(
                         job_backup,
                         IntervalTrigger(
@@ -138,12 +175,5 @@ async def _resolve_wow_installs(svc: ServiceContainer) -> None:
         logger.info("WoW: auto-detected %d install(s)", len(found))
     else:
         logger.warning("WoW: no installs found; user should configure a path in Settings")
-        if callable(getattr(svc, "wow_warn_fn", None)):
+        if svc.wow_warn_fn is not None:
             svc.wow_warn_fn("No WoW installation found. Add path in Settings.")
-
-
-from tsm.workers.jobs import (  # noqa: E402
-    job_auction_refresh,
-    job_auth_refresh,
-    job_backup,
-)

@@ -102,7 +102,7 @@ state, remove `~/.config/tsm-app/` and `~/.local/share/tsm-app/`.
 
 ## WoW Detection
 
-The app scans the following paths automatically on startup and every 5 minutes:
+The app scans the following paths automatically on startup:
 
 | Source                  | Path                                                                                          |
 | ----------------------- | --------------------------------------------------------------------------------------------- |

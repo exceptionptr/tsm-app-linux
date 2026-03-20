@@ -73,7 +73,7 @@ def main() -> None:
     from tsm.app import create_app
     from tsm.workers.bridge import AsyncBridge
 
-    qt_app, window, _async_runner, auth_svc = create_app(
+    qt_app, window, _, auth_svc = create_app(
         [sys.argv[0]] + qt_argv, debug_interval_minutes=debug_minutes
     )
     # Do NOT show main window yet: only show it after successful auth.
@@ -95,12 +95,7 @@ def main() -> None:
         if success:
             session = auth_svc.current_session
             if session:
-                window._app_vm.on_login_success(session)
-                window._app_vm.set_status("Connected, loading data...")
-                if not window._settings_vm.config.start_minimized:
-                    window.show()
-                window._realm_vm.load_snapshot()
-                window._realm_vm.refresh_all()
+                window.on_authenticated(session)
         else:
             window.show_login()
 

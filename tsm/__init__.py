@@ -3,6 +3,6 @@
 __all__ = ["__version__"]
 
 try:
-    from tsm._version import __version__ as __version__
+    from tsm._version import __version__ as __version__  # type: ignore[import-not-found]
 except ImportError:
     __version__ = "0.0.0"

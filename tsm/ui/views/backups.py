@@ -3,21 +3,21 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QPushButton,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from tsm.core.services.backup import _BACKUP_DIR, _KEEP_DIR, BackupService
+from tsm.ui.views._utils import set_table_cell, start_rate_limit_countdown
 
 logger = logging.getLogger(__name__)
 
@@ -72,35 +72,25 @@ class BackupsView(QWidget):
         backups = _list_backups()
         self._table.setRowCount(len(backups))
         for row, (sys_id, account, timestamp, _, is_manual) in enumerate(backups):
-            self._set_cell(row, 0, sys_id)
-            self._set_cell(row, 1, account)
-            self._set_cell(row, 2, timestamp)
-            self._set_cell(row, 3, "Manual" if is_manual else "Automatic")
+            set_table_cell(self._table, row, 0, sys_id)
+            set_table_cell(self._table, row, 1, account)
+            set_table_cell(self._table, row, 2, timestamp)
+            set_table_cell(self._table, row, 3, "Manual" if is_manual else "Automatic")
         self._update_backup_btn()
 
     def _update_backup_btn(self) -> None:
         """Disable Backup Now for the remainder of the 1-minute rate-limit window."""
-        import time
-
         manual_backups = [b for b in _list_backups() if b[4]]
         if not manual_backups:
             self._backup_now_btn.setEnabled(True)
             self._backup_now_btn.setText("Backup Now")
             return
         most_recent_mtime = max(b[3].stat().st_mtime for b in manual_backups)
-        remaining = 60.0 - (time.time() - most_recent_mtime)
-        if remaining > 0:
-            self._backup_now_btn.setEnabled(False)
-            self._backup_now_btn.setText(f"Backup Now ({int(remaining) + 1}s)")
-            QTimer.singleShot(1000, self._update_backup_btn)
-        else:
-            self._backup_now_btn.setEnabled(True)
-            self._backup_now_btn.setText("Backup Now")
-
-    def _set_cell(self, row: int, col: int, text: str) -> None:
-        item = QTableWidgetItem(text)
-        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        self._table.setItem(row, col, item)
+        start_rate_limit_countdown(
+            self._backup_now_btn,
+            "Backup Now",
+            lambda: 60.0 - (time.time() - most_recent_mtime),
+        )
 
     def _on_backup_now(self) -> None:
         if self._backup_now_fn is None:
@@ -155,6 +145,7 @@ class BackupsView(QWidget):
         layout.addLayout(btn_row)
 
         action: dict = {}
+
         def _accept_restore() -> None:
             action.update(v="restore")
             dlg.accept()
@@ -186,10 +177,11 @@ class BackupsView(QWidget):
                 QMessageBox.StandardButton.No,
             )
             if reply == QMessageBox.StandardButton.Yes:
-                try:
-                    zip_path.unlink()
-                except Exception as e:
-                    QMessageBox.warning(self, "TSM", f"Failed to delete backup:\n{e}")
+                if self._backup_svc is None:
+                    QMessageBox.warning(self, "TSM", "Backup service not available.")
+                    return
+                if not self._backup_svc.delete(zip_path):
+                    QMessageBox.warning(self, "TSM", "Failed to delete backup.")
                 self._refresh()
 
 

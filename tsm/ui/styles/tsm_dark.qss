@@ -1,5 +1,25 @@
 /* TSM Desktop App - dark theme matching original */
 
+/*
+ * ── Colour Palette ──────────────────────────────────────────────────
+ *
+ *  Background (base)    #1a1a1a   -- main windows, dialogs, tables
+ *  Background (raised)  #1e1e1e   -- tab bar, header
+ *  Background (hover)   #2a2a2a   -- hover / active tab
+ *  Background (widget)  #2e2e2e   -- secondary buttons, inputs
+ *  Border               #2e2e2e   -- dividers, grid lines
+ *  Text (primary)       #d0d0d0
+ *  Text (muted)         #aaaaaa   -- inactive tab labels
+ *  Accent (TSM orange)  #f26522   -- primary buttons, active tab indicator
+ *  Accent (cyan)        #00e5ff   -- welcome title / subtitle labels
+ *  Accent (twitter)     #1da1f2   -- Twitter/social button
+ *  Status (green)       #4caf50   -- "Up to date"
+ *  Status (yellow)      #ffc107   -- "Updating..."
+ *  Status (red)         #f44336   -- "Outdated"
+ *
+ * ────────────────────────────────────────────────────────────────────
+ */
+
 /* ── Base ─────────────────────────────────────────────────────────── */
 QMainWindow, QDialog, QWidget {
     background-color: #1a1a1a;

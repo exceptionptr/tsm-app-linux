@@ -23,9 +23,7 @@ async def job_auction_refresh(*, services) -> None:
                 threshold,
             )
             return
-        logger.info(
-            "job_auction_refresh: data is %.0f min old, fetching from API", age_minutes
-        )
+        logger.info("job_auction_refresh: data is %.0f min old, fetching from API", age_minutes)
         data = await services.auction.refresh_all_realms()
         addon_versions = getattr(data, "addon_versions", [])
         if addon_versions:
@@ -55,7 +53,7 @@ async def job_backup(*, services) -> None:
         cfg = services.config_store.load()
         # Ensure wow installs are populated before the sync backup code runs
         await services.wow_detector.get_installs()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         created = await loop.run_in_executor(
             None,
             lambda: services.backup.run(

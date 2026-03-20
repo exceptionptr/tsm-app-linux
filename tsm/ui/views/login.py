@@ -78,8 +78,6 @@ class LoginView(QDialog):
         self._login_btn.setDefault(True)
         layout.addWidget(self._login_btn)
 
-        self._password.returnPressed.connect(self._on_login)
-
     def _on_login(self) -> None:
         username = self._username.text().strip()
         password = self._password.text()

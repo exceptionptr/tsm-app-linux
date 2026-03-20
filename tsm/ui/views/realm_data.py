@@ -5,8 +5,7 @@ from __future__ import annotations
 import logging
 import time
 
-from PySide6.QtCore import QDateTime, QLocale, Qt, QTimer
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtCore import QDateTime, QLocale
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
@@ -14,12 +13,12 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from tsm.ui.viewmodels.realm_vm import RealmViewModel
+from tsm.ui.views._utils import set_table_cell, start_rate_limit_countdown
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +76,7 @@ class RealmDataView(QWidget):
         summaries = self._vm.summaries
         self._table.setRowCount(len(summaries))
         for row, s in enumerate(summaries):
-            self._set_cell(row, 0, s.display_name)
+            set_table_cell(self._table, row, 0, s.display_name)
 
             if s.auctiondb_status == "Up to date":
                 adb_color = _GREEN
@@ -85,17 +84,10 @@ class RealmDataView(QWidget):
                 adb_color = _RED
             else:
                 adb_color = _YELLOW
-            self._set_cell(row, 1, s.auctiondb_status, adb_color)
+            set_table_cell(self._table, row, 1, s.auctiondb_status, adb_color)
 
             dt_str = _fmt_ts(s.last_updated)
-            self._set_cell(row, 2, dt_str)
-
-    def _set_cell(self, row: int, col: int, text: str, color: str | None = None) -> None:
-        item = QTableWidgetItem(text)
-        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        if color:
-            item.setForeground(QBrush(QColor(color)))
-        self._table.setItem(row, col, item)
+            set_table_cell(self._table, row, 2, dt_str)
 
     def _on_refresh_now(self) -> None:
         self._last_manual_refresh = time.time()
@@ -103,14 +95,11 @@ class RealmDataView(QWidget):
         self._update_refresh_btn()
 
     def _update_refresh_btn(self) -> None:
-        remaining = 60.0 - (time.time() - self._last_manual_refresh)
-        if remaining > 0:
-            self._refresh_btn.setEnabled(False)
-            self._refresh_btn.setText(f"Refresh Now ({int(remaining) + 1}s)")
-            QTimer.singleShot(1000, self._update_refresh_btn)
-        else:
-            self._refresh_btn.setEnabled(True)
-            self._refresh_btn.setText("Refresh Now")
+        start_rate_limit_countdown(
+            self._refresh_btn,
+            "Refresh Now",
+            lambda: 60.0 - (time.time() - self._last_manual_refresh),
+        )
 
     def _on_loading(self, loading: bool) -> None:
         if loading:

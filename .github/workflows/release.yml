@@ -68,12 +68,14 @@ jobs:
       - name: Write DEBIAN/control
         run: |
           mkdir -p staging/DEBIAN
+          # Deps are canonical in packaging/debian/ci-depends (no dpkg substitution vars).
+          DEPENDS=$(cat packaging/debian/ci-depends)
           cat > staging/DEBIAN/control << EOF
           Package: tsm-app
           Version: ${VERSION}
           Architecture: all
           Maintainer: exceptionptr <https://github.com/exceptionptr>
-          Depends: python3 (>= 3.11), python3-pyside6, python3-aiohttp, python3-keyring
+          Depends: ${DEPENDS}
           Homepage: https://github.com/exceptionptr/tsm-app-linux
           Description: TradeSkillMaster Desktop App for Linux
            Downloads auction house data from the TSM API and writes Lua files for
@@ -121,6 +123,12 @@ jobs:
 
       - name: Build .rpm with fpm
         run: |
+          # Build --depends flags from the canonical ci-depends file
+          FPM_DEPS=$(tr ',' '\n' < packaging/debian/ci-depends \
+            | sed 's/^ *//;s/ *$//' \
+            | sed 's/ (>= />=/' | sed 's/)//' \
+            | awk '{print "--depends "$0}' \
+            | tr '\n' ' ')
           fpm -s dir -t rpm \
             --name tsm-app \
             --version "${VERSION}" \
@@ -129,10 +137,7 @@ jobs:
             --url "https://github.com/exceptionptr/tsm-app-linux" \
             --description "TradeSkillMaster Desktop App for Linux" \
             --license MIT \
-            --depends "python3 >= 3.11" \
-            --depends python3-pyside6 \
-            --depends python3-aiohttp \
-            --depends python3-keyring \
+            ${FPM_DEPS} \
             --package "dist/tsm-app-${VERSION}-1.noarch.rpm" \
             -C staging .
 

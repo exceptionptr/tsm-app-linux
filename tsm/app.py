@@ -60,6 +60,8 @@ def _ensure_single_instance(qt_app: QApplication) -> None:
         "TSM Desktop App is already running.\nCheck the system tray.",
     )
     sys.exit(0)
+
+
 DB_PATH = DATA_DIR / "data.db"
 
 

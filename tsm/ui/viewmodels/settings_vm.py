@@ -71,6 +71,12 @@ class SettingsViewModel(QObject):
         self._config.backup_retain_days = value
         self.config_changed.emit()
 
+    def reset_to_defaults(self) -> None:
+        """Reset configuration to factory defaults and persist."""
+        self._config = AppConfig()
+        self.save()
+        self.config_changed.emit()
+
     def save(self) -> None:
         self._store.save(self._config)
         self.saved.emit()

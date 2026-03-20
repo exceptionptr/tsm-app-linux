@@ -64,6 +64,7 @@ async def test_restore_session_success():
 
     assert restored is True
     assert svc.is_authenticated
+    assert svc.current_session is not None
     assert svc.current_session.username == "user@example.com"
 
 

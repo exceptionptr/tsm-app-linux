@@ -95,7 +95,7 @@ class AuctionDataService:
 
             # Process realms, dynamic key access requires cast (key is a runtime variable)
             for realm in cast(list[RealmEntry], result.get(realms_key, [])):
-                name = realm["name"]
+                name = realm.get("name", "")
                 region = realm.get("region", "")
                 strings = realm.get("appDataStrings", {})
                 # Apply display-name transform (BCC-EU → Progression-EU)
@@ -189,9 +189,10 @@ class AuctionDataService:
             "_classic_": None,
             "_anniversary_": None,
         }
-        if self._addon_writer is None or self._addon_writer._detector is None:
+        detector = self._addon_writer.get_detector() if self._addon_writer is not None else None
+        if detector is None:
             return result
-        installs = await self._addon_writer._detector.get_installs()
+        installs = await detector.get_installs()
         for install in installs:
             wow_root = Path(install.path).parent  # install.path is the _retail_ dir
             for gv in result:

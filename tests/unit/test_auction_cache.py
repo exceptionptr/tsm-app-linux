@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tsm.core.models.auction import RealmData
+from tsm.core.models.auction import RealmData, RealmStatus
 from tsm.storage.auction_cache import AuctionCache
 from tsm.storage.database import Database
 
@@ -60,3 +60,29 @@ async def test_get_all(cache):
         await cache.store(r)
     all_realms = await cache.get_all()
     assert len(all_realms) == 3
+
+
+@pytest.mark.asyncio
+async def test_save_and_load_snapshot(cache):
+    statuses = [
+        RealmStatus(
+            display_name="EU-Tarren Mill",
+            is_region=False,
+            auctiondb_status="Up to date",
+            last_updated=1710000000,
+            region="EU",
+            name="Tarren Mill",
+        )
+    ]
+    await cache.save_snapshot(statuses)
+    loaded, saved_at = await cache.load_snapshot()
+    assert len(loaded) == 1
+    assert loaded[0].display_name == "EU-Tarren Mill"
+    assert saved_at > 0
+
+
+@pytest.mark.asyncio
+async def test_load_snapshot_missing_returns_empty(cache):
+    statuses, saved_at = await cache.load_snapshot()
+    assert statuses == []
+    assert saved_at == 0
