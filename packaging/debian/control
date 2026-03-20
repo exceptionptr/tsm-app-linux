@@ -13,7 +13,13 @@ Depends: ${python3:Depends}, ${misc:Depends},
  python3 (>= 3.11),
  python3-pyside6,
  python3-aiohttp,
- python3-keyring
+ python3-keyring,
+ python3-pydantic,
+ python3-aiosqlite,
+ python3-apscheduler,
+ python3-structlog,
+ python3-tomli-w,
+ python3-yaml
 Description: TradeSkillMaster Desktop App for Linux
  Downloads auction house data from the TSM API and writes Lua files for
  the TradeSkillMaster WoW addon running under Wine, Lutris, or Steam.

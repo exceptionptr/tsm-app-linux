@@ -182,7 +182,7 @@ class AddonVersionsView(QWidget):
         if self._detector is None:
             return result
         try:
-            installs = getattr(self._detector, "_installs", []) or []
+            installs = self._detector.installs if self._detector is not None else []
             for install in installs:
                 # install.path is the _retail_ path; parent is the WoW root
                 wow_root = Path(install.path).parent

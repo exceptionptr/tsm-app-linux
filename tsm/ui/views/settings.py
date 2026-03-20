@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.ui.viewmodels.settings_vm import SettingsViewModel
+from tsm.ui.views._utils import build_realm_tree
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,7 @@ class SettingsDialog(QDialog):
         self._realm_vm = realm_vm
 
         from tsm import __version__
+
         self.setWindowTitle(f"Settings - v{__version__}")
         self.setModal(True)
         self.setMinimumSize(540, 400)
@@ -279,7 +281,7 @@ class SettingsDialog(QDialog):
 
         # Prefer detected WoW path from detector (shows WoW root, not _retail_)
         if self._detector is not None:
-            installs = getattr(self._detector, "_installs", []) or []
+            installs = self._detector.installs
             if installs:
                 from pathlib import Path
 
@@ -325,29 +327,7 @@ class SettingsDialog(QDialog):
         """Raw API response → build processed tree then populate combos."""
         if not isinstance(data, dict):
             return
-        self._realm_tree = {}
-        for game_ver, realms in data.items():
-            if not isinstance(realms, list):
-                continue
-            if game_ver == "retail":
-                gv_label, api_gv = "Retail", "retail"
-            elif game_ver == "bcc":
-                gv_label, api_gv = "Progression", "bcc"
-            else:
-                continue
-            self._realm_tree.setdefault(gv_label, {})
-            for realm in realms:
-                region = realm.get("region", "")
-                self._realm_tree[gv_label].setdefault(region, []).append(
-                    {
-                        "id": realm.get("id", 0),
-                        "name": realm.get("name", ""),
-                        "gameVersion": api_gv,
-                    }
-                )
-        for gv in self._realm_tree.values():
-            for region in gv:
-                gv[region].sort(key=lambda r: r["name"])
+        self._realm_tree = build_realm_tree(data)
         self._populate_gv_combo()
 
     def _populate_gv_combo(self) -> None:
@@ -360,7 +340,7 @@ class SettingsDialog(QDialog):
         self._gv_combo.setCurrentIndex(retail_idx if retail_idx >= 0 else 0)
         self._on_gv_changed(self._gv_combo.currentIndex())
 
-    def _on_gv_changed(self, _index: int) -> None:
+    def _on_gv_changed(self, _: int) -> None:
         gv_label = self._gv_combo.currentText()
         regions = (
             sorted(self._realm_tree.get(gv_label, {}).keys())
@@ -374,7 +354,7 @@ class SettingsDialog(QDialog):
         self._region_combo.blockSignals(False)
         self._on_region_changed(0)
 
-    def _on_region_changed(self, _index: int) -> None:
+    def _on_region_changed(self, _: int) -> None:
         gv_label = self._gv_combo.currentText()
         region = self._region_combo.currentText()
         realms = []
@@ -417,11 +397,7 @@ class SettingsDialog(QDialog):
 
     def _logout_reset(self) -> None:
         """Logout and reset all settings to defaults."""
-        # Reset config to defaults
-        from tsm.core.models.config import AppConfig
-
-        self._vm._config = AppConfig()
-        self._vm.save()
+        self._vm.reset_to_defaults()
 
         if self._auth_service:
             from tsm.workers.bridge import AsyncBridge

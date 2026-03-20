@@ -49,7 +49,6 @@ async def test_status_call():
         {
             "session": "s",
             "userId": 1,
-            "isPremium": False,
             "endpointSubdomains": {"status": "app-server"},
         }
     )
@@ -62,7 +61,8 @@ async def test_status_call():
     with aioresponses() as m:
         m.get(RE_STATUS, payload=status_payload)
         result = await client.status.get()
-    assert result["realms"][0]["name"] == "Blackhand"
+    realms = result.get("realms", [])
+    assert realms[0].get("name") == "Blackhand"
     await client.close()
 
 
@@ -84,7 +84,6 @@ async def test_retry_on_server_error():
         {
             "session": "s",
             "userId": 1,
-            "isPremium": False,
             "endpointSubdomains": {"status": "app-server"},
         }
     )
@@ -94,5 +93,5 @@ async def test_retry_on_server_error():
         m.get(RE_STATUS, status=503)
         m.get(RE_STATUS, payload=good_payload)
         result = await client.status.get()
-    assert result["realms"] == []
+    assert result.get("realms") == []
     await client.close()

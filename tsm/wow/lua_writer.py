@@ -25,7 +25,8 @@ logger = logging.getLogger(__name__)
 APP_VERSION = 41402
 
 # Tags that use store_raw=True (pass blob verbatim, no [[return ...]] wrapper).
-# All observed tags including APP_INFO use [[return ...]], so this is empty.
+# All observed tags use the [[return ...]] wrapping, so this set is empty.
+# Kept as a hook: add tag names here if a future API change introduces raw-format entries.
 RAW_TAGS: set[str] = set()
 
 

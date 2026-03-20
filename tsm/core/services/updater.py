@@ -20,15 +20,9 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from tsm.api.types import AddonVersionInfo
+from tsm.wow.utils import iter_wow_gv_roots
 
 logger = logging.getLogger(__name__)
-
-_SUFFIX_TO_GV: dict[str, str] = {
-    "": "_retail_",
-    "-Classic": "_classic_era_",
-    "-Progression": "_classic_",
-    "-Anniversary": "_anniversary_",
-}
 
 
 def _find_addons_dir(gv_path: Path) -> Path | None:
@@ -65,7 +59,7 @@ class UpdateService:
         if not addon_versions or self._client is None or self._detector is None:
             return []
 
-        installs = getattr(self._detector, "_installs", []) or []
+        installs = self._detector.installs if self._detector is not None else []
         if not installs:
             return []
 
@@ -91,21 +85,20 @@ class UpdateService:
 
     def _needs_update(self, base_name: str, latest: str, installs) -> bool:
         """True if any installed copy of this addon is outdated (release version ≠ latest)."""
-        for gv_dir in _SUFFIX_TO_GV.values():
-            for install in installs:
-                wow_root = Path(install.path).parent
-                addons_dir = _find_addons_dir(wow_root / gv_dir)
-                if addons_dir is None:
-                    continue
-                toc = addons_dir / base_name / f"{base_name}.toc"
-                vtype, installed_ver = _toc_version(toc)
-                if vtype == 1 and installed_ver != latest:
-                    return True
+        for wow_root, gv_dir in iter_wow_gv_roots(installs):
+            addons_dir = _find_addons_dir(wow_root / gv_dir)
+            if addons_dir is None:
+                continue
+            toc = addons_dir / base_name / f"{base_name}.toc"
+            vtype, installed_ver = _toc_version(toc)
+            if vtype == 1 and installed_ver != latest:
+                return True
         return False
 
     async def _download_and_install(self, base_name: str, latest: str, installs) -> bool:
         """Download zip for base_name and install into every game version dir
         where the addon folder already exists."""
+        assert self._client is not None
         logger.info("Downloading addon %s v%s", base_name, latest)
         try:
             zip_bytes = await self._client.addon.download(base_name, tsm_version=latest)
@@ -121,37 +114,33 @@ class UpdateService:
 
         installed_any = False
         with zf:
-            for gv_dir in _SUFFIX_TO_GV.values():
-                for install in installs:
-                    wow_root = Path(install.path).parent
-                    addons_dir = _find_addons_dir(wow_root / gv_dir)
-                    if addons_dir is None:
-                        continue
-                    addon_dir = addons_dir / base_name
-                    if not addon_dir.exists():
-                        continue  # only update where already installed
-                    try:
-                        shutil.rmtree(addon_dir)
-                        zf.extractall(addons_dir)
-                        logger.info("Installed %s v%s → %s", base_name, latest, addons_dir)
-                        installed_any = True
-                    except Exception:
-                        logger.exception("Failed to install %s to %s", base_name, addons_dir)
+            for wow_root, gv_dir in iter_wow_gv_roots(installs):
+                addons_dir = _find_addons_dir(wow_root / gv_dir)
+                if addons_dir is None:
+                    continue
+                addon_dir = addons_dir / base_name
+                if not addon_dir.exists():
+                    continue  # only update where already installed
+                try:
+                    shutil.rmtree(addon_dir)
+                    zf.extractall(addons_dir)
+                    logger.info("Installed %s v%s → %s", base_name, latest, addons_dir)
+                    installed_any = True
+                except Exception:
+                    logger.exception("Failed to install %s to %s", base_name, addons_dir)
 
         return installed_any
 
     async def _delete_addon(self, base_name: str, installs) -> None:
         """Remove addon folder from all game version dirs (version_str == "" signal)."""
-        for gv_dir in _SUFFIX_TO_GV.values():
-            for install in installs:
-                wow_root = Path(install.path).parent
-                addons_dir = _find_addons_dir(wow_root / gv_dir)
-                if addons_dir is None:
-                    continue
-                addon_dir = addons_dir / base_name
-                if addon_dir.exists():
-                    try:
-                        shutil.rmtree(addon_dir)
-                        logger.info("Deleted addon %s from %s", base_name, addons_dir)
-                    except Exception:
-                        logger.exception("Failed to delete %s", addon_dir)
+        for wow_root, gv_dir in iter_wow_gv_roots(installs):
+            addons_dir = _find_addons_dir(wow_root / gv_dir)
+            if addons_dir is None:
+                continue
+            addon_dir = addons_dir / base_name
+            if addon_dir.exists():
+                try:
+                    shutil.rmtree(addon_dir)
+                    logger.info("Deleted addon %s from %s", base_name, addons_dir)
+                except Exception:
+                    logger.exception("Failed to delete %s", addon_dir)

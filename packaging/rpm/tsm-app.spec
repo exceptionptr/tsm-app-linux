@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.0.3
+Version:        1.0.5
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -57,6 +57,17 @@ install -Dm644 LICENSE \
 %{_datadir}/licenses/%{name}/
 
 %changelog
+* Fri Mar 20 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.5-1
+- Add: Protocol types for ServiceContainer fields in scheduler.py
+- Add: unit tests for ConfigStore, WoWDetectorService, BackupService, AddonWriterService, and AuctionCache snapshot round-trip
+- CI: Python 3.13 added to the test matrix
+
+* Thu Mar 19 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.4-1
+- Fix: Last Updated column now correctly shows the primary tag timestamp
+- Fix: tray notification text trimmed to "{n} realm(s)/region(s) updated."
+- Add: reverse-engineered TSM API reference document (API.md)
+- CI: softprops/action-gh-release bumped to v2.3.2; AUR workflow extracted to separate manual dispatch
+
 * Wed Mar 18 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.3-1
 - Fix: realm list no longer clears when WoW install or AppHelper is not detected during refresh
 - Fix: closing via tray Quit no longer shows double confirmation dialog

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import logging
-import re
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -21,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.storage.config_store import CONFIG_DIR
+from tsm.wow.accounts import scan_tsm_accounts
 
 logger = logging.getLogger(__name__)
 
@@ -34,14 +34,12 @@ _DB_KEYS = {
     "Canceled Auctions": "csvCancelled",
 }
 
-_GAME_VERSIONS = ("_retail_", "_classic_era_", "_classic_", "_anniversary_")
 _SUFFIXES = {
     "_retail_": "",
     "_classic_era_": "-Classic",
     "_classic_": "-Progression",
     "_anniversary_": "-Anniversary",
 }
-
 
 _LAST_DIR_FILE = CONFIG_DIR / "last_export_dir"
 
@@ -52,7 +50,7 @@ class AccountingExportView(QWidget):
         self._detector = wow_detector
         self._last_export_dir: Path = self._load_last_dir()
         self._setup_ui()
-        self._populate()
+        self.populate()
 
     def _load_last_dir(self) -> Path:
         try:
@@ -73,7 +71,7 @@ class AccountingExportView(QWidget):
 
     def set_detector(self, detector) -> None:
         self._detector = detector
-        self._populate()
+        self.populate()
 
     def _setup_ui(self) -> None:
         vbox = QVBoxLayout(self)
@@ -117,8 +115,8 @@ class AccountingExportView(QWidget):
         # Internal: {account_key: [realm, ...]}
         self._accounts: dict[str, list[str]] = {}
 
-    def _populate(self) -> None:
-        self._accounts = _scan_accounts(self._detector)
+    def populate(self) -> None:
+        self._accounts = scan_tsm_accounts(self._detector)
         self._account_combo.blockSignals(True)
         self._account_combo.clear()
         for acct in sorted(self._accounts):
@@ -214,50 +212,10 @@ def _write_csv(csv_string: str, path: Path) -> None:
         writer.writerows(rows)
 
 
-def _scan_accounts(detector) -> dict[str, list[str]]:
-    """Return {account_display_name: [realm, ...]} from WTF directories."""
-    result: dict[str, list[str]] = {}
-    if detector is None:
-        return result
-    installs = getattr(detector, "_installs", []) or []
-    for install in installs:
-        wow_root = Path(install.path).parent
-        for gv in _GAME_VERSIONS:
-            suffix = _SUFFIXES.get(gv, "")
-            wtf_accounts = wow_root / gv / "WTF" / "Account"
-            if not wtf_accounts.is_dir():
-                continue
-            for acct_dir in wtf_accounts.iterdir():
-                if not acct_dir.is_dir():
-                    continue
-                if not re.match(r"^[A-Za-z0-9#]+$", acct_dir.name):
-                    continue
-                if acct_dir.name == "SavedVariables":
-                    continue
-                # Only show accounts with TSM SavedVariables
-                sv = acct_dir / "SavedVariables" / "TradeSkillMaster.lua"
-                if not sv.exists():
-                    continue
-                acct_key = acct_dir.name + suffix
-                realms = _scan_realms(acct_dir)
-                if realms:
-                    result.setdefault(acct_key, []).extend(realms)
-    return result
-
-
-def _scan_realms(acct_dir: Path) -> list[str]:
-    """Return realm names from WTF Account/ACCOUNT/SERVER/CHAR structure."""
-    realms = []
-    for item in acct_dir.iterdir():
-        if item.is_dir() and item.name != "SavedVariables":
-            realms.append(item.name)
-    return sorted(realms)
-
-
 def _get_wow_root(detector) -> Path | None:
     if detector is None:
         return None
-    installs = getattr(detector, "_installs", []) or []
+    installs = detector.installs
     if not installs:
         return None
     return Path(installs[0].path).parent

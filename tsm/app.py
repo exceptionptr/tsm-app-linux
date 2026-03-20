@@ -60,6 +60,8 @@ def _ensure_single_instance(qt_app: QApplication) -> None:
         "TSM Desktop App is already running.\nCheck the system tray.",
     )
     sys.exit(0)
+
+
 DB_PATH = DATA_DIR / "data.db"
 
 
@@ -113,6 +115,9 @@ def create_app(
     def _addon_notify(message: str) -> None:
         app_vm.addon_notification.emit(message)
 
+    def _wow_warn(message: str) -> None:
+        app_vm.set_status(message)
+
     # Scheduler (started after successful auth)
     svc_container = ServiceContainer(
         auth=auth_svc,
@@ -124,6 +129,7 @@ def create_app(
         backup_notify_fn=_backup_notify,
         addon_notify_fn=_addon_notify,
         auction_data_fn=app_vm.realm_data_received.emit,
+        wow_warn_fn=_wow_warn,
     )
     scheduler = JobScheduler(svc_container, debug_interval_minutes=debug_interval_minutes)
 

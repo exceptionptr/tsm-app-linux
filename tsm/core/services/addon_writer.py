@@ -16,6 +16,15 @@ class AddonWriterService:
         self._detector = wow_detector
         self._lua_writer = LuaWriter()
 
+    def get_detector(self):
+        """Return the WoW detector service."""
+        return self._detector
+
+    @property
+    def installs(self):
+        """Return cached WoW installs from the detector."""
+        return self._detector.installs if self._detector is not None else []
+
     async def write_data(self, data: AuctionData) -> list[Path]:
         """Write auction data Lua files to all detected WoW installs."""
         written: list[Path] = []

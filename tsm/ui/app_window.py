@@ -24,6 +24,7 @@ from tsm.ui.components.status_bar import TSMStatusBar
 from tsm.ui.viewmodels.app_vm import AppViewModel
 from tsm.ui.viewmodels.realm_vm import RealmViewModel
 from tsm.ui.viewmodels.settings_vm import SettingsViewModel
+from tsm.ui.views._utils import build_realm_tree
 from tsm.ui.views.accounting_export import AccountingExportView
 from tsm.ui.views.addon_versions import AddonVersionsView
 from tsm.ui.views.backups import BackupsView
@@ -66,6 +67,7 @@ class AppWindow(QMainWindow):
         self._quitting = False
 
         from tsm import __version__
+
         self.setWindowTitle(f"TradeSkillMaster Application - v{__version__}")
         self.setMinimumSize(620, 540)
         self.setMaximumSize(1200, 900)
@@ -108,7 +110,7 @@ class AppWindow(QMainWindow):
         # Wire addon versions update from realm VM
         self._realm_vm.addons_updated.connect(self._addon_view.update_from_api)
         # Refresh accounting dropdowns after data sync (detector will have installs by then)
-        self._realm_vm.data_updated.connect(self._acct_view._populate)
+        self._realm_vm.data_updated.connect(self._acct_view.populate)
 
         vbox.addWidget(self._build_footer())
 
@@ -208,14 +210,16 @@ class AppWindow(QMainWindow):
             done_callback()
             return
 
+        backup_service = self._backup_service
+
         async def _do_backup():
             import asyncio
 
             cfg = self._settings_vm.config
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             return await loop.run_in_executor(
                 None,
-                lambda: self._backup_service.run(
+                lambda: backup_service.run(
                     period_minutes=0,
                     retain_days=cfg.backup_retain_days,
                     extra_installs=cfg.wow_installs,
@@ -230,8 +234,8 @@ class AppWindow(QMainWindow):
         bridge.error_occurred.connect(lambda _: done_callback())
         bridge.run(_do_backup())
 
-    def _update_status(self, *_args: object) -> None:
-        installs = list(getattr(self._addon_service, "_installs", []) or [])
+    def _update_status(self, *_: object) -> None:
+        installs = list(self._addon_service.installs) if self._addon_service is not None else []
         if not installs:
             installs = list(getattr(self._settings_vm.config, "wow_installs", []) or [])
         if not installs:
@@ -378,30 +382,16 @@ class AppWindow(QMainWindow):
     def _on_realm_list_fetched(self, data) -> None:
         if not isinstance(data, dict):
             return
-        tree: dict[str, dict[str, list[dict]]] = {}
-        for game_ver, realms in data.items():
-            if not isinstance(realms, list):
-                continue
-            if game_ver == "retail":
-                gv_label, api_gv = "Retail", "retail"
-            elif game_ver == "bcc":
-                gv_label, api_gv = "Progression", "bcc"
-            else:
-                continue
-            tree.setdefault(gv_label, {})
-            for realm in realms:
-                region = realm.get("region", "")
-                tree[gv_label].setdefault(region, []).append(
-                    {
-                        "id": realm.get("id", 0),
-                        "name": realm.get("name", ""),
-                        "gameVersion": api_gv,
-                    }
-                )
-        for gv in tree.values():
-            for region in gv:
-                gv[region].sort(key=lambda r: r["name"])
-        self._realm_tree_cache = tree
+        self._realm_tree_cache = build_realm_tree(data)
+
+    def on_authenticated(self, session) -> None:
+        """Called after successful authentication (login or session restore)."""
+        self._app_vm.on_login_success(session)
+        self._app_vm.set_status("Connected, loading data...")
+        if not self._settings_vm.config.start_minimized:
+            self.show()
+        self._realm_vm.load_snapshot()
+        self._realm_vm.refresh_all()
 
 
 def _make_window_icon() -> QIcon:
