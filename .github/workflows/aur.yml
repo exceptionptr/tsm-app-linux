@@ -4,22 +4,49 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (e.g. 1.0.3)"
+        description: "Version to publish (e.g. 1.0.6)"
         required: true
 
 jobs:
   publish-aur:
     name: Publish to AUR
+    # Version check below guards against re-publishing what AUR already has.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - name: Update PKGBUILD version
+      - name: Resolve target version
+        id: resolve
         run: |
-          sed -i "s/^pkgver=.*/pkgver=${{ github.event.inputs.version }}/" packaging/PKGBUILD
+          echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+
+      - name: Check AUR version
+        id: check
+        run: |
+          AUR_VERSION=$(curl -fsSL "https://aur.archlinux.org/rpc/v5/info/tsm-app" \
+            | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          print(d['results'][0]['Version'].split('-')[0] if d['results'] else '')
+          ")
+          TARGET="${{ steps.resolve.outputs.version }}"
+          echo "aur_version=$AUR_VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$AUR_VERSION" = "$TARGET" ]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "AUR is already at $AUR_VERSION - nothing to publish."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "AUR is at '$AUR_VERSION', publishing $TARGET."
+          fi
+
+      - name: Update PKGBUILD version
+        if: steps.check.outputs.publish == 'true'
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${{ steps.resolve.outputs.version }}/" packaging/PKGBUILD
           sed -i "s/^pkgrel=.*/pkgrel=1/" packaging/PKGBUILD
 
       - name: Publish to AUR
+        if: steps.check.outputs.publish == 'true'
         uses: KSXGitHub/github-actions-deploy-aur@v3.0.1
         with:
           pkgname: tsm-app
@@ -27,6 +54,6 @@ jobs:
           commit_username: exceptionptr
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_KEY }}
-          commit_message: "Update to v${{ github.event.inputs.version }}"
+          commit_message: "Update to v${{ steps.resolve.outputs.version }}"
           updpkgsums: true
           allow_empty_commits: false

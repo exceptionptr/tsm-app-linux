@@ -9,9 +9,45 @@ env:
   PYTHON_VERSION: "3.11"
 
 jobs:
+  # ── 0. Tests (gate: all build jobs require this to pass) ──────────────────
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # hatch-vcs needs full tag history
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint with ruff
+        run: ruff check tsm/ tests/
+
+      - name: Type check with mypy
+        run: mypy tsm/
+
+      - name: Run unit tests
+        run: pytest tests/unit/ -v
+
+      - name: Run integration tests
+        run: pytest tests/integration/ -v
+        env:
+          QT_QPA_PLATFORM: offscreen
+
   # ── 1. Build Python wheel ─────────────────────────────────────────────────
   build-wheel:
     name: Build wheel
+    needs: test
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.value }}
@@ -166,4 +202,3 @@ jobs:
             artifacts/wheel/*.whl
             artifacts/deb/*.deb
             artifacts/rpm/*.rpm
-
