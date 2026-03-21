@@ -4,6 +4,26 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.0.6] - 2026-03-21
+
+### Fixed
+
+- `AppData.lua` `lastSync` field no longer goes stale between hourly API calls:
+  `job_auction_refresh` now calls `AuctionDataService.write_app_info()` on every
+  5-min poll when cached data is still fresh, keeping the in-game "data age" indicator
+  accurate without hitting the API
+- Status bar "last checked" timestamp now updates on every 5-min poll even when no
+  API call is made: the fresh path constructs an `AuctionData` from the cached realm
+  snapshot with the current time and calls `auction_data_fn` so `RealmViewModel`
+  updates `_last_sync`
+
+### Chore
+
+- `AddonWriterService.__init__` and `get_detector()` now carry proper type annotations;
+  removes the last `no-untyped-call` mypy error in strict-typed callers
+
+---
+
 ## [1.0.5] - 2026-03-20
 
 ### Removed
@@ -15,6 +35,14 @@ All notable changes to tsm-app-linux are documented here.
 
 ### Fixed
 
+- `AppData.lua` `lastSync` field no longer goes stale between hourly API calls:
+  `job_auction_refresh` now calls `AuctionDataService.write_app_info()` on every
+  5-min poll when cached data is still fresh, keeping the in-game "data age" indicator
+  accurate without hitting the API
+- Status bar "last checked" timestamp now updates on every 5-min poll even when no
+  API call is made: the fresh path constructs an `AuctionData` from the cached realm
+  snapshot with the current time and calls `auction_data_fn` so `RealmViewModel`
+  updates `_last_sync`
 - `assert self._db is not None` in `database.py` replaced with a proper
   `RuntimeError` (assert can be silenced with `-O`)
 - Silent `except Exception: pass` on backup purge now logs a `WARNING`

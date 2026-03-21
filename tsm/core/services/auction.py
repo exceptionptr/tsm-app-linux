@@ -208,6 +208,19 @@ class AuctionDataService:
             return
         await self._client.realms.remove(game_version, region, name)
 
+    async def write_app_info(self) -> None:
+        """Update APP_INFO.lastSync in every AppData.lua without hitting the API.
+
+        Called on every 5-min poll when cached data is still fresh, so the TSM
+        addon always sees a recent lastSync and does not display stale-data warnings.
+        """
+        if self._addon_writer is None:
+            return
+        data = AuctionData(
+            app_info=AppInfo(version=41402, last_sync=int(time.time()))
+        )
+        await self._addon_writer.write_data(data)
+
     async def get_snapshot(self) -> tuple[list[RealmStatus], int]:
         """Load last-known realm list from DB for immediate display at startup.
 
