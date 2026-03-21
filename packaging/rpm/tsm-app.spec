@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.0.5
+Version:        1.0.6
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -57,6 +57,11 @@ install -Dm644 LICENSE \
 %{_datadir}/licenses/%{name}/
 
 %changelog
+* Sat Mar 21 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.6-1
+- Fix: AppData.lua lastSync no longer goes stale between hourly API calls
+- Fix: status bar last-checked timestamp now updates on every 5-min poll
+- Chore: AddonWriterService.get_detector() now typed
+
 * Fri Mar 20 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.5-1
 - Add: Protocol types for ServiceContainer fields in scheduler.py
 - Add: unit tests for ConfigStore, WoWDetectorService, BackupService, AddonWriterService, and AuctionCache snapshot round-trip

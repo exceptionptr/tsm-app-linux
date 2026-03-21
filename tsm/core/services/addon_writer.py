@@ -6,17 +6,18 @@ import logging
 from pathlib import Path
 
 from tsm.core.models.auction import AuctionData
+from tsm.core.services.wow_detector import WoWDetectorService
 from tsm.wow.lua_writer import LuaWriter
 
 logger = logging.getLogger(__name__)
 
 
 class AddonWriterService:
-    def __init__(self, wow_detector=None):
+    def __init__(self, wow_detector: WoWDetectorService | None = None):
         self._detector = wow_detector
         self._lua_writer = LuaWriter()
 
-    def get_detector(self):
+    def get_detector(self) -> WoWDetectorService | None:
         """Return the WoW detector service."""
         return self._detector
 
