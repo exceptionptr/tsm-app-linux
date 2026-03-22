@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.0.6
+Version:        1.0.7
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -57,6 +57,11 @@ install -Dm644 LICENSE \
 %{_datadir}/licenses/%{name}/
 
 %changelog
+* Sun Mar 22 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.7-1
+- Fix: auction poller checks TSM API on every 5-min poll; removed 60-min cache gate
+- Chore: ci.yml deleted; tests moved into release.yml as a gate job
+- Chore: aur.yml version check prevents duplicate AUR publishes
+
 * Sat Mar 21 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.6-1
 - Fix: AppData.lua lastSync no longer goes stale between hourly API calls
 - Fix: status bar last-checked timestamp now updates on every 5-min poll

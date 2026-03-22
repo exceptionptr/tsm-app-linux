@@ -1,3 +1,13 @@
+tsm-app (1.0.7-1) stable; urgency=low
+
+  * Fix: auction poller now checks TSM API on every 5-min poll; removed
+    60-min local-cache gate that caused realm updates to be missed for up
+    to an hour after TSM published new data
+  * Chore: ci.yml deleted; tests moved into release.yml as a gate job
+  * Chore: aur.yml version check prevents duplicate AUR publishes
+
+ -- exceptionptr <https://github.com/exceptionptr>  Sun, 22 Mar 2026 12:00:00 +0100
+
 tsm-app (1.0.6-1) stable; urgency=low
 
   * Fix: AppData.lua lastSync no longer goes stale between hourly API calls;
