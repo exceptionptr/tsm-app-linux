@@ -4,6 +4,25 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.0.7] - 2026-03-22
+
+### Fixed
+
+- `job_auction_refresh` now calls `refresh_all_realms()` on every 5-min poll instead
+  of gating on a 60-min local-cache age. TSM publishes new realm data independently of
+  our local cache; the old threshold meant updates could be missed for up to 60 minutes.
+  `refresh_all_realms()` is already differential (status endpoint + per-tag
+  `lastModified` comparison) so only changed blobs are downloaded each poll.
+
+### Chore
+
+- `ci.yml` deleted; test matrix (ruff, mypy, pytest on 3.11/3.12/3.13) moved into
+  `release.yml` as a gate job that all build jobs depend on
+- `aur.yml` now checks the AUR RPC API before publishing and skips if AUR is already
+  at the target version, preventing duplicate publishes
+
+---
+
 ## [1.0.6] - 2026-03-21
 
 ### Fixed

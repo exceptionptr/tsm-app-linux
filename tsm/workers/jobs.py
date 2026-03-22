@@ -4,37 +4,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
-
-from tsm.core.models.auction import AppInfo, AuctionData
 
 logger = logging.getLogger(__name__)
 
 
 async def job_auction_refresh(*, services) -> None:
-    """Poll every 5 min; only fetch from TSM API when data is older than the
-    configured interval (default 60 min).  Also checks for addon updates."""
+    """Poll TSM API every 5 min for new auction data.
+
+    refresh_all_realms() is differential: it calls the status endpoint,
+    compares lastModified timestamps per realm/tag, and only downloads
+    blobs that have changed since the last fetch.
+    """
     try:
-        statuses, saved_at = await services.auction.get_snapshot()
-        threshold = getattr(services, "auction_interval_minutes", 60)
-        age_minutes = (time.time() - saved_at) / 60 if saved_at else float("inf")
-        if age_minutes < threshold:
-            logger.debug(
-                "job_auction_refresh: data is %.0f min old (threshold %d min), skipping API",
-                age_minutes,
-                threshold,
-            )
-            # Keep AppData.lua lastSync fresh so the addon does not show stale warnings.
-            await services.auction.write_app_info()
-            # Update status bar with cached realm list and current check time.
-            if statuses and callable(getattr(services, "auction_data_fn", None)):
-                fresh = AuctionData(
-                    app_info=AppInfo(version=41402, last_sync=int(time.time())),
-                    realm_statuses=list(statuses),
-                )
-                services.auction_data_fn(fresh)
-            return
-        logger.info("job_auction_refresh: data is %.0f min old, fetching from API", age_minutes)
+        logger.info("job_auction_refresh: checking TSM API for new data")
         data = await services.auction.refresh_all_realms()
         addon_versions = getattr(data, "addon_versions", [])
         if addon_versions:

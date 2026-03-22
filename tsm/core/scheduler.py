@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 class AuctionServiceProtocol(Protocol):
     async def get_snapshot(self) -> tuple[Any, float]: ...
     async def refresh_all_realms(self) -> Any: ...
-    async def write_app_info(self) -> None: ...
 
 
 class AuthServiceProtocol(Protocol):
@@ -63,7 +62,6 @@ class ServiceContainer:
     addon_notify_fn: Callable[[str], None] | None = None
     auction_data_fn: Callable[[Any], None] | None = None
     wow_warn_fn: Callable[[str], None] | None = None
-    auction_interval_minutes: int = 60  # staleness threshold for the 5-min auction poller
 
 
 class JobScheduler:
@@ -96,8 +94,7 @@ class JobScheduler:
 
             async with scheduler:
                 if debug is not None:
-                    # Debug mode: bypass staleness gate and fire immediately.
-                    svc.auction_interval_minutes = debug
+                    # Debug mode: fire immediately and at a short interval.
                     await scheduler.add_schedule(
                         job_auction_refresh,
                         IntervalTrigger(minutes=debug),
@@ -111,9 +108,9 @@ class JobScheduler:
                         kwargs={"services": svc},
                     )
                 else:
-                    # Auction poller: check every 5 minutes but only hit the API
-                    # when data is older than auction_interval_minutes (default 60).
-                    # First poll after 5 min; startup refresh already ran at login.
+                    # Auction poller: check TSM API every 5 minutes for new data.
+                    # refresh_all_realms() is differential so only changed blobs are
+                    # downloaded. First poll after 5 min; startup refresh already ran at login.
                     await scheduler.add_schedule(
                         job_auction_refresh,
                         IntervalTrigger(minutes=5, start_time=now + timedelta(minutes=5)),
