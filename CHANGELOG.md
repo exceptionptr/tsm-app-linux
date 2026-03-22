@@ -13,6 +13,9 @@ All notable changes to tsm-app-linux are documented here.
   our local cache; the old threshold meant updates could be missed for up to 60 minutes.
   `refresh_all_realms()` is already differential (status endpoint + per-tag
   `lastModified` comparison) so only changed blobs are downloaded each poll.
+- `apscheduler` dependency specifier changed from `>=4.0.0` to `>=4.0.0a5`: pip
+  excludes pre-releases when the lower bound is a stable version, causing CI installs
+  to fail since no stable 4.x release exists yet.
 
 ### Chore
 
