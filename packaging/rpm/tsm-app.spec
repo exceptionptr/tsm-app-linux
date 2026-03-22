@@ -59,6 +59,7 @@ install -Dm644 LICENSE \
 %changelog
 * Sun Mar 22 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.7-1
 - Fix: auction poller checks TSM API on every 5-min poll; removed 60-min cache gate
+- Fix: apscheduler dependency changed to >=4.0.0a5 so pip resolves 4.x pre-release
 - Chore: ci.yml deleted; tests moved into release.yml as a gate job
 - Chore: aur.yml version check prevents duplicate AUR publishes
 

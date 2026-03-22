@@ -3,6 +3,8 @@ tsm-app (1.0.7-1) stable; urgency=low
   * Fix: auction poller now checks TSM API on every 5-min poll; removed
     60-min local-cache gate that caused realm updates to be missed for up
     to an hour after TSM published new data
+  * Fix: apscheduler dependency changed to >=4.0.0a5 so pip resolves the
+    4.x pre-release correctly in CI
   * Chore: ci.yml deleted; tests moved into release.yml as a gate job
   * Chore: aur.yml version check prevents duplicate AUR publishes
 
