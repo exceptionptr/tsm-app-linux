@@ -41,8 +41,6 @@ jobs:
 
       - name: Run integration tests
         run: pytest tests/integration/ -v
-        env:
-          QT_QPA_PLATFORM: offscreen
 
   # ── 1. Build Python wheel ─────────────────────────────────────────────────
   build-wheel:
