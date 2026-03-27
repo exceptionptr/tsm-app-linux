@@ -160,8 +160,8 @@ jobs:
           # apscheduler 4.x, structlog, and tomli-w are not available as RPM
           # system packages on Fedora/openSUSE. Bundle them under a vendor dir
           # that is injected into sys.path by the entry point script.
-          pip install --target=staging/usr/lib/tsm-app/vendor \
-            "apscheduler>=4.0.0,<5" structlog tomli-w
+          pip install --pre --target=staging/usr/lib/tsm-app/vendor \
+            "apscheduler>=4.0.0a1,<5" structlog tomli-w
           # Inject vendor path after the shebang line in the entry point
           sed -i '2i import sys; sys.path.insert(0, "/usr/lib/tsm-app/vendor")' \
             staging/usr/bin/tsm-app
@@ -245,8 +245,15 @@ jobs:
 
       - name: Install .deb
         run: |
+          # python3-pyside6 is not in Ubuntu's default apt repos; install via pip
+          # so the deb's Depends can be satisfied when we force-install the package.
+          pip install PySide6
           sudo apt-get update -qq
-          sudo apt-get install -y ./dist/*.deb
+          sudo apt-get install -y \
+            python3-aiohttp python3-pydantic python3-aiosqlite \
+            python3-keyring python3-apscheduler python3-structlog \
+            python3-tomli-w python3-yaml
+          sudo dpkg -i --ignore-depends=python3-pyside6 dist/*.deb
 
       - name: Smoke test
         run: tsm-app --version
