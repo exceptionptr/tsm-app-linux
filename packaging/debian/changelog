@@ -1,6 +1,8 @@
 tsm-app (1.1.1-1) stable; urgency=low
 
   * Add: WoW auto-detection for Faugus Launcher via games.json and ~/Faugus/ subdirectory fallback (Closes: #1)
+  * Fix: status bar warning text shown in red for ⚠ messages
+  * Fix: status bar shows ⚠ AppHelper addon not found when WoW path is set but addon is missing
   * Fix: WoW path browse now scans for _retail_/_classic_ subdirs instead of storing
     the raw selected path; resolves installs breaking after manual path config (Closes: #2)
   * Fix: selecting a version subdir (_retail_ etc.) resolves one level up before scanning

@@ -12,6 +12,14 @@ All notable changes to tsm-app-linux are documented here.
   `~/.config/faugus-launcher/games.json` and `~/Faugus/` subdirectory fallback.
   Closes #1.
 
+### Fixed
+
+- Status bar warning text (`⚠ ...`) is now shown in red, making misconfiguration
+  states easier to spot at a glance.
+- Status bar now shows `⚠ TradeSkillMaster_AppHelper addon not found` when a valid
+  WoW path is configured but the AppHelper addon is missing, instead of silently
+  showing "Up to date as of X".
+
 ---
 
 ## [1.1.1] - 2026-03-27

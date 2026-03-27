@@ -243,6 +243,9 @@ class AppWindow(QMainWindow):
         if not installs:
             self._app_vm.set_status("⚠ WoW directory not configured")
             return
+        if self._realm_vm.apphelper_missing:
+            self._app_vm.set_status("⚠ TradeSkillMaster_AppHelper addon not found")
+            return
         last = self._realm_vm.last_sync
         if last:
             self._app_vm.set_status(f"Up to date as of {fmt_ts(last)}")

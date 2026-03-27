@@ -61,3 +61,7 @@ class TSMStatusBar(QStatusBar):
 
     def set_status(self, msg: str) -> None:
         self._status_label.setText(msg)
+        if msg.startswith("⚠"):
+            self._status_label.setStyleSheet("color: #f44336;")
+        else:
+            self._status_label.setStyleSheet("")
