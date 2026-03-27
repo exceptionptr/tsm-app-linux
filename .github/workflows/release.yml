@@ -146,25 +146,28 @@ jobs:
           sudo apt-get install -y ruby ruby-dev rpm
           sudo gem install fpm --no-document
 
-      - name: Install wheel into staging tree
+      - name: Build staging tree
         run: |
-          pip install installer
-          python -m installer --destdir=staging dist/*.whl
+          # Install the app package itself (no deps - RPM Requires provides them)
+          pip install --no-deps --target=staging/usr/lib/tsm-app dist/*.whl
+          # Bundle Python deps absent from Fedora/openSUSE repos
+          pip install --pre --target=staging/usr/lib/tsm-app \
+            "apscheduler>=4.0.0a1,<5" structlog tomli-w
+          # Shell wrapper: version-agnostic, avoids Ubuntu-generated shebang/path issues
+          mkdir -p staging/usr/bin
+          printf '#!/bin/sh\nPYTHONPATH=/usr/lib/tsm-app${PYTHONPATH:+:$PYTHONPATH}\nexport PYTHONPATH\nexec python3 -m tsm "$@"\n' \
+            > staging/usr/bin/tsm-app
+          chmod +x staging/usr/bin/tsm-app
+          # Desktop entry, icons, license
           install -Dm644 packaging/tsm-app.desktop \
             staging/usr/share/applications/tsm-app.desktop
+          install -Dm644 tsm/ui/assets/tsm_16.png  staging/usr/share/icons/hicolor/16x16/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_32.png  staging/usr/share/icons/hicolor/32x32/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_48.png  staging/usr/share/icons/hicolor/48x48/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_128.png staging/usr/share/icons/hicolor/128x128/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_256.png staging/usr/share/icons/hicolor/256x256/apps/tsm-app.png
           install -Dm644 LICENSE \
             staging/usr/share/licenses/tsm-app/LICENSE
-
-      - name: Bundle Python deps not packaged in RPM distros
-        run: |
-          # apscheduler 4.x, structlog, and tomli-w are not available as RPM
-          # system packages on Fedora/openSUSE. Bundle them under a vendor dir
-          # that is injected into sys.path by the entry point script.
-          pip install --pre --target=staging/usr/lib/tsm-app/vendor \
-            "apscheduler>=4.0.0a1,<5" structlog tomli-w
-          # Inject vendor path after the shebang line in the entry point
-          EP=$(find staging -name tsm-app -type f)
-          sed -i '2i import sys; sys.path.insert(0, "/usr/lib/tsm-app/vendor")' "$EP"
 
       - name: Build .rpm with fpm
         run: |
