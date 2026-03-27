@@ -212,7 +212,7 @@ jobs:
       - name: Smoke test
         run: |
           tsm-app --version
-          python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
+          PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
 
   test-rpm-opensuse:
     name: Test .rpm (openSUSE)
@@ -232,7 +232,7 @@ jobs:
       - name: Smoke test
         run: |
           tsm-app --version
-          python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
+          PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
 
   # ── 5. Smoke-test .deb on Ubuntu ─────────────────────────────────────────
   test-deb:
