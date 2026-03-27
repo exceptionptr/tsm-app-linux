@@ -163,8 +163,8 @@ jobs:
           pip install --pre --target=staging/usr/lib/tsm-app/vendor \
             "apscheduler>=4.0.0a1,<5" structlog tomli-w
           # Inject vendor path after the shebang line in the entry point
-          sed -i '2i import sys; sys.path.insert(0, "/usr/lib/tsm-app/vendor")' \
-            staging/usr/bin/tsm-app
+          EP=$(find staging -name tsm-app -type f)
+          sed -i '2i import sys; sys.path.insert(0, "/usr/lib/tsm-app/vendor")' "$EP"
 
       - name: Build .rpm with fpm
         run: |
