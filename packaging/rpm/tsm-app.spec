@@ -59,8 +59,13 @@ install -Dm644 LICENSE \
 %changelog
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
 - Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)
+- Add: --skip-detection, --skip-auto-sync, --skip-auto-backup CLI flags replace --debug
 - Fix: status bar warning text shown in red for ⚠ messages
 - Fix: status bar shows ⚠ AppHelper addon not found when WoW path is set but addon is missing
+- Fix: Addon Versions, Backups, and Accounting tabs disabled when WoW not configured
+- Fix: auto-detected WoW paths no longer overwrite manually configured paths in config
+- Fix: WoW version dir check now looks for WoW executable (case-insensitive) instead of Interface/AddOns
+- Fix: Addon Versions tab populated from API data even when AppHelper is not installed
 - Fix: WoW path browse scans for _retail_/_classic_ subdirs; raw path no longer stored verbatim (Closes: #2)
 - Fix: selecting a version subdir resolves one level up before scanning
 - Fix: stale config entries cleared on each browse; prevents duplicate path accumulation

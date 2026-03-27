@@ -11,6 +11,9 @@ All notable changes to tsm-app-linux are documented here.
 - WoW auto-detection: Faugus Launcher prefixes scanned automatically via
   `~/.config/faugus-launcher/games.json` and `~/Faugus/` subdirectory fallback.
   Closes #1.
+- Debug CLI flags: `--skip-detection`, `--skip-auto-sync`, `--skip-auto-backup`
+  replace the removed `--debug` flag, allowing targeted bypassing of individual
+  startup phases without altering the sync interval.
 
 ### Fixed
 
@@ -19,6 +22,17 @@ All notable changes to tsm-app-linux are documented here.
 - Status bar now shows `⚠ TradeSkillMaster_AppHelper addon not found` when a valid
   WoW path is configured but the AppHelper addon is missing, instead of silently
   showing "Up to date as of X".
+- Addon Versions, Backups, and Accounting tabs are now disabled (and navigation
+  redirected to Realm Data) when no valid WoW directory is configured.
+- Auto-detected WoW paths no longer overwrite manually configured paths in config.
+  Auto-detection only writes to config when the stored install list is empty.
+- WoW game-version directory validation now checks for the WoW executable
+  (`Wow.exe` / `WowClassic.exe`, case-insensitive) instead of requiring
+  `Interface/AddOns` to exist. Fresh installs without any addons are now detected
+  correctly.
+- Addon Versions tab is now populated from API data even when AppHelper is not
+  installed. Previously `addons_updated` was never emitted when no realm statuses
+  were returned, leaving the tab empty.
 
 ---
 

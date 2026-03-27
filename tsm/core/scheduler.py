@@ -66,9 +66,17 @@ class ServiceContainer:
 
 
 class JobScheduler:
-    def __init__(self, services: ServiceContainer, debug_interval_minutes: int | None = None):
+    def __init__(
+        self,
+        services: ServiceContainer,
+        skip_detection: bool = False,
+        skip_auto_sync: bool = False,
+        skip_auto_backup: bool = False,
+    ):
         self._svc = services
-        self._debug = debug_interval_minutes
+        self._skip_detection = skip_detection
+        self._skip_auto_sync = skip_auto_sync
+        self._skip_auto_backup = skip_auto_backup
         self._scheduler: AsyncScheduler | None = None
         self._runner_task: asyncio.Task[None] | None = None
         self._started = False
@@ -78,7 +86,9 @@ class JobScheduler:
             return
 
         svc = self._svc
-        debug = self._debug
+        skip_detection = self._skip_detection
+        skip_auto_sync = self._skip_auto_sync
+        skip_auto_backup = self._skip_auto_backup
         self._scheduler = AsyncScheduler()
 
         # Keep __aenter__ and __aexit__ in the same task (anyio cancel scope requirement).
@@ -91,34 +101,21 @@ class JobScheduler:
 
             # Startup: resolve WoW installs from config, or auto-detect once.
             # No periodic rescanning needed; user can add paths via Settings.
-            await _resolve_wow_installs(svc)
+            await _resolve_wow_installs(svc, skip_scan=skip_detection)
 
             async with scheduler:
-                if debug is not None:
-                    # Debug mode: fire immediately and at a short interval.
-                    await scheduler.add_schedule(
-                        job_auction_refresh,
-                        IntervalTrigger(minutes=debug),
-                        id="auction_refresh",
-                        kwargs={"services": svc},
-                    )
-                    await scheduler.add_schedule(
-                        job_backup,
-                        IntervalTrigger(minutes=debug),
-                        id="backup",
-                        kwargs={"services": svc},
-                    )
-                else:
-                    # Auction poller: check TSM API every 5 minutes for new data.
-                    # refresh_all_realms() is differential so only changed blobs are
-                    # downloaded. First poll after 5 min; startup refresh already ran at login.
+                # Auction poller: check TSM API every 5 minutes for new data.
+                # refresh_all_realms() is differential so only changed blobs are
+                # downloaded. First poll after 5 min; startup refresh already ran at login.
+                if not skip_auto_sync:
                     await scheduler.add_schedule(
                         job_auction_refresh,
                         IntervalTrigger(minutes=5, start_time=now + timedelta(minutes=5)),
                         id="auction_refresh",
                         kwargs={"services": svc},
                     )
-                    # Backup: schedule at the user-configured period, not a fixed 15 min.
+                # Backup: schedule at the user-configured period.
+                if not skip_auto_backup:
                     backup_minutes = (
                         svc.config_store.load().backup_period_minutes
                         if svc.config_store is not None
@@ -139,7 +136,12 @@ class JobScheduler:
                     id="auth_refresh",
                     kwargs={"services": svc},
                 )
-                logger.info("JobScheduler started (debug_interval=%s)", debug)
+                logger.info(
+                    "JobScheduler started (detection=%s sync=%s backup=%s)",
+                    not skip_detection,
+                    not skip_auto_sync,
+                    not skip_auto_backup,
+                )
                 await scheduler.run_until_stopped()
 
         self._runner_task = asyncio.ensure_future(_scheduler_task())
@@ -155,8 +157,8 @@ class JobScheduler:
             self._runner_task = None
 
 
-async def _resolve_wow_installs(svc: ServiceContainer) -> None:
-    """Check config for valid WoW paths; auto-detect if missing or invalid."""
+async def _resolve_wow_installs(svc: ServiceContainer, skip_scan: bool = False) -> None:
+    """Load WoW paths from config into the detector; auto-detect if missing or invalid."""
     if svc.config_store is None:
         return
     cfg = svc.config_store.load()
@@ -166,12 +168,24 @@ async def _resolve_wow_installs(svc: ServiceContainer) -> None:
         logger.info("WoW: using %d configured install(s)", len(valid))
         return
 
+    if skip_scan:
+        logger.info("WoW: no valid configured path; auto-scan skipped (--skip-detection)")
+        if not cfg.wow_installs and svc.wow_warn_fn is not None:
+            svc.wow_warn_fn("No WoW installation found. Add path in Settings.")
+        return
+
     logger.info("WoW: no valid configured path, running auto-detection")
     found = await svc.wow_detector.scan()
     if found:
-        cfg.wow_installs = found
-        svc.config_store.save(cfg)
-        logger.info("WoW: auto-detected %d install(s)", len(found))
+        # Only persist auto-detected paths when config has no user-configured paths at
+        # all. If the user has paths in config that are temporarily invalid (e.g. an
+        # unmounted drive), do not overwrite them.
+        if not cfg.wow_installs:
+            cfg.wow_installs = found
+            svc.config_store.save(cfg)
+            logger.info("WoW: auto-detected %d install(s), saved to config", len(found))
+        else:
+            logger.info("WoW: auto-detected %d install(s), keeping existing config", len(found))
     else:
         logger.warning("WoW: no installs found; user should configure a path in Settings")
         if svc.wow_warn_fn is not None:

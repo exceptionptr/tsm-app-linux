@@ -103,6 +103,7 @@ class AppWindow(QMainWindow):
         self._addon_view = AddonVersionsView(self._addon_service, self._updater_service)
         self._backup_view = BackupsView(self._backup_service, backup_now_fn=self._run_backup_now)
         self._acct_view = AccountingExportView(self._addon_service)
+
         self._stack.addWidget(self._realm_view)  # 0
         self._stack.addWidget(self._addon_view)  # 1
         self._stack.addWidget(self._backup_view)  # 2
@@ -169,6 +170,7 @@ class AppWindow(QMainWindow):
         if valid:
             self._addon_service.set_installs(valid)
             logger.info("Settings saved: pushed %d WoW install(s) to detector", len(valid))
+        self._update_status()
 
     def notify(self, message: str, critical: bool = False) -> None:
         cfg = self._settings_vm.config
@@ -240,7 +242,9 @@ class AppWindow(QMainWindow):
         installs = list(self._addon_service.installs) if self._addon_service is not None else []
         if not installs:
             installs = list(getattr(self._settings_vm.config, "wow_installs", []) or [])
-        if not installs:
+        has_wow = bool(installs)
+        self._set_wow_tabs_enabled(has_wow)
+        if not has_wow:
             self._app_vm.set_status("⚠ WoW directory not configured")
             return
         if self._realm_vm.apphelper_missing:
@@ -251,6 +255,14 @@ class AppWindow(QMainWindow):
             self._app_vm.set_status(f"Up to date as of {fmt_ts(last)}")
         else:
             self._app_vm.set_status("Checking status…")
+
+    def _set_wow_tabs_enabled(self, enabled: bool) -> None:
+        wow_tabs = {"addons", "backups", "accounting"}
+        for i, (_, key) in enumerate(_TABS):
+            if key in wow_tabs:
+                self._tab_buttons[i].setEnabled(enabled)
+        if not enabled and self._current_tab_key() in wow_tabs:
+            self._switch_tab("realm")
 
     def _on_loading_changed(self, loading: bool) -> None:
         if loading:

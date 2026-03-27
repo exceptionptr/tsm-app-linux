@@ -68,6 +68,10 @@ QPushButton#tab:checked {
     font-weight: bold;
     border-bottom: 2px solid #f26522;
 }
+QPushButton#tab:disabled {
+    background-color: #1e1e1e;
+    color: #444444;
+}
 
 /* ── Buttons ──────────────────────────────────────────────────────── */
 QPushButton {

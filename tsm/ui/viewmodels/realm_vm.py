@@ -143,6 +143,10 @@ class RealmViewModel(QObject):
         if new_sync:
             self._last_sync = new_sync
 
+        addon_versions = getattr(data, "addon_versions", [])
+        if addon_versions:
+            self.addons_updated.emit(addon_versions)
+
         statuses = getattr(data, "realm_statuses", [])
         if not statuses:
             # Service returned no realms, WoW install or AppHelper not detected yet.
@@ -170,10 +174,6 @@ class RealmViewModel(QObject):
         ]
         self._had_new_data = bool(getattr(data, "entries", {}))
         self.data_updated.emit()
-
-        addon_versions = getattr(data, "addon_versions", [])
-        if addon_versions:
-            self.addons_updated.emit(addon_versions)
 
     def _on_error(self, error_msg: str) -> None:
         logger.error("Realm refresh error: %s", error_msg)

@@ -268,7 +268,10 @@ class SettingsDialog(QDialog):
     def _browse_wow(self) -> None:
         from pathlib import Path
 
-        from tsm.wow.detector import WOW_VERSIONS, find_wow_installs
+        from PySide6.QtWidgets import QMessageBox
+
+        from tsm.wow.detector import WOW_VERSIONS
+        from tsm.wow.utils import is_valid_wow_version_dir
 
         path = QFileDialog.getExistingDirectory(self, "Select WoW Directory")
         if not path:
@@ -279,14 +282,23 @@ class SettingsDialog(QDialog):
         # resolve one level up to get the WoW root and scan from there.
         base = selected.parent if selected.name in WOW_VERSIONS else selected
 
-        found = find_wow_installs(extra_paths=[base])
+        # Scan only the selected folder - do not run full auto-detection here.
+        seen: set[str] = set()
+        found: list[tuple[str, str]] = []
+        for version in WOW_VERSIONS:
+            p = base / version
+            if is_valid_wow_version_dir(p):
+                key = str(p.resolve())
+                if key not in seen:
+                    seen.add(key)
+                    found.append((str(p.resolve()), version))
+
         if found:
             self._vm.clear_wow_paths()
-            for install in found:
-                self._vm.add_wow_path(install.path, install.version)
+            for path_str, version in found:
+                self._vm.add_wow_path(path_str, version)
             self._wow_dir.setText(str(base))
         else:
-            from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(
                 self,
                 "WoW Not Found",

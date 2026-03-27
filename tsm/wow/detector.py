@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from tsm.core.models.config import WoWInstall
+from tsm.wow.utils import is_valid_wow_version_dir
 
 logger = logging.getLogger(__name__)
 
@@ -120,8 +121,7 @@ def find_wow_installs(extra_paths: list[Path] | None = None) -> list[WoWInstall]
             continue
         for version in WOW_VERSIONS:
             p = base / version
-            addons_dir = p / "Interface" / "AddOns"
-            if addons_dir.is_dir():
+            if is_valid_wow_version_dir(p):
                 key = str(p.resolve())
                 if key not in seen:
                     seen.add(key)
