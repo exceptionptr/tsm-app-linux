@@ -171,8 +171,7 @@ jobs:
           # RPM requires list excludes bundled packages (apscheduler, structlog, tomli-w)
           FPM_DEPS=$(tr ',' '\n' < packaging/rpm/rpm-requires \
             | sed 's/^ *//;s/ *$//' \
-            | sed 's/ (>= />=/' | sed 's/)//' \
-            | awk '{print "--depends "$0}' \
+            | awk 'NF {print "--depends "$0}' \
             | tr '\n' ' ')
           fpm -s dir -t rpm \
             --name tsm-app \
