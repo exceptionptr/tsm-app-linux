@@ -266,10 +266,33 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _browse_wow(self) -> None:
+        from pathlib import Path
+
+        from tsm.wow.detector import WOW_VERSIONS, find_wow_installs
+
         path = QFileDialog.getExistingDirectory(self, "Select WoW Directory")
-        if path:
-            self._wow_dir.setText(path)
-            self._vm.add_wow_path(path)
+        if not path:
+            return
+
+        selected = Path(path)
+        # If the user selected a version directory directly (e.g. _retail_),
+        # resolve one level up to get the WoW root and scan from there.
+        base = selected.parent if selected.name in WOW_VERSIONS else selected
+
+        found = find_wow_installs(extra_paths=[base])
+        if found:
+            self._vm.clear_wow_paths()
+            for install in found:
+                self._vm.add_wow_path(install.path, install.version)
+            self._wow_dir.setText(str(base))
+        else:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self,
+                "WoW Not Found",
+                f"No WoW version directories (_retail_, _classic_, etc.) found under:\n{base}\n\n"
+                "Select the root World of Warcraft folder or a version subfolder directly.",
+            )
 
     def _open_backup_folder(self) -> None:
         from tsm.core.services.backup import _BACKUP_DIR

@@ -31,6 +31,10 @@ class SettingsViewModel(QObject):
             self._config.wow_installs.append(install)
             self.config_changed.emit()
 
+    def clear_wow_paths(self) -> None:
+        self._config.wow_installs = []
+        self.config_changed.emit()
+
     def remove_wow_path(self, path: str) -> None:
         self._config.wow_installs = [w for w in self._config.wow_installs if w.path != path]
         self.config_changed.emit()

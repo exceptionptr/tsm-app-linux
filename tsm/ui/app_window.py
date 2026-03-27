@@ -153,7 +153,22 @@ class AppWindow(QMainWindow):
         self._backup_view._refresh()
         self._app_vm.addon_notification.connect(self._notify_addon)
         self._app_vm.realm_data_received.connect(self._realm_vm._on_data_received)
+        self._settings_vm.saved.connect(self._on_settings_saved)
         self._update_status()
+
+    def _on_settings_saved(self) -> None:
+        """Push updated WoW install paths into the detector immediately.
+
+        _resolve_wow_installs only runs once at scheduler startup, so without
+        this hook a freshly saved custom path is ignored until the app restarts.
+        """
+        if self._addon_service is None:
+            return
+        cfg = self._settings_vm.config
+        valid = [i for i in cfg.wow_installs if Path(i.path).exists()]
+        if valid:
+            self._addon_service.set_installs(valid)
+            logger.info("Settings saved: pushed %d WoW install(s) to detector", len(valid))
 
     def notify(self, message: str, critical: bool = False) -> None:
         cfg = self._settings_vm.config
