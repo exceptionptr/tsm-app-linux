@@ -163,13 +163,13 @@ jobs:
           pip install --target=staging/usr/lib/tsm-app/vendor \
             "apscheduler>=4.0.0,<5" structlog tomli-w
           # Inject vendor path after the shebang line in the entry point
-          python3 -c "
+          python3 - <<'PYEOF'
 import pathlib
 ep = pathlib.Path('staging/usr/bin/tsm-app')
 lines = ep.read_text().splitlines(keepends=True)
-lines.insert(1, 'import sys; sys.path.insert(0, \"/usr/lib/tsm-app/vendor\")\n')
+lines.insert(1, 'import sys; sys.path.insert(0, "/usr/lib/tsm-app/vendor")\n')
 ep.write_text(''.join(lines))
-"
+PYEOF
 
       - name: Build .rpm with fpm
         run: |
