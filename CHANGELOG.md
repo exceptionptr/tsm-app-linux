@@ -4,6 +4,17 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.2] - 2026-03-28
+
+### Fixed
+
+- Status bar no longer shows "⚠ TradeSkillMaster_AppHelper addon not found" on WoW
+  installs where `WoW.exe` is absent from the game-version directory (common on some
+  Lutris setups). The AppData.lua reader now only requires the game-version directory
+  to exist rather than a WoW executable, matching the writer's behavior.
+
+---
+
 ## [1.1.1] - 2026-03-27
 
 ### Added

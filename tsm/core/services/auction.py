@@ -27,7 +27,6 @@ from tsm.core.models.auction import AppInfo, AuctionData, RealmData, RealmStatus
 from tsm.core.services.addon_writer import AddonWriterService
 from tsm.storage.auction_cache import AuctionCache
 from tsm.wow.lua_writer import AppDataFile
-from tsm.wow.utils import is_valid_wow_version_dir
 
 logger = logging.getLogger(__name__)
 
@@ -198,10 +197,10 @@ class AuctionDataService:
             wow_root = Path(install.path).parent  # install.path is the _retail_ dir
             for gv in result:
                 gv_path = wow_root / gv
-                # A game version is usable if WoW.exe / WowClassic.exe is present.
-                # AppData.lua may not exist yet (AppHelper not installed), but
-                # AppDataFile handles that gracefully on first run.
-                if is_valid_wow_version_dir(gv_path):
+                # Only requires the game-version directory to exist - WoW.exe may be
+                # absent on some Lutris/Wine setups. AppDataFile handles a missing
+                # AppData.lua gracefully (AppHelper not yet installed).
+                if gv_path.is_dir():
                     path = gv_path / "Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua"
                     result[gv] = AppDataFile(path)
         return result

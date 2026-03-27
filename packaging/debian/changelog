@@ -1,3 +1,10 @@
+tsm-app (1.1.2-1) stable; urgency=low
+
+  * Fix: status bar no longer shows AppHelper not found on WoW installs where
+    WoW.exe is absent from the game-version directory (common on some Lutris setups)
+
+ -- exceptionptr <https://github.com/exceptionptr>  Sat, 28 Mar 2026 00:00:00 +0100
+
 tsm-app (1.1.1-1) stable; urgency=low
 
   * Add: WoW auto-detection for Faugus Launcher via games.json and ~/Faugus/ subdirectory fallback (Closes: #1)

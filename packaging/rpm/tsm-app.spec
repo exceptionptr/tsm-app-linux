@@ -72,6 +72,10 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sat Mar 28 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.2-1
+- Fix: status bar no longer shows AppHelper not found on WoW installs where WoW.exe
+  is absent from the game-version directory (common on some Lutris setups)
+
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
 - Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)
 - Add: --skip-detection, --skip-auto-sync, --skip-auto-backup CLI flags replace --debug
