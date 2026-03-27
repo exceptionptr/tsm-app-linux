@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QDate, QEvent, QObject, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QFontMetrics, QIcon
+from PySide6.QtGui import QFontMetrics, QIcon, QMouseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -216,8 +216,10 @@ class _ItemHoverFilter(QObject):
 
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.MouseMove:
-            me = event  # type: ignore[assignment]
-            pos = me.position().toPoint()  # type: ignore[attr-defined]
+            me = event if isinstance(event, QMouseEvent) else None
+            if me is None:
+                return False
+            pos = me.position().toPoint()
             col = self._table.columnAt(pos.x())
             row = self._table.rowAt(pos.y())
             if col == _ITEM_COL and row >= 0:
