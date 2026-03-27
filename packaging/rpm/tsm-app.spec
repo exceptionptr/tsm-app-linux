@@ -15,7 +15,7 @@ BuildRequires:  python3-hatchling
 BuildRequires:  python3-hatch-vcs
 BuildRequires:  git
 
-Requires:       python3 >= 3.11
+Requires:       python3
 Requires:       python3-pyside6
 Requires:       python3-aiohttp
 Requires:       python3-pydantic
