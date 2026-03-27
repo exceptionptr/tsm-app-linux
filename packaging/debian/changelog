@@ -1,3 +1,15 @@
+tsm-app (1.1.1-1) stable; urgency=low
+
+  * Add: WoW auto-detection for Faugus Launcher via games.json and ~/Faugus/ subdirectory fallback (Closes: #1)
+  * Fix: WoW path browse now scans for _retail_/_classic_ subdirs instead of storing
+    the raw selected path; resolves installs breaking after manual path config (Closes: #2)
+  * Fix: selecting a version subdir (_retail_ etc.) resolves one level up before scanning
+  * Fix: stale config entries cleared on each browse; prevents duplicate path accumulation
+  * Fix: settings save immediately pushes valid paths to the WoW detector (no restart needed)
+  * Chore: accounting_export.py QEvent cast replaced with isinstance guard; fixes CI mypy
+
+ -- exceptionptr <https://github.com/exceptionptr>  Fri, 27 Mar 2026 00:00:00 +0100
+
 tsm-app (1.1.0-1) stable; urgency=low
 
   * Add: Addon Versions tab collapsible game-version groups with 180 ms animation,

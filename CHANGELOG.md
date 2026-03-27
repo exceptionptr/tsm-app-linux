@@ -6,6 +6,35 @@ All notable changes to tsm-app-linux are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- WoW auto-detection: Faugus Launcher prefixes scanned automatically via
+  `~/.config/faugus-launcher/games.json` and `~/Faugus/` subdirectory fallback.
+  Closes #1.
+
+---
+
+## [1.1.1] - 2026-03-27
+
+### Fixed
+
+- WoW path detection: browsing for a custom install in Settings now scans the selected
+  folder for version subdirectories (`_retail_`, `_classic_`, etc.) the same way
+  auto-detection does. Previously the raw folder path was stored verbatim, causing
+  downstream lookups (AppHelper, addon writer, backup) to search the wrong location.
+- WoW path detection: selecting a version subdirectory directly (e.g. `_retail_`) now
+  resolves one level up so the correct base is scanned. Invalid selections (no version
+  dirs found) show a descriptive error message.
+- WoW path detection: stale/duplicate config entries are cleared on each browse,
+  preventing accumulation of wrong paths (caused the two-entry config in issue #2).
+- WoW path detection: saving Settings now immediately pushes valid config paths into
+  the WoW detector, so the next poll uses the correct paths without a restart.
+
+### Chore
+
+- `accounting_export.py`: replaced `# type: ignore` pair on `QEvent` cast with a
+  proper `isinstance(event, QMouseEvent)` guard; fixes mypy `unused-ignore` error in CI.
+
 ---
 
 ## [1.1.0] - 2026-03-27

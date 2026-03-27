@@ -57,6 +57,14 @@ install -Dm644 LICENSE \
 %{_datadir}/licenses/%{name}/
 
 %changelog
+* Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
+- Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)
+- Fix: WoW path browse scans for _retail_/_classic_ subdirs; raw path no longer stored verbatim (Closes: #2)
+- Fix: selecting a version subdir resolves one level up before scanning
+- Fix: stale config entries cleared on each browse; prevents duplicate path accumulation
+- Fix: settings save immediately pushes valid paths to WoW detector without restart
+- Chore: accounting_export.py QEvent isinstance guard replaces type: ignore; fixes CI mypy
+
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.0-1
 - Add: Addon Versions tab collapsible game-version groups with 180 ms animation, top-aligned
 - Add: Addon Versions tab always-visible action buttons (download/refresh/trash) with functional install, update, and uninstall (WTF untouched)
