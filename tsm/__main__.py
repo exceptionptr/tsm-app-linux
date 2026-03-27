@@ -52,6 +52,11 @@ def _setup_logging() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
+        "--version",
+        action="store_true",
+        help="Print version and exit",
+    )
+    parser.add_argument(
         "--skip-detection",
         action="store_true",
         help="Skip WoW install auto-detection at startup",
@@ -67,6 +72,12 @@ def main() -> None:
         help="Do not schedule the periodic backup job",
     )
     known, qt_argv = parser.parse_known_args()
+
+    if known.version:
+        from tsm import __version__
+
+        print(__version__)
+        return
 
     _setup_logging()
 

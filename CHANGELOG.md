@@ -4,7 +4,7 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
-## [Unreleased]
+## [1.1.1] - 2026-03-27
 
 ### Added
 
@@ -14,6 +14,14 @@ All notable changes to tsm-app-linux are documented here.
 - Debug CLI flags: `--skip-detection`, `--skip-auto-sync`, `--skip-auto-backup`
   replace the removed `--debug` flag, allowing targeted bypassing of individual
   startup phases without altering the sync interval.
+- `--version` flag: prints the app version and exits without starting the GUI or
+  requiring a display.
+- RPM package now bundles `apscheduler` (4.x), `structlog`, and `tomli-w` under
+  `/usr/lib/tsm-app/vendor/` - these are not packaged in Fedora or openSUSE repos.
+  The entry point injects the vendor path automatically; no manual `pip install`
+  needed after installing the `.rpm`.
+- CI: install-and-run smoke tests for the `.rpm` on Fedora and openSUSE Tumbleweed,
+  and for the `.deb` on Ubuntu. Release is blocked until all three pass.
 
 ### Fixed
 
@@ -33,13 +41,6 @@ All notable changes to tsm-app-linux are documented here.
 - Addon Versions tab is now populated from API data even when AppHelper is not
   installed. Previously `addons_updated` was never emitted when no realm statuses
   were returned, leaving the tab empty.
-
----
-
-## [1.1.1] - 2026-03-27
-
-### Fixed
-
 - WoW path detection: browsing for a custom install in Settings now scans the selected
   folder for version subdirectories (`_retail_`, `_classic_`, etc.) the same way
   auto-detection does. Previously the raw folder path was stored verbatim, causing

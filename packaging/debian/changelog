@@ -2,6 +2,9 @@ tsm-app (1.1.1-1) stable; urgency=low
 
   * Add: WoW auto-detection for Faugus Launcher via games.json and ~/Faugus/ subdirectory fallback (Closes: #1)
   * Add: --skip-detection, --skip-auto-sync, --skip-auto-backup CLI flags replace --debug
+  * Add: --version flag; prints version and exits without requiring a display
+  * Add: CI smoke tests install and run the .rpm (Fedora, openSUSE) and .deb (Ubuntu) before release
+  * Fix: RPM package bundles apscheduler 4.x, structlog, and tomli-w (not packaged on Fedora/openSUSE)
   * Fix: status bar warning text shown in red for ⚠ messages
   * Fix: status bar shows ⚠ AppHelper addon not found when WoW path is set but addon is missing
   * Fix: Addon Versions, Backups, and Accounting tabs disabled when WoW not configured
