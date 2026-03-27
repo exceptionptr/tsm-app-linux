@@ -142,6 +142,7 @@ def create_app(
         addon_service=wow_detector,
         api_client=api_client,
         backup_service=backup_svc,
+        updater_service=updater_svc,
     )
 
     # Start scheduler once the user is authenticated

@@ -4,6 +4,7 @@ Original behaviour (from decompiled WoWHelper.py):
 - Backs up ALL TradeSkillMaster*.lua SavedVariables per account
 - Uses ZIP_LZMA compression
 - Filename: {system_id}_{account}_{timestamp}.zip  (BACKUP_TIME_FORMAT = "%Y%m%d%H%M%S")
+  Named:    {system_id}_{account}_{timestamp}_{safe_name}.zip
 - Per account:
     1. Purge backups older than retain period
     2. Collect modified times of all TSM SV files
@@ -19,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 import socket
 import zipfile
 from datetime import datetime, timedelta
@@ -51,7 +53,12 @@ class BackupService:
         self._detector = wow_detector
 
     def run(
-        self, period_minutes: int, retain_days: int, extra_installs=None, keep: bool = False
+        self,
+        period_minutes: int,
+        retain_days: int,
+        extra_installs=None,
+        keep: bool = False,
+        name: str = "",
     ) -> list[Path]:
         """Create backups per account. Returns list of newly created paths.
 
@@ -132,7 +139,7 @@ class BackupService:
 
             # 7. Create new zip
             try:
-                path = self._create_backup(sys_id, account_key, sv_files, keep=keep)
+                path = self._create_backup(sys_id, account_key, sv_files, keep=keep, name=name)
                 created.append(path)
                 logger.info("Backup created: %s", path.name)
             except Exception:
@@ -143,9 +150,9 @@ class BackupService:
     def restore(self, backup_path: Path) -> bool:
         """Extract all SV files from backup zip to the correct SavedVariables dir."""
         accounts = self._find_accounts()
-        # Match account from filename: {sys_id}_{account}_{timestamp}.zip
+        # Match account from filename: {sys_id}_{account}_{timestamp}[_{name}].zip
         stem = backup_path.stem
-        parts = stem.split(_SEPARATOR, 2)  # [sys_id, account, timestamp]
+        parts = stem.split(_SEPARATOR, 3)  # [sys_id, account, timestamp, name?]
         if len(parts) < 3:
             logger.error("Cannot parse backup filename: %s", backup_path.name)
             return False
@@ -219,22 +226,32 @@ class BackupService:
         return list(sv_dir.glob(f"{_TSM_ADDON_PREFIX}*.lua"))
 
     def _create_backup(
-        self, sys_id: str, account_key: str, sv_files: list[Path], keep: bool = False
+        self,
+        sys_id: str,
+        account_key: str,
+        sv_files: list[Path],
+        keep: bool = False,
+        name: str = "",
     ) -> Path:
         ts = datetime.now().strftime(_TIME_FORMAT)
-        name = f"{sys_id}{_SEPARATOR}{account_key}{_SEPARATOR}{ts}.zip"
-        zip_path = (_KEEP_DIR if keep else _BACKUP_DIR) / name
+        safe_name = re.sub(r"[^\w\-]", "-", name).strip("-") if name.strip() else ""
+        stem = f"{sys_id}{_SEPARATOR}{account_key}{_SEPARATOR}{ts}"
+        if safe_name:
+            stem = f"{stem}{_SEPARATOR}{safe_name}"
+        zip_path = (_KEEP_DIR if keep else _BACKUP_DIR) / f"{stem}.zip"
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_LZMA) as zf:
             for sv in sv_files:
                 zf.write(sv, sv.name)
         return zip_path
 
     def _list_backups(self) -> list[dict]:
-        """Return list of {account, timestamp, path, keep} dicts."""
+        """Return list of {account, timestamp, path, keep, name} dicts."""
         result = []
         for keep, directory in ((False, _BACKUP_DIR), (True, _KEEP_DIR)):
+            if not directory.exists():
+                continue
             for f in directory.glob("*.zip"):
-                parts = f.stem.split(_SEPARATOR, 2)
+                parts = f.stem.split(_SEPARATOR, 3)  # [sys_id, account, ts, name?]
                 if len(parts) < 3:
                     continue
                 try:
@@ -247,6 +264,7 @@ class BackupService:
                         "timestamp": ts,
                         "path": f,
                         "keep": keep,
+                        "name": parts[3] if len(parts) > 3 else "",
                     }
                 )
         return result

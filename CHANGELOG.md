@@ -4,6 +4,114 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [Unreleased]
+
+---
+
+## [1.1.0] - 2026-03-27
+
+### Added
+
+- Addon Versions tab: collapsible game-version groups (Retail, Classic, Progression,
+  Anniversary). Each group header shows an expand/collapse arrow, the group name, and
+  an installed summary ("2 installed" / "not installed"). Groups auto-expand on first
+  load when any addon is installed; subsequent collapse/expand is manual with a 180 ms
+  animation. Groups are top-aligned with a fixed collapsed height.
+- Addon Versions tab: per-row action buttons always visible - download icon for
+  not-installed addons (installs fresh into the correct game version directory), refresh
+  icon for addons with an update available (downloads and replaces), trash icon for
+  up-to-date addons (confirms then deletes the addon folder; WTF directory is never
+  touched). Icons turn green/orange/red on hover respectively.
+- Addon Versions tab: rotating loader-circle spinner replaces the action button while
+  a download is in progress. Multiple simultaneous downloads each show their own
+  spinner independently.
+- Addon Versions tab: Installed Version column and Status column with colored dot
+  ("Up to date" green, "Update available" amber, "Not installed" gray).
+- Realm Data tab: colored status dot next to AuctionDB text replaces colored text.
+  Realms: green under 2 h, yellow 2-6 h, red over 6 h. Regions use wider thresholds
+  (green under 26 h, yellow 26-50 h, red over 50 h) matching the ~daily
+  AUCTIONDB_REGION_STAT update cadence (MAX_DATA_AGE = 86400 in original app).
+  "Updating..." shows yellow; "Outdated" shows red for both.
+- Realm Data tab: per-row trash icon delete button (always visible) replaces
+  double-click-to-delete. Icon turns red on hover.
+- Realm Data tab: inline "Add Realm" panel at the bottom (game version, region,
+  and realm dropdowns plus a button). Realm list is pre-fetched on login and
+  session restore and pushed to the view via `set_realm_tree()`.
+- Realm Data tab: Refresh Now replaced with an icon-only button (refresh-cw.svg).
+  Tooltip is dynamic: shows countdown when rate-limited, syncing state during fetch.
+- Backups tab: per-row restore button (archive-restore icon, turns green on hover) and
+  delete button (trash icon, turns red on hover) with confirmation dialogs.
+- Backups tab: Name column showing the optional custom name with automatic ellipsis when
+  the column is too narrow. Name input in the bottom panel (matching Realm Data layout)
+  validates to alphanumeric, spaces, hyphens, and underscores only; max 40 characters.
+  The name is embedded in the filename (`{sys_id}_{account}_{ts}_{name}.zip`).
+- Backups tab: Auto/Manual type tag column with uniform fixed-width bordered labels;
+  Auto = gray, Manual = orange.
+- Backups tab: file size column (KB or MB).
+- Status bar shows tab-context text: Backups tab shows "N backups stored - X total";
+  all other tabs show the normal "Up to date as of..." message.
+- Accounting tab: date range filter row with From/To `QDateEdit` pickers (chevron icon,
+  cross-validation blocks from > to) and "Last 7d", "Last 30d", "All time" quick-select
+  buttons. Default range is last 30 days.
+- Accounting tab: preview table shows all filtered rows sorted by date with pagination
+  (50 rows per page). Prev/next chevron buttons are flush left/right; page indicator is
+  centered. Row count label shows total matching rows.
+- Accounting tab: item names resolved via Wowhead tooltip API with persistent disk cache
+  (`~/.local/share/tsm-app/item_cache.json`). Braille spinner shown while loading; falls
+  back to `i:ID` on failure. Plain-text entries (e.g. "Repair Bill") shown as-is without
+  a fetch attempt.
+- Accounting tab: WoW-style item tooltip on row hover (500 ms delay) with quality-colored
+  border and full stat block parsed from Wowhead tooltip HTML (money spans, item quality
+  colors, sell price).
+- Accounting tab: gold column number colored green (income) or red (expense); `g` suffix
+  colored gold (#f0c040). Column width sized to the widest entry on the current page.
+- Accounting tab: summary bar (dark green-tinted panel) showing total sales, total
+  purchases, net gold, and transaction count for the filtered data.
+- Accounting tab: Export to CSV applies the date filter and writes per-type CSV files
+  with original headers; button label shows the filtered row count.
+- Status bar: GitHub icon button (right of settings) opens the project repository;
+  Settings icon button (rightmost) opens the Settings dialog. Both icons swap to white
+  on hover. Status bar text size raised from 10 px to 12 px.
+
+### Changed
+
+- Settings > General: Realms section removed; realm management now lives in the
+  Realm Data tab inline panel.
+- Main window minimum width raised from 620 px to 740 px; maximum width constraint
+  removed.
+- "Accounting Export" tab renamed to "Accounting".
+
+### Fixed
+
+- Status bar "Up to date as of" timestamp now updates on every 5-min poll even when
+  no new realm data is available. Previously `_on_data_received` only wrote `_last_sync`
+  when `realm_statuses` was non-empty; polls that returned an empty statuses list
+  (AppHelper not yet detected, etc.) left the timestamp frozen at the last successful
+  refresh.
+
+### Removed
+
+- Addon Versions tab: double-click-to-install replaced by explicit always-visible
+  per-row action buttons.
+- Addon Versions tab: bottom hint label removed.
+- Backups tab: double-click dialog replaced by per-row restore/delete icon buttons.
+- Backups tab: System ID column removed (not useful to the user).
+- Footer bar (Premium and GitHub buttons) removed; replaced by status bar icon buttons.
+
+### Chore
+
+- Removed dead `AuctionDataService.write_app_info()` method; all call sites were
+  removed in 1.0.7 but the method body was not
+- README: sync interval corrected from "60 minutes" to "5 minutes (differential)"
+- `lua_writer.py` docstring corrected: APP_INFO uses `[[return ...]]` wrapping like
+  all other tags; `RAW_TAGS` is an empty reserved set, not used by APP_INFO
+- `realm_vm.py`: `_STALE_SECONDS` comment updated to reflect that it is a
+  startup-only snapshot staleness threshold, not tied to the poll interval
+- Renamed `_fmt_ts` to `fmt_ts` in `realm_data.py`; was being imported as a private
+  function from another module
+
+---
+
 ## [1.0.7] - 2026-03-22
 
 ### Fixed

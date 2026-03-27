@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 CONFIG_DIR = Path.home() / ".config" / "tsm-app"
 CONFIG_FILE = CONFIG_DIR / "config.toml"
+DATA_DIR = Path.home() / ".local" / "share" / "tsm-app"
 
 
 class ConfigStore:

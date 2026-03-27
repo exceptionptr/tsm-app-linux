@@ -1,30 +1,46 @@
-"""Addon Versions tab: addon list from API + installed version from TOC files."""
+"""Addon Versions tab: collapsible game-version groups with per-row action buttons."""
 
 from __future__ import annotations
 
 import logging
+import shutil
+from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtCore import (
+    QEasingCurve,
+    QPropertyAnimation,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
+from PySide6.QtGui import QIcon, QPainter
+from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QTableWidget,
-    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from tsm.api.types import AddonVersionInfo
+from tsm.ui.views._utils import set_table_cell
 
 logger = logging.getLogger(__name__)
 
+_ASSETS = Path(__file__).parent.parent / "assets"
+
 _GREEN = "#4caf50"
-_RED = "#f44336"
-_GROUP_HEADER = "#2a2a2a"  # slightly lighter than table bg for group rows
-_GROUP_FG = "#f26522"  # TSM orange for group label text
+_AMBER = "#ffc107"
+_GRAY = "#666666"
 
 # Game-version suffixes the original TSM app uses (from WoWHelper.SUFFIX_BY_GAME_VERSION)
 _SUFFIXES = ["", "-Classic", "-Progression", "-Anniversary"]
@@ -36,8 +52,18 @@ _SUFFIX_LABEL = {
     "-Anniversary": "Anniversary",
 }
 
-# Fallback list if the API hasn't returned addon info yet
+# Fallback list if the API has not returned addon info yet
 _DEFAULT_ADDONS = ["TradeSkillMaster", "TSM_AppHelper"]
+
+_ANIM_MS = 180  # collapse/expand animation duration (ms)
+
+# Module-level icon constants - avoid per-row file I/O
+_DL_ICON = QIcon(str(_ASSETS / "download.svg"))
+_DL_ICON_HOVER = QIcon(str(_ASSETS / "download-hover.svg"))
+_REFRESH_ICON = QIcon(str(_ASSETS / "refresh-cw.svg"))
+_REFRESH_ICON_HOVER = QIcon(str(_ASSETS / "refresh-cw-hover.svg"))
+_TRASH_ICON = QIcon(str(_ASSETS / "trash.svg"))
+_TRASH_ICON_HOVER = QIcon(str(_ASSETS / "trash-hover.svg"))
 
 
 def _get_suffix(name: str) -> str:
@@ -48,21 +74,139 @@ def _get_suffix(name: str) -> str:
 
 
 def _addon_sort_key(addon: AddonVersionInfo) -> tuple[int, bool, str]:
-    """Sort by suffix group first, then put base addons (no '_') before sub-addons."""
+    """Sort by suffix group first, then base addons (no '_') before sub-addons."""
     name = addon["name"]
     suffix = _get_suffix(name)
     base = name[: -len(suffix)] if suffix else name
-    # Within a group: names without '_' (base addons) sort before those with '_'
     has_underscore = "_" in base
     return (_SUFFIX_ORDER.get(suffix, 99), has_underscore, base)
 
 
-class AddonVersionsView(QWidget):
-    def __init__(self, wow_detector=None, parent=None):
+class _ActionButton(QPushButton):
+    """Row action button that swaps its icon on hover. Always visible."""
+
+    def __init__(self, normal_icon: QIcon, hover_icon: QIcon, parent=None):
         super().__init__(parent)
-        self._detector = wow_detector
-        # List of {name, version_str} dicts from the status API
-        self._api_addons: list[AddonVersionInfo] = []
+        self._normal_icon = normal_icon
+        self._hover_icon = hover_icon
+        self.setObjectName("row-action")
+        self.setIcon(normal_icon)
+        self.setIconSize(QSize(14, 14))
+
+    def enterEvent(self, event) -> None:
+        self.setIcon(self._hover_icon)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self.setIcon(self._normal_icon)
+        super().leaveEvent(event)
+
+
+_SPINNER_SVG = str(_ASSETS / "loader-circle.svg")
+
+
+class _SpinnerWidget(QWidget):
+    """Rotating loader-circle SVG shown in the action column during a download."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._angle = 0.0
+        self._renderer = QSvgRenderer(_SPINNER_SVG, self)
+        timer = QTimer(self)
+        timer.timeout.connect(self._tick)
+        timer.start(30)  # ~33 fps, 12 deg/tick = 1 rotation/sec
+
+    def _tick(self) -> None:
+        self._angle = (self._angle + 12.0) % 360.0
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        size = min(self.width(), self.height()) - 4
+        x = (self.width() - size) / 2
+        y = (self.height() - size) / 2
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.translate(self.width() / 2, self.height() / 2)
+        p.rotate(self._angle)
+        p.translate(-self.width() / 2, -self.height() / 2)
+        self._renderer.render(p, QRectF(x, y, size, size))
+        p.end()
+
+
+def _make_status_cell(status: str, color: str) -> QWidget:
+    """Return a transparent widget with a colored dot and status label."""
+    w = QWidget()
+    w.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+    w.setStyleSheet("background: transparent;")
+    layout = QHBoxLayout(w)
+    layout.setContentsMargins(6, 0, 6, 0)
+    layout.setSpacing(6)
+    dot = QLabel()
+    dot.setFixedSize(10, 10)
+    dot.setStyleSheet(f"border-radius: 5px; background: {color};")
+    lbl = QLabel(status)
+    lbl.setStyleSheet(f"background: transparent; color: {color};")
+    layout.addWidget(dot)
+    layout.addWidget(lbl)
+    layout.addStretch()
+    return w
+
+
+class _GroupHeader(QWidget):
+    """Clickable group header with arrow, group name, and installed summary."""
+
+    clicked: Signal = Signal()
+
+    def __init__(self, label: str, parent=None):
+        super().__init__(parent)
+        self._label = label
+        self.setObjectName("addon-group-header")
+        self.setFixedHeight(32)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 0, 10, 0)
+        layout.setSpacing(6)
+
+        self._arrow = QLabel("▶")
+        self._arrow.setObjectName("addon-group-arrow")
+        self._arrow.setFixedWidth(12)
+        layout.addWidget(self._arrow)
+
+        name_lbl = QLabel(label)
+        name_lbl.setObjectName("addon-group-name")
+        layout.addWidget(name_lbl)
+
+        layout.addStretch()
+
+        self._summary = QLabel("")
+        self._summary.setObjectName("addon-group-summary")
+        layout.addWidget(self._summary)
+
+    def set_expanded(self, expanded: bool) -> None:
+        self._arrow.setText("▼" if expanded else "▶")
+
+    def set_summary(self, text: str) -> None:
+        self._summary.setText(text)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+
+class _AddonGroupWidget(QWidget):
+    """Collapsible group for one game-version suffix (Retail, Classic, etc.)."""
+
+    def __init__(self, suffix: str, parent=None):
+        super().__init__(parent)
+        self._suffix = suffix
+        self._expanded = False
+        self._initialized = False
+        self._natural_height = 0
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -70,37 +214,187 @@ class AddonVersionsView(QWidget):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
-        self._table = QTableWidget(0, 3)
-        self._table.setHorizontalHeaderLabels(["Name", "Version", "Status"])
+        label = _SUFFIX_LABEL.get(self._suffix, self._suffix.lstrip("-"))
+        self._header = _GroupHeader(label)
+        self._header.clicked.connect(self._toggle)
+        vbox.addWidget(self._header)
+
+        # Collapsible body
+        self._body = QWidget()
+        self._body.setMaximumHeight(0)
+        body_vbox = QVBoxLayout(self._body)
+        body_vbox.setContentsMargins(0, 0, 0, 0)
+        body_vbox.setSpacing(0)
+
+        self._table = QTableWidget(0, 5)
+        self._table.setHorizontalHeaderLabels(["Name", "Latest", "Installed", "Status", ""])
         self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setShowGrid(False)
         self._table.verticalHeader().setVisible(False)
+        self._table.verticalHeader().setDefaultSectionSize(28)
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        vbox.addWidget(self._table, 1)
+        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self._table.setColumnWidth(3, 140)
+        self._table.setColumnWidth(4, 28)
+        hdr.setMinimumSectionSize(16)
+        self._table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        self._table.doubleClicked.connect(self._on_double_click)
+        body_vbox.addWidget(self._table)
+        vbox.addWidget(self._body)
 
-        # Bottom bar, fixed height so it matches realm-data and backups bars
-        bottom = QWidget()
-        bottom.setObjectName("realm-bottom")
-        bottom.setFixedHeight(39)
-        row = QHBoxLayout(bottom)
-        row.setContentsMargins(8, 8, 8, 8)
-        hint = QLabel("Double-click on an addon to install it.")
-        hint.setObjectName("hint")
-        row.addWidget(hint)
-        row.addStretch()
-        vbox.addWidget(bottom)
+        self._anim = QPropertyAnimation(self._body, b"maximumHeight")
+        self._anim.setDuration(_ANIM_MS)
+        self._anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
+        self._anim.finished.connect(self._on_anim_finished)
+
+    # ── Toggle ────────────────────────────────────────────────────────
+
+    def _toggle(self) -> None:
+        if self._expanded:
+            self._anim.stop()
+            self._anim.setStartValue(self._body.height())
+            self._anim.setEndValue(0)
+            self._expanded = False
+        else:
+            self._anim.stop()
+            self._anim.setStartValue(self._body.maximumHeight())
+            self._anim.setEndValue(self._natural_height)
+            self._expanded = True
+        self._header.set_expanded(self._expanded)
+        self._anim.start()
+
+    def _on_anim_finished(self) -> None:
+        if self._expanded:
+            # Remove constraint so table can grow if rows are added later
+            self._body.setMaximumHeight(16777215)
+
+    # ── Data update ───────────────────────────────────────────────────
+
+    def refresh(
+        self,
+        addons: list[AddonVersionInfo],
+        installed: dict[str, tuple[int, str]],
+        on_delete: Callable[[str], None] | None = None,
+        on_install: Callable[[str, str], None] | None = None,
+        downloading: set[str] | None = None,
+    ) -> None:
+        """Rebuild table rows. Addons must already be filtered to this suffix."""
+        installed_count = 0
+        downloading = downloading or set()
+
+        self._table.setRowCount(len(addons))
+        for row, addon in enumerate(addons):
+            name = addon["name"]
+            latest = addon.get("version_str", "")
+            version_type, inst_ver = installed.get(name, (0, ""))
+
+            set_table_cell(self._table, row, 0, name)
+            set_table_cell(self._table, row, 1, latest)
+
+            if version_type == 0:
+                set_table_cell(self._table, row, 2, "")
+                self._table.setCellWidget(row, 3, _make_status_cell("Not installed", _GRAY))
+                if name in downloading:
+                    self._table.setCellWidget(row, 4, _SpinnerWidget())
+                else:
+                    btn = _ActionButton(_DL_ICON, _DL_ICON_HOVER)
+                    if on_install is not None:
+                        btn.clicked.connect(lambda _, n=name, v=latest: on_install(n, v))
+                    self._table.setCellWidget(row, 4, btn)
+            elif version_type != 2 and latest and inst_ver != latest:
+                installed_count += 1
+                set_table_cell(self._table, row, 2, inst_ver)
+                self._table.setCellWidget(row, 3, _make_status_cell("Update available", _AMBER))
+                if name in downloading:
+                    self._table.setCellWidget(row, 4, _SpinnerWidget())
+                else:
+                    btn = _ActionButton(_REFRESH_ICON, _REFRESH_ICON_HOVER)
+                    if on_install is not None:
+                        btn.clicked.connect(lambda _, n=name, v=latest: on_install(n, v))
+                    self._table.setCellWidget(row, 4, btn)
+            else:
+                installed_count += 1
+                set_table_cell(self._table, row, 2, inst_ver)
+                self._table.setCellWidget(row, 3, _make_status_cell("Up to date", _GREEN))
+                btn = _ActionButton(_TRASH_ICON, _TRASH_ICON_HOVER)
+                if on_delete is not None:
+                    btn.clicked.connect(lambda _, n=name: on_delete(n))
+                self._table.setCellWidget(row, 4, btn)
+
+        # Compute and lock table height to its exact content size
+        hdr_h = self._table.horizontalHeader().sizeHint().height()
+        if hdr_h < 1:
+            hdr_h = 28
+        row_h = self._table.verticalHeader().defaultSectionSize()
+        self._natural_height = hdr_h + len(addons) * row_h
+        self._table.setFixedHeight(self._natural_height)
+
+        # Update header summary
+        if installed_count == 0:
+            summary = "not installed"
+        elif installed_count == 1:
+            summary = "1 installed"
+        else:
+            summary = f"{installed_count} installed"
+        self._header.set_summary(summary)
+
+        # Set initial expand/collapse on first call
+        if not self._initialized:
+            self._initialized = True
+            if installed_count > 0:
+                self._expanded = True
+                self._header.set_expanded(True)
+                self._body.setMaximumHeight(16777215)
+            # else: stays collapsed (maximumHeight == 0)
+        elif self._expanded:
+            # Already expanded - keep the height constraint removed
+            self._body.setMaximumHeight(16777215)
+
+
+class AddonVersionsView(QWidget):
+    def __init__(self, wow_detector=None, update_service=None, parent=None):
+        super().__init__(parent)
+        self._detector = wow_detector
+        self._update_service = update_service
+        self._api_addons: list[AddonVersionInfo] = []
+        self._downloading: set[str] = set()
+        self._setup_ui()
+
+    def _setup_ui(self) -> None:
+        vbox = QVBoxLayout(self)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        content = QWidget()
+        content_vbox = QVBoxLayout(content)
+        content_vbox.setContentsMargins(0, 0, 0, 0)
+        content_vbox.setSpacing(0)
+
+        self._groups: dict[str, _AddonGroupWidget] = {}
+        for suffix in _SUFFIXES:
+            grp = _AddonGroupWidget(suffix)
+            self._groups[suffix] = grp
+            content_vbox.addWidget(grp)
+
+        content_vbox.addStretch()
+        scroll.setWidget(content)
+        vbox.addWidget(scroll)
 
     def update_from_api(self, addon_versions: list[AddonVersionInfo]) -> None:
         """Called when the status API returns addon info."""
-        # API returns [{name, version_str}, ...] for base addons.
-        # Expand each with all game-version suffixes (same as original WoWHelper).
+        # Expand each base addon to all game-version suffixes
         expanded: list[AddonVersionInfo] = []
         for addon in addon_versions:
             base_name = addon["name"]
@@ -108,7 +402,7 @@ class AddonVersionsView(QWidget):
                 expanded.append(
                     AddonVersionInfo(name=base_name + suffix, version_str=addon["version_str"])
                 )
-        self._api_addons = expanded
+        self._api_addons = sorted(expanded, key=_addon_sort_key)
         self._refresh()
 
     def _refresh(self) -> None:
@@ -116,66 +410,110 @@ class AddonVersionsView(QWidget):
         if self._api_addons:
             addon_list = self._api_addons
         else:
-            addon_list = [
-                AddonVersionInfo(name=base + suffix, version_str="")
-                for base in _DEFAULT_ADDONS
-                for suffix in _SUFFIXES
-            ]
+            addon_list = sorted(
+                [
+                    AddonVersionInfo(name=base + suffix, version_str="")
+                    for base in _DEFAULT_ADDONS
+                    for suffix in _SUFFIXES
+                ],
+                key=_addon_sort_key,
+            )
 
-        addon_list = sorted(addon_list, key=_addon_sort_key)
         installed = self._get_installed_versions()
 
-        # Group addons by suffix, inserting a header row before each group
+        # Group addons by suffix and update each group widget
         groups: dict[str, list[AddonVersionInfo]] = {}
         for addon in addon_list:
             suffix = _get_suffix(addon["name"])
             groups.setdefault(suffix, []).append(addon)
 
-        self._table.setRowCount(0)
-        self._header_rows: set[int] = set()
+        for suffix, grp in self._groups.items():
+            grp_addons = groups.get(suffix, [])
+            grp.setVisible(bool(grp_addons))
+            if grp_addons:
+                grp.refresh(
+                    grp_addons,
+                    installed,
+                    on_delete=self._delete_addon,
+                    on_install=self._install_or_update_addon,
+                    downloading=self._downloading,
+                )
 
-        for suffix in _SUFFIXES:
-            if suffix not in groups:
-                continue
-            # Insert group header row
-            header_row = self._table.rowCount()
-            self._table.insertRow(header_row)
-            self._header_rows.add(header_row)
-            label = _SUFFIX_LABEL.get(suffix, suffix.lstrip("-"))
-            item = QTableWidgetItem(label)
-            item.setFlags(Qt.ItemFlag.ItemIsEnabled)  # not selectable
-            item.setForeground(QBrush(QColor(_GROUP_FG)))
-            item.setBackground(QBrush(QColor(_GROUP_HEADER)))
-            self._table.setItem(header_row, 0, item)
-            for col in (1, 2):
-                filler = QTableWidgetItem("")
-                filler.setFlags(Qt.ItemFlag.ItemIsEnabled)
-                filler.setBackground(QBrush(QColor(_GROUP_HEADER)))
-                self._table.setItem(header_row, col, filler)
+    def _install_or_update_addon(self, name: str, version: str) -> None:
+        """Download and install the addon via AsyncBridge, then refresh the view."""
+        if self._update_service is None:
+            logger.warning("No update service available - cannot install %s", name)
+            return
+        from tsm.workers.bridge import AsyncBridge
 
-            for addon in groups[suffix]:
-                row = self._table.rowCount()
-                self._table.insertRow(row)
-                name = addon["name"]
-                latest = addon.get("version_str", "")
-                version_type, installed_ver = installed.get(name, (0, ""))
+        self._downloading.add(name)
+        self._refresh()  # show spinner immediately
 
-                self._set_cell(row, 0, name)
-                if version_type == 0:
-                    self._set_cell(row, 1, "")
-                    self._set_cell(row, 2, "")
-                elif version_type == 2:
-                    self._set_cell(row, 1, installed_ver)
-                    self._set_cell(row, 2, "Up to date", _GREEN)
-                elif latest and installed_ver != latest:
-                    self._set_cell(row, 1, installed_ver)
-                    self._set_cell(row, 2, f"Update available: {latest}", _RED)
-                else:
-                    self._set_cell(row, 1, installed_ver)
-                    self._set_cell(row, 2, "Up to date", _GREEN)
+        def _done(_) -> None:
+            self._downloading.discard(name)
+            self._refresh()
+
+        def _error(err: object) -> None:
+            logger.error("Install failed for %s: %s", name, err)
+            self._downloading.discard(name)
+            self._refresh()
+
+        bridge = AsyncBridge(self)
+        bridge.result_ready.connect(_done)
+        bridge.error_occurred.connect(_error)
+        bridge.run(self._update_service.install_or_update_addon(name, version))
+
+    def _find_addon_paths(self, name: str) -> list[Path]:
+        """Return all Interface/AddOns/<folder> paths on disk for the given addon name."""
+        paths: list[Path] = []
+        if self._detector is None:
+            return paths
+        suffix = _get_suffix(name)
+        game_ver_map = {
+            "": "_retail_",
+            "-Classic": "_classic_era_",
+            "-Progression": "_classic_",
+            "-Anniversary": "_anniversary_",
+        }
+        game_ver = game_ver_map.get(suffix, "")
+        if not game_ver:
+            return paths
+        folder_name = name[: -len(suffix)] if suffix else name
+        try:
+            for install in self._detector.installs:
+                wow_root = Path(install.path).parent
+                for sub in ("AddOns", "Addons"):
+                    candidate = wow_root / game_ver / "Interface" / sub / folder_name
+                    if candidate.is_dir():
+                        paths.append(candidate)
+        except Exception:
+            logger.debug("Could not locate addon folder for %s", name, exc_info=True)
+        return paths
+
+    def _delete_addon(self, name: str) -> None:
+        """Confirm with the user, then delete the addon folder(s) from Interface/AddOns."""
+        paths = self._find_addon_paths(name)
+        if not paths:
+            QMessageBox.warning(self, "TSM", f"Could not find addon folder for '{name}'.")
+            return
+        reply = QMessageBox.question(
+            self,
+            "TSM",
+            f"Are you sure you want to delete '{name}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        for path in paths:
+            try:
+                shutil.rmtree(path)
+                logger.info("Deleted addon folder: %s", path)
+            except OSError:
+                logger.warning("Failed to delete addon folder: %s", path, exc_info=True)
+        self._refresh()
 
     def _get_installed_versions(self) -> dict[str, tuple[int, str]]:
-        """Returns {addon_name: (version_type, version_str)} for all installed addons.
+        """Return {addon_name: (version_type, version_str)} for all installed addons.
         version_type: 0=not installed, 1=release, 2=dev
         """
         result: dict[str, tuple[int, str]] = {}
@@ -197,14 +535,12 @@ class AddonVersionsView(QWidget):
                         addons_dir = wow_root / game_ver / "Interface" / "Addons"
                     if not addons_dir.exists():
                         continue
-                    # Check every addon that ends with this suffix
                     for addon_info in self._api_addons or []:
                         name = addon_info["name"]
-                        if not name.endswith(suffix if suffix else "") and suffix:
+                        if suffix and not name.endswith(suffix):
                             continue
-                        if suffix == "" and any(name.endswith(s) for s in _SUFFIXES[1:]):
+                        if not suffix and any(name.endswith(s) for s in _SUFFIXES[1:]):
                             continue
-                        # Zip always extracts as base_name/ (suffix only picks the gv dir)
                         folder = name[: -len(suffix)] if suffix else name
                         toc = addons_dir / folder / f"{folder}.toc"
                         if toc.exists():
@@ -213,26 +549,9 @@ class AddonVersionsView(QWidget):
             logger.debug("Could not detect addon versions", exc_info=True)
         return result
 
-    def _set_cell(self, row: int, col: int, text: str, color: str | None = None) -> None:
-        item = QTableWidgetItem(text)
-        item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-        if col in (1, 2):
-            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-        if color:
-            item.setForeground(QBrush(QColor(color)))
-        self._table.setItem(row, col, item)
-
-    def _on_double_click(self, index) -> None:
-        row = index.row()
-        if row in getattr(self, "_header_rows", set()):
-            return  # ignore clicks on group header rows
-        name_item = self._table.item(row, 0)
-        if name_item:
-            logger.info("Install/update requested for %s", name_item.text())
-
 
 def _parse_toc(toc: Path) -> tuple[int, str]:
-    """Returns (version_type, version_str). version_type: 1=release, 2=dev."""
+    """Return (version_type, version_str). version_type: 1=release, 2=dev."""
     try:
         for line in toc.read_text(encoding="utf-8", errors="ignore").splitlines():
             if line.startswith("## Version:"):

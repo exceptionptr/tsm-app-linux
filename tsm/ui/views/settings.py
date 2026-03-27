@@ -22,7 +22,6 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.ui.viewmodels.settings_vm import SettingsViewModel
-from tsm.ui.views._utils import build_realm_tree
 
 logger = logging.getLogger(__name__)
 
@@ -33,17 +32,12 @@ class SettingsDialog(QDialog):
         settings_vm: SettingsViewModel,
         auth_service=None,
         wow_detector=None,
-        api_client=None,
-        realm_vm=None,
-        realm_tree=None,
         parent=None,
     ):
         super().__init__(parent)
         self._vm = settings_vm
         self._auth_service = auth_service
         self._detector = wow_detector
-        self._api_client = api_client
-        self._realm_vm = realm_vm
 
         from tsm import __version__
 
@@ -54,11 +48,6 @@ class SettingsDialog(QDialog):
         self.resize(560, 440)
         self._setup_ui()
         self._load()
-        if realm_tree is not None:
-            self._realm_tree = realm_tree
-            self._populate_gv_combo()
-        else:
-            self._load_realms_async()
 
     def _setup_ui(self) -> None:
         vbox = QVBoxLayout(self)
@@ -140,36 +129,6 @@ class SettingsDialog(QDialog):
         browse_btn.clicked.connect(self._browse_wow)
         dir_row.addWidget(browse_btn)
         vbox.addLayout(dir_row)
-
-        vbox.addSpacing(8)
-
-        realms_label = QLabel("Realms")
-        realms_label.setObjectName("section-title")
-        vbox.addWidget(realms_label)
-
-        # Realm selectors: Game Version | Region | Realm + Add
-        realm_row = QHBoxLayout()
-        realm_row.setSpacing(8)
-        self._gv_combo = QComboBox()
-        self._gv_combo.setFixedWidth(110)
-        self._gv_combo.currentIndexChanged.connect(self._on_gv_changed)
-        realm_row.addWidget(self._gv_combo)
-
-        self._region_combo = QComboBox()
-        self._region_combo.setFixedWidth(80)
-        self._region_combo.currentIndexChanged.connect(self._on_region_changed)
-        realm_row.addWidget(self._region_combo)
-
-        self._realm_combo = QComboBox()
-        self._realm_combo.setMinimumWidth(130)
-        realm_row.addWidget(self._realm_combo, 1)
-
-        add_btn = QPushButton("Add")
-        add_btn.setObjectName("secondary")
-        add_btn.setFixedWidth(50)
-        add_btn.clicked.connect(self._add_realm)
-        realm_row.addWidget(add_btn)
-        vbox.addLayout(realm_row)
 
         vbox.addSpacing(8)
 
@@ -311,83 +270,6 @@ class SettingsDialog(QDialog):
         if path:
             self._wow_dir.setText(path)
             self._vm.add_wow_path(path)
-
-    def _load_realms_async(self) -> None:
-        """Fetch realm list from API and populate the combo box."""
-        if self._api_client is None:
-            return
-        from tsm.workers.bridge import AsyncBridge
-
-        bridge = AsyncBridge(self)
-        bridge.result_ready.connect(self._on_realms_loaded)
-        bridge.error_occurred.connect(lambda e: logger.warning("Failed to load realm list: %s", e))
-        bridge.run(self._api_client.realms.list())
-
-    def _on_realms_loaded(self, data) -> None:
-        """Raw API response → build processed tree then populate combos."""
-        if not isinstance(data, dict):
-            return
-        self._realm_tree = build_realm_tree(data)
-        self._populate_gv_combo()
-
-    def _populate_gv_combo(self) -> None:
-        self._gv_combo.blockSignals(True)
-        self._gv_combo.clear()
-        for gv_label in sorted(self._realm_tree):
-            self._gv_combo.addItem(gv_label)
-        self._gv_combo.blockSignals(False)
-        retail_idx = self._gv_combo.findText("Retail")
-        self._gv_combo.setCurrentIndex(retail_idx if retail_idx >= 0 else 0)
-        self._on_gv_changed(self._gv_combo.currentIndex())
-
-    def _on_gv_changed(self, _: int) -> None:
-        gv_label = self._gv_combo.currentText()
-        regions = (
-            sorted(self._realm_tree.get(gv_label, {}).keys())
-            if hasattr(self, "_realm_tree")
-            else []
-        )
-        self._region_combo.blockSignals(True)
-        self._region_combo.clear()
-        for r in regions:
-            self._region_combo.addItem(r)
-        self._region_combo.blockSignals(False)
-        self._on_region_changed(0)
-
-    def _on_region_changed(self, _: int) -> None:
-        gv_label = self._gv_combo.currentText()
-        region = self._region_combo.currentText()
-        realms = []
-        if hasattr(self, "_realm_tree"):
-            realms = self._realm_tree.get(gv_label, {}).get(region, [])
-        self._realm_combo.clear()
-        for r in realms:
-            self._realm_combo.addItem(r["name"])
-
-    def _add_realm(self) -> None:
-        gv_label = self._gv_combo.currentText()
-        region = self._region_combo.currentText()
-        idx = self._realm_combo.currentIndex()
-        if not hasattr(self, "_realm_tree") or not gv_label or not region or idx < 0:
-            return
-        realm_list = self._realm_tree.get(gv_label, {}).get(region, [])
-        if idx >= len(realm_list):
-            return
-        realm = realm_list[idx]
-        if self._api_client is None:
-            return
-        from tsm.workers.bridge import AsyncBridge
-
-        bridge = AsyncBridge(self)
-
-        def _on_added(_):
-            logger.info("Realm added: %s %s %s", gv_label, region, realm["name"])
-            if self._realm_vm is not None:
-                self._realm_vm.refresh_all()
-
-        bridge.result_ready.connect(_on_added)
-        bridge.error_occurred.connect(lambda e: logger.error("Failed to add realm: %s", e))
-        bridge.run(self._api_client.realms.add(realm["gameVersion"], realm["id"]))
 
     def _open_backup_folder(self) -> None:
         from tsm.core.services.backup import _BACKUP_DIR

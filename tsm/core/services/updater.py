@@ -24,6 +24,21 @@ from tsm.wow.utils import iter_wow_gv_roots
 
 logger = logging.getLogger(__name__)
 
+_SUFFIX_TO_GV: dict[str, str] = {
+    "": "_retail_",
+    "-Classic": "_classic_era_",
+    "-Progression": "_classic_",
+    "-Anniversary": "_anniversary_",
+}
+_SUFFIXES_BY_LENGTH = sorted(_SUFFIX_TO_GV, key=len, reverse=True)
+
+
+def _addon_suffix(name: str) -> str:
+    for s in _SUFFIXES_BY_LENGTH:
+        if s and name.endswith(s):
+            return s
+    return ""
+
 
 def _find_addons_dir(gv_path: Path) -> Path | None:
     for name in ("AddOns", "Addons"):
@@ -125,6 +140,55 @@ class UpdateService:
                     shutil.rmtree(addon_dir)
                     zf.extractall(addons_dir)
                     logger.info("Installed %s v%s → %s", base_name, latest, addons_dir)
+                    installed_any = True
+                except Exception:
+                    logger.exception("Failed to install %s to %s", base_name, addons_dir)
+
+        return installed_any
+
+    async def install_or_update_addon(self, name: str, version: str) -> bool:
+        """Download and install the addon for the game version implied by its name suffix.
+        Installs even when the addon folder does not yet exist (fresh install).
+        Uses the specific game version directory only - does not touch other game versions.
+        """
+        if self._client is None or self._detector is None:
+            return False
+        installs = self._detector.installs
+        if not installs:
+            return False
+
+        suffix = _addon_suffix(name)
+        base_name = name[: -len(suffix)] if suffix else name
+        game_ver = _SUFFIX_TO_GV.get(suffix, "")
+        if not game_ver:
+            return False
+
+        logger.info("Downloading %s v%s for %s", base_name, version, game_ver)
+        try:
+            zip_bytes = await self._client.addon.download(base_name, tsm_version=version)
+        except Exception:
+            logger.exception("Failed to download addon %s", base_name)
+            return False
+
+        try:
+            zf = ZipFile(BytesIO(zip_bytes))
+        except BadZipFile:
+            logger.error("Downloaded file for %s is not a valid zip", base_name)
+            return False
+
+        installed_any = False
+        with zf:
+            for install in installs:
+                wow_root = Path(install.path).parent
+                addons_dir = _find_addons_dir(wow_root / game_ver)
+                if addons_dir is None:
+                    continue
+                try:
+                    addon_dir = addons_dir / base_name
+                    if addon_dir.exists():
+                        shutil.rmtree(addon_dir)
+                    zf.extractall(addons_dir)
+                    logger.info("Installed %s v%s -> %s", base_name, version, addons_dir)
                     installed_any = True
                 except Exception:
                     logger.exception("Failed to install %s to %s", base_name, addons_dir)

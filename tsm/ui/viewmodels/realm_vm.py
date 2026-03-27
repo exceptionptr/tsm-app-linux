@@ -12,7 +12,8 @@ from tsm.workers.bridge import AsyncBridge
 
 logger = logging.getLogger(__name__)
 
-# Data older than this is shown as "Outdated", 1.5× the normal 60 min refresh interval.
+# Startup-only threshold: cached snapshot data older than this is shown as "Outdated"
+# while waiting for the first live poll to complete.
 _STALE_SECONDS = 90 * 60
 
 
@@ -92,6 +93,14 @@ class RealmViewModel(QObject):
         bridge.result_ready.connect(lambda _: self.refresh_all())
         bridge.run(self._service.remove_realm(game_version, region, name))
 
+    def add_realm(self, game_version: str, realm_id: int) -> None:
+        """Call realms2/add API and refresh."""
+        if self._service is None:
+            return
+        bridge = AsyncBridge(self)
+        bridge.result_ready.connect(lambda _: self.refresh_all())
+        bridge.run(self._service.add_realm(game_version, realm_id))
+
     def _on_snapshot_received(self, result: object) -> None:
         """Called with (statuses, saved_at) from DB. Shows cached data immediately."""
         if not isinstance(result, tuple):
@@ -123,10 +132,17 @@ class RealmViewModel(QObject):
 
     def _on_data_received(self, data: object) -> None:
         # data is AuctionData
+        # Always record the poll timestamp so the status bar reflects the last check time,
+        # even when no realm data is available (AppHelper not yet installed, etc.).
+        new_sync = getattr(data, "last_sync", 0)
+        if new_sync:
+            self._last_sync = new_sync
+
         statuses = getattr(data, "realm_statuses", [])
         if not statuses:
             # Service returned no realms, WoW install or AppHelper not detected yet.
             # Keep existing rows visible; reset any "Updating..." labels.
+            logger.debug("_on_data_received: no realm statuses (last_sync=%s)", new_sync)
             for s in self._summaries:
                 if s.auctiondb_status == "Updating...":
                     s.auctiondb_status = "Up to date"
@@ -144,7 +160,6 @@ class RealmViewModel(QObject):
             )
             for s in statuses
         ]
-        self._last_sync = getattr(data, "last_sync", 0)
         self._had_new_data = bool(getattr(data, "entries", {}))
         self.data_updated.emit()
 

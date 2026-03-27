@@ -1,3 +1,43 @@
+tsm-app (1.1.0-1) stable; urgency=low
+
+  * Add: Addon Versions tab collapsible game-version groups with 180 ms animation,
+    top-aligned with fixed collapsed height
+  * Add: Addon Versions tab always-visible action buttons: download (fresh install),
+    refresh (update), trash (uninstall with confirmation; WTF untouched)
+  * Add: Addon Versions tab rotating spinner during download, per-row
+  * Add: Addon Versions tab Installed Version and Status dot columns
+  * Add: Realm Data tab colored status dot (realms: 2h/6h; regions: 26h/50h)
+  * Add: per-row trash icon delete button (always visible, turns red on hover)
+  * Add: inline Add Realm panel at bottom of Realm Data tab
+  * Add: Refresh Now replaced with icon-only button; tooltip shows rate-limit countdown
+  * Change: Settings > General Realms section removed; moved to Realm Data tab
+  * Change: main window min width raised to 740 px; max width constraint removed
+  * Fix: status bar timestamp now updates on every poll; previously frozen
+    when realm_statuses was empty (AppHelper not yet detected, etc.)
+  * Add: Backups tab per-row restore (green on hover) and delete (red on hover) icon buttons
+  * Add: Backups tab Name column with ellipsis; bottom name input (alphanum/hyphen/space,
+    max 40 chars) embeds name in filename; Auto=gray tag, Manual=orange tag, uniform width
+  * Add: Backups tab file size column (KB/MB)
+  * Add: status bar shows tab-context text; Backups tab shows backup count and total size
+  * Remove: Addon Versions tab double-click-to-install replaced by explicit action buttons
+  * Remove: Backups tab double-click dialog and System ID column removed
+  * Add: Accounting tab date range filter (From/To QDateEdit with cross-validation, Last 7d/30d/All time)
+  * Add: Accounting tab preview table with full pagination (50 rows/page, prev/next chevron buttons)
+  * Add: Accounting tab item names from Wowhead API with disk cache; spinner while loading, i:ID fallback
+  * Add: Accounting tab WoW-style item tooltip on hover (quality-colored border, full stat block)
+  * Add: Accounting tab gold column: sign-colored number, gold-colored g suffix, auto-sized width
+  * Add: Accounting tab summary bar (total sales, purchases, net gold, transactions)
+  * Add: Export to CSV now applies the date filter; button shows filtered row count
+  * Change: "Accounting Export" tab renamed to "Accounting"
+  * Add: status bar GitHub icon (opens repo) and Settings icon (opens dialog), both white on hover
+  * Change: status bar text size raised from 10px to 12px
+  * Remove: footer bar (Premium and GitHub buttons) replaced by status bar icon buttons
+  * Chore: removed dead write_app_info() from AuctionDataService
+  * Chore: README sync interval corrected to "5 minutes (differential)"
+  * Chore: lua_writer.py docstring corrected; fmt_ts renamed from _fmt_ts
+
+ -- exceptionptr <https://github.com/exceptionptr>  Fri, 27 Mar 2026 00:00:00 +0100
+
 tsm-app (1.0.7-1) stable; urgency=low
 
   * Fix: auction poller now checks TSM API on every 5-min poll; removed

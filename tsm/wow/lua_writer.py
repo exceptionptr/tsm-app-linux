@@ -6,8 +6,8 @@ Real format from AppData.pyc (decompiled):
 
 - One line per entry.
 - The trailing --<...> comment is parsed back by AppData.__init__ to read timestamps.
-- APP_INFO uses store_raw=True (no [[return ...]]), it's a raw Lua call.
-- All other types use [[return data]] wrapping.
+- All tags (including APP_INFO) use [[return data]] wrapping; RAW_TAGS is reserved
+  for future API entries that require verbatim unwrapped Lua blobs.
 """
 
 from __future__ import annotations

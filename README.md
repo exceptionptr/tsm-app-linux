@@ -10,26 +10,27 @@ TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloa
 
 ### Main window
 
-![Main window 1](media/1.png)
-![Main window 2](media/2.png)
-![Main window 3](media/3.png)
-![Main window 4](media/4.png)
+| | |
+|---|---|
+| ![](media/1.png) | ![](media/2.png) |
+| ![](media/3.png) | ![](media/4.png) |
 
 ### Settings
 
-![Settings 1](media/5.png)
-![Settings 2](media/6.png)
-![Settings 3](media/7.png)
+| | | |
+|---|---|---|
+| ![](media/5.png) | ![](media/6.png) | ![](media/7.png) |
 
 ## Features
 
 - TSM account login with secure credential storage (keyring / Secret Service)
-- Automatic auction data sync every 60 minutes; manual refresh on demand
+- Automatic auction data sync every 5 minutes (differential - only changed blobs downloaded); manual refresh on demand
 - WoW install auto-detection for Wine, Lutris, Steam, and custom paths
 - Atomic `AppData.lua` writes: no partial/corrupt addon data
 - Scheduled SavedVariables backups with restore support
-- TSM addon version checking and auto-update
-- System tray icon with minimise-to-tray support
+- TSM addon version checking with auto-update on each sync; manual install, update, and uninstall per addon per game version from the Addon Versions tab
+- Accounting tab: browse sales, purchases, income, and expenses from WoW SavedVariables with date filtering, paginated preview (50 rows/page), item names resolved via Wowhead API with WoW-style tooltips on hover, and CSV export
+- Status bar with GitHub link and Settings shortcut; system tray icon with minimise-to-tray support
 
 ## Requirements
 
@@ -96,6 +97,7 @@ tsm-app
 | Database      | `~/.local/share/tsm-app/data.db`              |
 | Log file      | `~/.local/share/tsm-app/logs/tsm-app.log`     |
 | Backups       | `~/.local/share/tsm-app/backups/`             |
+| Item cache    | `~/.local/share/tsm-app/item_cache.json`      |
 
 Logs rotate automatically; the last 5 files are kept. To reset the app to a clean
 state, remove `~/.config/tsm-app/` and `~/.local/share/tsm-app/`.

@@ -185,6 +185,98 @@ QComboBox QAbstractItemView {
     outline: none;
 }
 
+QDateEdit {
+    background-color: #252525;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 4px 8px;
+}
+QDateEdit:focus {
+    border-color: #f26522;
+}
+QDateEdit::drop-down {
+    width: 24px;
+    background-color: transparent;
+    border: none;
+    border-left: 1px solid #3a3a3a;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+}
+QDateEdit::drop-down:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+QDateEdit::down-arrow {
+    image: url({ASSETS}/chevron-down-picker.svg);
+    width: 10px;
+    height: 10px;
+}
+
+/* ── Calendar popup (QDateEdit) ────────────────────────────────────── */
+QCalendarWidget {
+    background-color: #1e1e1e;
+    color: #d0d0d0;
+}
+QCalendarWidget QWidget#qt_calendar_navigationbar {
+    background-color: #252525;
+    border-bottom: 1px solid #3a3a3a;
+    padding: 2px 4px;
+}
+QCalendarWidget QToolButton {
+    background-color: transparent;
+    color: #d0d0d0;
+    border: none;
+    border-radius: 3px;
+    padding: 3px 8px;
+    font-weight: bold;
+}
+QCalendarWidget QToolButton:hover {
+    background-color: #f26522;
+    color: #ffffff;
+}
+QCalendarWidget QToolButton::menu-indicator {
+    image: none;
+}
+QCalendarWidget QSpinBox {
+    background-color: #252525;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    border-radius: 3px;
+    padding: 2px 4px;
+    selection-background-color: #f26522;
+}
+QCalendarWidget QMenu {
+    background-color: #252525;
+    color: #d0d0d0;
+    border: 1px solid #3a3a3a;
+    selection-background-color: #f26522;
+    selection-color: #ffffff;
+}
+QCalendarWidget QAbstractItemView {
+    background-color: #1e1e1e;
+    color: #d0d0d0;
+    selection-background-color: #f26522;
+    selection-color: #ffffff;
+    outline: none;
+}
+QCalendarWidget QAbstractItemView:disabled {
+    color: #444444;
+}
+QCalendarWidget QAbstractItemView::item:hover {
+    background-color: #2e2e2e;
+    color: #ffffff;
+}
+QCalendarWidget QWidget {
+    alternate-background-color: #242424;
+}
+
+/* ── Accounting Export summary bar ────────────────────────────────── */
+QWidget#accounting-summary {
+    background-color: #192419;
+    border: 1px solid #2d422d;
+    border-radius: 4px;
+}
+
 /* ── CheckBox ─────────────────────────────────────────────────────── */
 QCheckBox {
     spacing: 6px;
@@ -259,11 +351,6 @@ QWidget#realm-bottom QLabel {
     background-color: transparent;
 }
 
-/* ── Refresh button ───────────────────────────────────────────────── */
-QPushButton#refresh-btn {
-    padding: 4px 10px;
-    font-size: 11px;
-}
 
 /* ── GroupBox ─────────────────────────────────────────────────────── */
 QGroupBox {
@@ -284,7 +371,7 @@ QStatusBar {
     background-color: #1a1a1a;
     color: #666666;
     border-top: 1px solid #2e2e2e;
-    font-size: 10px;
+    font-size: 12px;
     padding: 2px 10px;
 }
 QStatusBar::item {
@@ -292,8 +379,50 @@ QStatusBar::item {
     background: transparent;
 }
 QStatusBar QLabel {
-    font-size: 10px;
+    font-size: 12px;
     color: #666666;
     background: transparent;
     padding: 2px 10px;
+}
+QPushButton#statusbar-icon {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    margin-right: 4px;
+}
+
+/* Per-row action buttons (Realm Data and Addon Versions tabs) */
+QPushButton#row-action {
+    background: transparent;
+    border: none;
+    color: #666666;
+    font-size: 13px;
+    padding: 0px;
+    min-width: 0px;
+}
+QPushButton#row-action:hover {
+    color: #f44336;
+}
+
+/* Addon Versions - collapsible group headers */
+QWidget#addon-group-header {
+    background-color: #252525;
+    border-bottom: 1px solid #2e2e2e;
+}
+QWidget#addon-group-header:hover {
+    background-color: #2e2e2e;
+}
+QLabel#addon-group-arrow {
+    color: #aaaaaa;
+    background: transparent;
+}
+QLabel#addon-group-name {
+    color: #f26522;
+    font-weight: bold;
+    background: transparent;
+}
+QLabel#addon-group-summary {
+    color: #666666;
+    font-weight: normal;
+    background: transparent;
 }

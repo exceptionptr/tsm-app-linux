@@ -57,6 +57,38 @@ install -Dm644 LICENSE \
 %{_datadir}/licenses/%{name}/
 
 %changelog
+* Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.0-1
+- Add: Addon Versions tab collapsible game-version groups with 180 ms animation, top-aligned
+- Add: Addon Versions tab always-visible action buttons (download/refresh/trash) with functional install, update, and uninstall (WTF untouched)
+- Add: Addon Versions tab per-row spinner during download
+- Add: Addon Versions tab Installed Version and Status dot columns
+- Add: Realm Data tab colored status dot (realms 2h/6h, regions 26h/50h thresholds)
+- Add: per-row trash icon delete button, always visible, turns red on hover
+- Add: inline Add Realm panel at bottom of Realm Data tab
+- Add: Refresh Now replaced with icon-only button with dynamic tooltip
+- Change: Settings Realms section removed, moved to Realm Data tab
+- Change: main window min width 740px, max width constraint removed
+- Fix: status bar timestamp now updates on every poll when realm_statuses is empty
+- Add: Backups tab per-row restore (green hover) and delete (red hover) icon buttons with confirmations
+- Add: Backups tab Name column with ellipsis; bottom name input (alphanum/hyphen/space, max 40); Auto=gray/Manual=orange uniform tags
+- Add: Backups tab file size column (KB/MB)
+- Add: status bar shows tab-context text; Backups tab shows backup count and total size
+- Remove: Addon Versions double-click-to-install replaced by explicit action buttons
+- Remove: Backups tab double-click dialog and System ID column removed
+- Add: Accounting tab date range filter (From/To QDateEdit with cross-validation, Last 7d/30d/All time)
+- Add: Accounting tab full pagination (50 rows/page, prev/next chevron buttons flush left/right)
+- Add: Accounting tab item names via Wowhead API with disk cache; spinner while loading, i:ID fallback
+- Add: Accounting tab WoW-style item tooltip on hover with quality-colored border and stat block
+- Add: Accounting tab gold column sign-colored number, gold g suffix, auto-sized to widest entry
+- Add: Accounting tab summary bar with total sales, purchases, net gold, transaction count
+- Add: Export to CSV applies date filter; button label shows filtered row count
+- Change: "Accounting Export" tab renamed to "Accounting"
+- Add: status bar GitHub icon (opens repo) and Settings icon (opens dialog), both white on hover
+- Change: status bar text size raised from 10px to 12px
+- Remove: footer bar (Premium and GitHub buttons) replaced by status bar icon buttons
+- Chore: removed dead write_app_info() from AuctionDataService
+- Chore: README sync interval corrected; lua_writer.py docstring fixed; fmt_ts renamed
+
 * Sun Mar 22 2026 exceptionptr <https://github.com/exceptionptr> - 1.0.7-1
 - Fix: auction poller checks TSM API on every 5-min poll; removed 60-min cache gate
 - Fix: apscheduler dependency changed to >=4.0.0a5 so pip resolves 4.x pre-release

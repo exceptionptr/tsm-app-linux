@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QAction, QColor, QDesktopServices, QIcon, QPixmap
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -29,7 +29,7 @@ from tsm.ui.views.accounting_export import AccountingExportView
 from tsm.ui.views.addon_versions import AddonVersionsView
 from tsm.ui.views.backups import BackupsView
 from tsm.ui.views.login import LoginView
-from tsm.ui.views.realm_data import RealmDataView, _fmt_ts
+from tsm.ui.views.realm_data import RealmDataView, fmt_ts
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ _TABS = [
     ("Realm Data", "realm"),
     ("Addon Versions", "addons"),
     ("Backups", "backups"),
-    ("Accounting Export", "accounting"),
+    ("Accounting", "accounting"),
 ]
 
 
@@ -53,6 +53,7 @@ class AppWindow(QMainWindow):
         addon_service=None,
         api_client=None,
         backup_service=None,
+        updater_service=None,
         parent=None,
     ):
         super().__init__(parent)
@@ -63,15 +64,16 @@ class AppWindow(QMainWindow):
         self._addon_service = addon_service
         self._api_client = api_client
         self._backup_service = backup_service
+        self._updater_service = updater_service
         self._realm_tree_cache: dict | None = None
         self._quitting = False
+        self._backup_stats: str = ""
 
         from tsm import __version__
 
         self.setWindowTitle(f"TradeSkillMaster Application - v{__version__}")
-        self.setMinimumSize(620, 540)
-        self.setMaximumSize(1200, 900)
-        self.resize(620, 560)
+        self.setMinimumSize(740, 600)
+        self.resize(740, 600)
         self.setWindowIcon(_make_window_icon())
         self.setWindowFlags(
             Qt.WindowType.Window
@@ -98,7 +100,7 @@ class AppWindow(QMainWindow):
 
         self._stack = QStackedWidget()
         self._realm_view = RealmDataView(self._realm_vm)
-        self._addon_view = AddonVersionsView(self._addon_service)
+        self._addon_view = AddonVersionsView(self._addon_service, self._updater_service)
         self._backup_view = BackupsView(self._backup_service, backup_now_fn=self._run_backup_now)
         self._acct_view = AccountingExportView(self._addon_service)
         self._stack.addWidget(self._realm_view)  # 0
@@ -111,8 +113,6 @@ class AppWindow(QMainWindow):
         self._realm_vm.addons_updated.connect(self._addon_view.update_from_api)
         # Refresh accounting dropdowns after data sync (detector will have installs by then)
         self._realm_vm.data_updated.connect(self._acct_view.populate)
-
-        vbox.addWidget(self._build_footer())
 
         self._status_bar = TSMStatusBar()
         self.setStatusBar(self._status_bar)
@@ -138,45 +138,19 @@ class AppWindow(QMainWindow):
         self._tab_buttons[0].setChecked(True)
         return bar
 
-    def _build_footer(self) -> QWidget:
-        footer = QWidget()
-        footer.setObjectName("footer")
-        footer.setFixedHeight(44)
-        row = QHBoxLayout(footer)
-        row.setContentsMargins(8, 6, 8, 6)
-        row.setSpacing(6)
-
-        premium_btn = QPushButton("Support TSM by Going Premium!")
-        premium_btn.setFixedHeight(30)
-        premium_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl("https://tradeskillmaster.com/premium"))
-        )
-        row.addWidget(premium_btn)
-
-        github_btn = QPushButton("GitHub")
-        github_btn.setFixedHeight(30)
-        github_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl("https://github.com/exceptionptr/tsm-app-linux"))
-        )
-        row.addWidget(github_btn)
-
-        settings_btn = QPushButton("Settings")
-        settings_btn.setFixedHeight(30)
-        settings_btn.clicked.connect(self._open_settings)
-        row.addWidget(settings_btn)
-
-        return footer
-
     # ── Signals ─────────────────────────────────────────────────────
 
     def _connect_signals(self) -> None:
-        self._app_vm.status_changed.connect(self._status_bar.set_status)  # single pipe
+        self._app_vm.status_changed.connect(self._status_bar.set_status)
+        self._status_bar.settings_requested.connect(self._open_settings)
         self._app_vm.authenticated_changed.connect(self._update_status)
         self._realm_vm.data_updated.connect(self._update_status)
         self._realm_vm.data_updated.connect(self._notify_realm_data)
         self._realm_vm.loading_changed.connect(self._on_loading_changed)
         self._app_vm.backup_notification.connect(self._notify_backup)
         self._app_vm.backup_notification.connect(lambda _: self._backup_view._refresh())
+        self._backup_view.stats_updated.connect(self._on_backup_stats)
+        self._backup_view._refresh()
         self._app_vm.addon_notification.connect(self._notify_addon)
         self._app_vm.realm_data_received.connect(self._realm_vm._on_data_received)
         self._update_status()
@@ -205,7 +179,7 @@ class AppWindow(QMainWindow):
         if self._settings_vm.config.notify_addon_update:
             self.notify(message)
 
-    def _run_backup_now(self, done_callback) -> None:
+    def _run_backup_now(self, name: str, done_callback) -> None:
         if self._backup_service is None:
             done_callback()
             return
@@ -224,6 +198,7 @@ class AppWindow(QMainWindow):
                     retain_days=cfg.backup_retain_days,
                     extra_installs=cfg.wow_installs,
                     keep=True,
+                    name=name,
                 ),
             )
 
@@ -234,7 +209,19 @@ class AppWindow(QMainWindow):
         bridge.error_occurred.connect(lambda _: done_callback())
         bridge.run(_do_backup())
 
+    def _current_tab_key(self) -> str:
+        idx = self._stack.currentIndex()
+        return _TABS[idx][1] if 0 <= idx < len(_TABS) else ""
+
+    def _on_backup_stats(self, text: str) -> None:
+        self._backup_stats = text
+        if self._current_tab_key() == "backups":
+            self._app_vm.set_status(text)
+
     def _update_status(self, *_: object) -> None:
+        if self._current_tab_key() == "backups":
+            self._app_vm.set_status(self._backup_stats or "No backups stored.")
+            return
         installs = list(self._addon_service.installs) if self._addon_service is not None else []
         if not installs:
             installs = list(getattr(self._settings_vm.config, "wow_installs", []) or [])
@@ -243,7 +230,7 @@ class AppWindow(QMainWindow):
             return
         last = self._realm_vm.last_sync
         if last:
-            self._app_vm.set_status(f"Up to date as of {_fmt_ts(last)}")
+            self._app_vm.set_status(f"Up to date as of {fmt_ts(last)}")
         else:
             self._app_vm.set_status("Checking status…")
 
@@ -258,6 +245,7 @@ class AppWindow(QMainWindow):
         self._stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._tab_buttons):
             btn.setChecked(i == idx)
+        self._update_status()
 
     # ── Settings dialog ──────────────────────────────────────────────
 
@@ -268,9 +256,6 @@ class AppWindow(QMainWindow):
             self._settings_vm,
             self._auth_service,
             wow_detector=self._addon_service,
-            api_client=self._api_client,
-            realm_vm=self._realm_vm,
-            realm_tree=self._realm_tree_cache,
             parent=self,
         )
         dlg.exec()
@@ -383,6 +368,7 @@ class AppWindow(QMainWindow):
         if not isinstance(data, dict):
             return
         self._realm_tree_cache = build_realm_tree(data)
+        self._realm_view.set_realm_tree(self._realm_tree_cache)
 
     def on_authenticated(self, session) -> None:
         """Called after successful authentication (login or session restore)."""
@@ -392,6 +378,7 @@ class AppWindow(QMainWindow):
             self.show()
         self._realm_vm.load_snapshot()
         self._realm_vm.refresh_all()
+        self._prefetch_realm_list()
 
 
 def _make_window_icon() -> QIcon:
