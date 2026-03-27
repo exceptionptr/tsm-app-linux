@@ -4,7 +4,59 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
-## [Unreleased]
+## [1.1.1] - 2026-03-27
+
+### Added
+
+- WoW auto-detection: Faugus Launcher prefixes scanned automatically via
+  `~/.config/faugus-launcher/games.json` and `~/Faugus/` subdirectory fallback.
+  Closes #1.
+- Debug CLI flags: `--skip-detection`, `--skip-auto-sync`, `--skip-auto-backup`
+  replace the removed `--debug` flag, allowing targeted bypassing of individual
+  startup phases without altering the sync interval.
+- `--version` flag: prints the app version and exits without starting the GUI or
+  requiring a display.
+- RPM package now bundles `apscheduler` (4.x), `structlog`, and `tomli-w` under
+  `/usr/lib/tsm-app/vendor/` - these are not packaged in Fedora or openSUSE repos.
+  The entry point injects the vendor path automatically; no manual `pip install`
+  needed after installing the `.rpm`.
+- CI: install-and-run smoke tests for the `.rpm` on Fedora and openSUSE Tumbleweed,
+  and for the `.deb` on Ubuntu. Release is blocked until all three pass.
+
+### Fixed
+
+- Status bar warning text (`⚠ ...`) is now shown in red, making misconfiguration
+  states easier to spot at a glance.
+- Status bar now shows `⚠ TradeSkillMaster_AppHelper addon not found` when a valid
+  WoW path is configured but the AppHelper addon is missing, instead of silently
+  showing "Up to date as of X".
+- Addon Versions, Backups, and Accounting tabs are now disabled (and navigation
+  redirected to Realm Data) when no valid WoW directory is configured.
+- Auto-detected WoW paths no longer overwrite manually configured paths in config.
+  Auto-detection only writes to config when the stored install list is empty.
+- WoW game-version directory validation now checks for the WoW executable
+  (`Wow.exe` / `WowClassic.exe`, case-insensitive) instead of requiring
+  `Interface/AddOns` to exist. Fresh installs without any addons are now detected
+  correctly.
+- Addon Versions tab is now populated from API data even when AppHelper is not
+  installed. Previously `addons_updated` was never emitted when no realm statuses
+  were returned, leaving the tab empty.
+- WoW path detection: browsing for a custom install in Settings now scans the selected
+  folder for version subdirectories (`_retail_`, `_classic_`, etc.) the same way
+  auto-detection does. Previously the raw folder path was stored verbatim, causing
+  downstream lookups (AppHelper, addon writer, backup) to search the wrong location.
+- WoW path detection: selecting a version subdirectory directly (e.g. `_retail_`) now
+  resolves one level up so the correct base is scanned. Invalid selections (no version
+  dirs found) show a descriptive error message.
+- WoW path detection: stale/duplicate config entries are cleared on each browse,
+  preventing accumulation of wrong paths (caused the two-entry config in issue #2).
+- WoW path detection: saving Settings now immediately pushes valid config paths into
+  the WoW detector, so the next poll uses the correct paths without a restart.
+
+### Chore
+
+- `accounting_export.py`: replaced `# type: ignore` pair on `QEvent` cast with a
+  proper `isinstance(event, QMouseEvent)` guard; fixes mypy `unused-ignore` error in CI.
 
 ---
 

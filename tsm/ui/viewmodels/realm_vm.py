@@ -41,6 +41,7 @@ class RealmViewModel(QObject):
         self._last_sync: int = 0
         self._loading = False
         self._had_new_data: bool = False
+        self._apphelper_missing: bool = False
 
     @property
     def loading(self) -> bool:
@@ -61,6 +62,10 @@ class RealmViewModel(QObject):
     @property
     def had_new_data(self) -> bool:
         return self._had_new_data
+
+    @property
+    def apphelper_missing(self) -> bool:
+        return self._apphelper_missing
 
     def load_snapshot(self) -> None:
         """Pre-populate the table from the last-known realm list (instant, no network)."""
@@ -138,16 +143,23 @@ class RealmViewModel(QObject):
         if new_sync:
             self._last_sync = new_sync
 
+        addon_versions = getattr(data, "addon_versions", [])
+        if addon_versions:
+            self.addons_updated.emit(addon_versions)
+
         statuses = getattr(data, "realm_statuses", [])
         if not statuses:
             # Service returned no realms, WoW install or AppHelper not detected yet.
             # Keep existing rows visible; reset any "Updating..." labels.
             logger.debug("_on_data_received: no realm statuses (last_sync=%s)", new_sync)
+            if new_sync:
+                self._apphelper_missing = True
             for s in self._summaries:
                 if s.auctiondb_status == "Updating...":
                     s.auctiondb_status = "Up to date"
             self.data_updated.emit()
             return
+        self._apphelper_missing = False
         self._summaries = [
             RealmSummary(
                 display_name=s.display_name,
@@ -162,10 +174,6 @@ class RealmViewModel(QObject):
         ]
         self._had_new_data = bool(getattr(data, "entries", {}))
         self.data_updated.emit()
-
-        addon_versions = getattr(data, "addon_versions", [])
-        if addon_versions:
-            self.addons_updated.emit(addon_versions)
 
     def _on_error(self, error_msg: str) -> None:
         logger.error("Realm refresh error: %s", error_msg)

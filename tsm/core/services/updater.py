@@ -20,7 +20,7 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from tsm.api.types import AddonVersionInfo
-from tsm.wow.utils import iter_wow_gv_roots
+from tsm.wow.utils import is_valid_wow_version_dir, iter_wow_gv_roots
 
 logger = logging.getLogger(__name__)
 
@@ -180,9 +180,15 @@ class UpdateService:
         with zf:
             for install in installs:
                 wow_root = Path(install.path).parent
-                addons_dir = _find_addons_dir(wow_root / game_ver)
+                gv_path = wow_root / game_ver
+                addons_dir = _find_addons_dir(gv_path)
                 if addons_dir is None:
-                    continue
+                    # Create Interface/AddOns for a fresh WoW install that has
+                    # no addons yet but has a valid WoW executable.
+                    if not is_valid_wow_version_dir(gv_path):
+                        continue
+                    addons_dir = gv_path / "Interface" / "AddOns"
+                    addons_dir.mkdir(parents=True, exist_ok=True)
                 try:
                     addon_dir = addons_dir / base_name
                     if addon_dir.exists():

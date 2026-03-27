@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 
 class WoWDetectorService:
-    def __init__(self):
+    def __init__(self, skip_scan: bool = False):
         self._installs: list[WoWInstall] = []
+        self._skip_scan = skip_scan
 
     @property
     def installs(self) -> list[WoWInstall]:
@@ -30,8 +31,8 @@ class WoWDetectorService:
         return installs
 
     async def get_installs(self) -> list[WoWInstall]:
-        """Return cached list; scan if empty."""
-        if not self._installs:
+        """Return cached list; scan if empty (unless skip_scan is set)."""
+        if not self._installs and not self._skip_scan:
             await self.scan()
         return self._installs
 

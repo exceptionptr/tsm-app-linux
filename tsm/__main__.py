@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import logging
 import logging.handlers
 import signal
@@ -49,32 +50,45 @@ def _setup_logging() -> None:
 
 
 def main() -> None:
-    import argparse
-
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument(
-        "--debug",
-        type=int,
-        metavar="MINUTES",
-        default=None,
-        help="Run auction and backup jobs every MINUTES instead of normal intervals",
+        "--version",
+        action="store_true",
+        help="Print version and exit",
+    )
+    parser.add_argument(
+        "--skip-detection",
+        action="store_true",
+        help="Skip WoW install auto-detection at startup",
+    )
+    parser.add_argument(
+        "--skip-auto-sync",
+        action="store_true",
+        help="Do not schedule the periodic auction data sync job",
+    )
+    parser.add_argument(
+        "--skip-auto-backup",
+        action="store_true",
+        help="Do not schedule the periodic backup job",
     )
     known, qt_argv = parser.parse_known_args()
-    debug_minutes: int | None = known.debug
+
+    if known.version:
+        from tsm import __version__
+
+        print(__version__)
+        return
 
     _setup_logging()
-    if debug_minutes is not None:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.getLogger("tsm").setLevel(logging.DEBUG)
-        logging.warning(
-            "DEBUG mode: auction + backup interval = %d min (fires immediately)", debug_minutes
-        )
 
     from tsm.app import create_app
     from tsm.workers.bridge import AsyncBridge
 
     qt_app, window, _, auth_svc = create_app(
-        [sys.argv[0]] + qt_argv, debug_interval_minutes=debug_minutes
+        [sys.argv[0]] + qt_argv,
+        skip_detection=known.skip_detection,
+        skip_auto_sync=known.skip_auto_sync,
+        skip_auto_backup=known.skip_auto_backup,
     )
     # Do NOT show main window yet: only show it after successful auth.
 

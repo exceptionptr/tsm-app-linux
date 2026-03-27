@@ -155,10 +155,26 @@ jobs:
           install -Dm644 LICENSE \
             staging/usr/share/licenses/tsm-app/LICENSE
 
+      - name: Bundle Python deps not packaged in RPM distros
+        run: |
+          # apscheduler 4.x, structlog, and tomli-w are not available as RPM
+          # system packages on Fedora/openSUSE. Bundle them under a vendor dir
+          # that is injected into sys.path by the entry point script.
+          pip install --target=staging/usr/lib/tsm-app/vendor \
+            "apscheduler>=4.0.0,<5" structlog tomli-w
+          # Inject vendor path after the shebang line in the entry point
+          python3 -c "
+import pathlib
+ep = pathlib.Path('staging/usr/bin/tsm-app')
+lines = ep.read_text().splitlines(keepends=True)
+lines.insert(1, 'import sys; sys.path.insert(0, \"/usr/lib/tsm-app/vendor\")\n')
+ep.write_text(''.join(lines))
+"
+
       - name: Build .rpm with fpm
         run: |
-          # Build --depends flags from the canonical ci-depends file
-          FPM_DEPS=$(tr ',' '\n' < packaging/debian/ci-depends \
+          # RPM requires list excludes bundled packages (apscheduler, structlog, tomli-w)
+          FPM_DEPS=$(tr ',' '\n' < packaging/rpm/rpm-requires \
             | sed 's/^ *//;s/ *$//' \
             | sed 's/ (>= />=/' | sed 's/)//' \
             | awk '{print "--depends "$0}' \
@@ -180,10 +196,70 @@ jobs:
           name: rpm
           path: dist/*.rpm
 
-  # ── 4. Create GitHub Release ──────────────────────────────────────────────
+  # ── 4. Smoke-test .rpm on Fedora and openSUSE ────────────────────────────
+  test-rpm-fedora:
+    name: Test .rpm (Fedora)
+    needs: build-rpm
+    runs-on: ubuntu-latest
+    container:
+      image: fedora:latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: rpm
+          path: dist/
+
+      - name: Install RPM
+        run: dnf install -y dist/*.rpm
+
+      - name: Smoke test
+        run: |
+          tsm-app --version
+          python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
+
+  test-rpm-opensuse:
+    name: Test .rpm (openSUSE)
+    needs: build-rpm
+    runs-on: ubuntu-latest
+    container:
+      image: opensuse/tumbleweed:latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: rpm
+          path: dist/
+
+      - name: Install RPM
+        run: zypper --non-interactive install --allow-unsigned-rpm dist/*.rpm
+
+      - name: Smoke test
+        run: |
+          tsm-app --version
+          python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
+
+  # ── 5. Smoke-test .deb on Ubuntu ─────────────────────────────────────────
+  test-deb:
+    name: Test .deb (Ubuntu)
+    needs: build-deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: deb
+          path: dist/
+
+      - name: Install .deb
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ./dist/*.deb
+
+      - name: Smoke test
+        run: tsm-app --version
+
+  # ── 6. Create GitHub Release ──────────────────────────────────────────────
   github-release:
     name: GitHub Release
-    needs: [build-wheel, build-deb, build-rpm]
+    needs: [build-wheel, build-deb, build-rpm, test-rpm-fedora, test-rpm-opensuse, test-deb]
     runs-on: ubuntu-latest
     permissions:
       contents: write

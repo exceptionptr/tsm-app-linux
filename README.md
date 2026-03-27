@@ -25,7 +25,7 @@ TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloa
 
 - TSM account login with secure credential storage (keyring / Secret Service)
 - Automatic auction data sync every 5 minutes (differential - only changed blobs downloaded); manual refresh on demand
-- WoW install auto-detection for Wine, Lutris, Steam, and custom paths
+- WoW install auto-detection for Wine, Lutris, Faugus Launcher, Steam, and custom paths
 - Atomic `AppData.lua` writes: no partial/corrupt addon data
 - Scheduled SavedVariables backups with restore support
 - TSM addon version checking with auto-update on each sync; manual install, update, and uninstall per addon per game version from the Addon Versions tab
@@ -113,6 +113,8 @@ The app scans the following paths automatically on startup:
 | Lutris (common)         | `~/Games/world-of-warcraft`                                                                   |
 | Lutris (common)         | `~/Games/World of Warcraft`                                                                   |
 | Lutris (config)         | Wine prefix read from `~/.local/share/lutris/games/*.yml`, both Program Files variants        |
+| Faugus Launcher (config)| Wine prefix read from `~/.config/faugus-launcher/games.json`, both Program Files variants    |
+| Faugus Launcher (common)| All subdirectories of `~/Faugus/`, both Program Files variants                               |
 | Steam                   | `~/.local/share/Steam/steamapps/common/World of Warcraft`                                    |
 | Snap Wine               | `~/snap/wine-platform-5-stable/common/.wine/drive_c/Program Files (x86)/World of Warcraft`   |
 | Mount (games partition) | `/mnt/games/World of Warcraft`                                                                |

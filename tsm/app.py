@@ -67,7 +67,9 @@ DB_PATH = DATA_DIR / "data.db"
 
 def create_app(
     argv: list[str] | None = None,
-    debug_interval_minutes: int | None = None,
+    skip_detection: bool = False,
+    skip_auto_sync: bool = False,
+    skip_auto_backup: bool = False,
 ) -> tuple[QApplication, AppWindow, AsyncRunner, AuthService]:
     """Wire up all dependencies and return the configured application."""
     qt_app = QApplication(argv or sys.argv)
@@ -98,7 +100,7 @@ def create_app(
     # API + Services
     api_client = TSMApiClient()
     auth_svc = AuthService(api_client)
-    wow_detector = WoWDetectorService()
+    wow_detector = WoWDetectorService(skip_scan=skip_detection)
     addon_writer = AddonWriterService(wow_detector)
     auction_svc = AuctionDataService(api_client, cache, addon_writer)
     updater_svc = UpdateService(api_client, wow_detector)
@@ -131,7 +133,12 @@ def create_app(
         auction_data_fn=app_vm.realm_data_received.emit,
         wow_warn_fn=_wow_warn,
     )
-    scheduler = JobScheduler(svc_container, debug_interval_minutes=debug_interval_minutes)
+    scheduler = JobScheduler(
+        svc_container,
+        skip_detection=skip_detection,
+        skip_auto_sync=skip_auto_sync,
+        skip_auto_backup=skip_auto_backup,
+    )
 
     # Main window
     window = AppWindow(

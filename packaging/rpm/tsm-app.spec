@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.0.7
+Version:        1.1.1
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -21,9 +21,9 @@ Requires:       python3-aiohttp
 Requires:       python3-pydantic
 Requires:       python3-aiosqlite
 Requires:       python3-keyring
-Requires:       python3-structlog
-Requires:       python3-tomli-w
-Requires:       python3-pyyaml
+Requires:       python3-PyYAML
+# apscheduler (4.x), structlog, and tomli-w are bundled under
+# /usr/lib/tsm-app/vendor/ because they are not packaged in Fedora/openSUSE.
 
 %description
 Downloads auction house data from the TSM API and writes Lua files for
@@ -47,6 +47,20 @@ install -Dm644 tsm/ui/assets/tsm_256.png %{buildroot}%{_datadir}/icons/hicolor/2
 install -Dm644 LICENSE \
     %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
+# Bundle Python deps not packaged in Fedora/openSUSE repos
+pip3 install --target=%{buildroot}/usr/lib/tsm-app/vendor \
+    "apscheduler>=4.0.0,<5" structlog tomli-w
+
+# Inject vendor path into the entry point so it takes precedence over any
+# system-installed incompatible version (e.g. apscheduler 3.x)
+python3 -c "
+import pathlib
+ep = pathlib.Path('%{buildroot}%{_bindir}/tsm-app')
+lines = ep.read_text().splitlines(keepends=True)
+lines.insert(1, 'import sys; sys.path.insert(0, \"/usr/lib/tsm-app/vendor\")\n')
+ep.write_text(''.join(lines))
+"
+
 %files
 %license LICENSE
 %{python3_sitelib}/tsm/
@@ -55,8 +69,27 @@ install -Dm644 LICENSE \
 %{_datadir}/applications/tsm-app.desktop
 %{_datadir}/icons/hicolor/*/apps/tsm-app.png
 %{_datadir}/licenses/%{name}/
+/usr/lib/tsm-app/
 
 %changelog
+* Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
+- Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)
+- Add: --skip-detection, --skip-auto-sync, --skip-auto-backup CLI flags replace --debug
+- Add: --version flag; prints version and exits without requiring a display
+- Add: CI smoke tests install and run the .rpm on Fedora and openSUSE before release
+- Fix: bundle apscheduler 4.x, structlog, and tomli-w under /usr/lib/tsm-app/vendor/ - not packaged on Fedora/openSUSE
+- Fix: status bar warning text shown in red for ⚠ messages
+- Fix: status bar shows ⚠ AppHelper addon not found when WoW path is set but addon is missing
+- Fix: Addon Versions, Backups, and Accounting tabs disabled when WoW not configured
+- Fix: auto-detected WoW paths no longer overwrite manually configured paths in config
+- Fix: WoW version dir check now looks for WoW executable (case-insensitive) instead of Interface/AddOns
+- Fix: Addon Versions tab populated from API data even when AppHelper is not installed
+- Fix: WoW path browse scans for _retail_/_classic_ subdirs; raw path no longer stored verbatim (Closes: #2)
+- Fix: selecting a version subdir resolves one level up before scanning
+- Fix: stale config entries cleared on each browse; prevents duplicate path accumulation
+- Fix: settings save immediately pushes valid paths to WoW detector without restart
+- Chore: accounting_export.py QEvent isinstance guard replaces type: ignore; fixes CI mypy
+
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.0-1
 - Add: Addon Versions tab collapsible game-version groups with 180 ms animation, top-aligned
 - Add: Addon Versions tab always-visible action buttons (download/refresh/trash) with functional install, update, and uninstall (WTF untouched)

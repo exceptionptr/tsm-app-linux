@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from tsm.core.models.config import WoWInstall
+from tsm.wow.utils import is_valid_wow_version_dir
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ COMMON_BASE_PATHS = [
 WOW_VERSIONS = ["_retail_", "_classic_", "_classic_era_", "_classic_ptr_", "_retail_ptr_"]
 
 LUTRIS_GAMES_DIR = Path.home() / ".local/share/lutris/games"
+
+FAUGUS_PREFIX_DIR = Path.home() / "Faugus"
+FAUGUS_GAMES_JSON = Path.home() / ".config" / "faugus-launcher" / "games.json"
 
 
 def _lutris_base_paths() -> list[Path]:
@@ -60,10 +64,52 @@ def _lutris_base_paths() -> list[Path]:
     return paths
 
 
+def _faugus_base_paths() -> list[Path]:
+    """Extract WoW base paths from Faugus Launcher prefixes."""
+    paths: list[Path] = []
+    seen: set[str] = set()
+
+    # Dynamic: read games.json for per-game custom prefix paths
+    if FAUGUS_GAMES_JSON.is_file():
+        try:
+            import json
+
+            games = json.loads(FAUGUS_GAMES_JSON.read_text(encoding="utf-8"))
+            for game in games if isinstance(games, list) else []:
+                prefix = game.get("prefix") if isinstance(game, dict) else None
+                if not prefix:
+                    continue
+                for pf in ["Program Files (x86)", "Program Files"]:
+                    candidate = Path(prefix) / "drive_c" / pf / "World of Warcraft"
+                    key = str(candidate)
+                    if key not in seen:
+                        seen.add(key)
+                        paths.append(candidate)
+                        logger.debug("Faugus games.json prefix -> WoW base: %s", candidate)
+        except Exception:
+            logger.debug("Failed to parse Faugus games.json")
+
+    # Static fallback: scan all subdirs of ~/Faugus/
+    if FAUGUS_PREFIX_DIR.is_dir():
+        for prefix_dir in FAUGUS_PREFIX_DIR.iterdir():
+            if not prefix_dir.is_dir():
+                continue
+            for pf in ["Program Files (x86)", "Program Files"]:
+                candidate = prefix_dir / "drive_c" / pf / "World of Warcraft"
+                key = str(candidate)
+                if key not in seen:
+                    seen.add(key)
+                    paths.append(candidate)
+                    logger.debug("Faugus prefix %s -> WoW base: %s", prefix_dir.name, candidate)
+
+    return paths
+
+
 def find_wow_installs(extra_paths: list[Path] | None = None) -> list[WoWInstall]:
     """Scan common Linux paths and Lutris configs for WoW installations."""
     base_paths = list(COMMON_BASE_PATHS)
     base_paths.extend(_lutris_base_paths())
+    base_paths.extend(_faugus_base_paths())
     if extra_paths:
         base_paths.extend(extra_paths)
 
@@ -75,8 +121,7 @@ def find_wow_installs(extra_paths: list[Path] | None = None) -> list[WoWInstall]
             continue
         for version in WOW_VERSIONS:
             p = base / version
-            addons_dir = p / "Interface" / "AddOns"
-            if addons_dir.is_dir():
+            if is_valid_wow_version_dir(p):
                 key = str(p.resolve())
                 if key not in seen:
                     seen.add(key)
