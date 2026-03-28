@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from tsm.ui.components.wow_tooltip import _wowhead_to_qt
+from tsm.ui.components._wowhead_html import _wowhead_to_qt
 
 
 def test_strips_html_comments():
