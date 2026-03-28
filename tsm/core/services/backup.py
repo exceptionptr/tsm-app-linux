@@ -80,22 +80,9 @@ class BackupService:
         period_td = timedelta(minutes=period_minutes)
 
         for account_key, sv_dir in accounts.items():
-            # 1. Purge old backups for this account
             acct_backups = [b for b in all_backups if b["account"] == account_key]
-            surviving = []
-            for b in acct_backups:
-                age = datetime.now() - b["timestamp"]
-                if retain_td and age > retain_td and not b["keep"]:
-                    try:
-                        b["path"].unlink()
-                        logger.info("Purged old backup: %s", b["path"].name)
-                    except Exception:
-                        logger.warning("Failed to purge backup: %s", b["path"])
-                else:
-                    surviving.append(b)
-            acct_backups = surviving
+            acct_backups = self._purge_old_backups(acct_backups, retain_td)
 
-            # 2. Collect TSM SV file paths + their mtimes
             sv_files = self._find_sv_files(sv_dir)
             if not sv_files:
                 logger.debug("No TSM SV files for account %s", account_key)
@@ -103,41 +90,12 @@ class BackupService:
 
             modified_times = [p.stat().st_mtime for p in sv_files]
 
-            # 3+4+5. Check whether a new backup is needed
-            if keep:
-                # Manual backup: ignore file-change state, rate-limit to once per minute
-                manual_backups = [b for b in acct_backups if b["keep"]]
-                if manual_backups:
-                    last_manual = max(b["timestamp"] for b in manual_backups)
-                    if datetime.now() - last_manual < timedelta(minutes=1):
-                        logger.debug("Manual backup rate limit not elapsed for %s", account_key)
-                        continue
-            else:
-                # Automatic backup: skip if no file changes or period not elapsed
-                if acct_backups:
-                    last_backup = max(b["timestamp"] for b in acct_backups)
-                    last_ts = last_backup.timestamp()
-                    if max(modified_times) < last_ts:
-                        logger.debug("No change since last backup for %s", account_key)
-                        continue
-                    if datetime.now() - last_backup < period_td:
-                        logger.debug("Backup period not elapsed for %s", account_key)
-                        continue
-                # 6. Keep only the 9 most recent automatic backups (10th is the one
-                #    we're about to create).
-                auto_backups = sorted(
-                    [b for b in acct_backups if not b["keep"]],
-                    key=lambda b: b["timestamp"],
-                    reverse=True,
-                )
-                for old in auto_backups[9:]:
-                    try:
-                        old["path"].unlink()
-                        logger.debug("Pruned old backup: %s", old["path"].name)
-                    except Exception:
-                        pass
+            if self._should_skip_backup(keep, acct_backups, modified_times, period_td, account_key):
+                continue
 
-            # 7. Create new zip
+            if not keep:
+                self._prune_auto_backups(acct_backups)
+
             try:
                 path = self._create_backup(sys_id, account_key, sv_files, keep=keep, name=name)
                 created.append(path)
@@ -181,6 +139,65 @@ class BackupService:
             return False
 
     # ── Internals ──────────────────────────────────────────────────────
+
+    def _purge_old_backups(
+        self, acct_backups: list[dict], retain_td: timedelta | None
+    ) -> list[dict]:
+        """Delete backups older than retain_td; return the survivors."""
+        surviving = []
+        for b in acct_backups:
+            age = datetime.now() - b["timestamp"]
+            if retain_td and age > retain_td and not b["keep"]:
+                try:
+                    b["path"].unlink()
+                    logger.info("Purged old backup: %s", b["path"].name)
+                except Exception:
+                    logger.warning("Failed to purge backup: %s", b["path"])
+            else:
+                surviving.append(b)
+        return surviving
+
+    def _should_skip_backup(
+        self,
+        keep: bool,
+        acct_backups: list[dict],
+        modified_times: list[float],
+        period_td: timedelta,
+        account_key: str,
+    ) -> bool:
+        """Return True if no new backup is needed for this account."""
+        if keep:
+            manual_backups = [b for b in acct_backups if b["keep"]]
+            if manual_backups:
+                last_manual = max(b["timestamp"] for b in manual_backups)
+                if datetime.now() - last_manual < timedelta(minutes=1):
+                    logger.debug("Manual backup rate limit not elapsed for %s", account_key)
+                    return True
+        else:
+            if acct_backups:
+                last_backup = max(b["timestamp"] for b in acct_backups)
+                last_ts = last_backup.timestamp()
+                if max(modified_times) < last_ts:
+                    logger.debug("No change since last backup for %s", account_key)
+                    return True
+                if datetime.now() - last_backup < period_td:
+                    logger.debug("Backup period not elapsed for %s", account_key)
+                    return True
+        return False
+
+    def _prune_auto_backups(self, acct_backups: list[dict]) -> None:
+        """Keep only the 9 most recent automatic backups; delete the rest."""
+        auto_backups = sorted(
+            [b for b in acct_backups if not b["keep"]],
+            key=lambda b: b["timestamp"],
+            reverse=True,
+        )
+        for old in auto_backups[9:]:
+            try:
+                old["path"].unlink()
+                logger.debug("Pruned old backup: %s", old["path"].name)
+            except Exception:
+                pass
 
     def _find_accounts(self, extra_installs=None) -> dict[str, Path]:
         """Return {account_key: sv_directory} for accounts with TSM SV files."""

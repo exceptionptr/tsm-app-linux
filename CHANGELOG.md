@@ -32,6 +32,13 @@ All notable changes to tsm-app-linux are documented here.
   `tsm/ui/components/hover_button.py`; four duplicate inner classes removed.
 - `populate_combo()` helper added to `tsm/ui/views/_utils.py`; `blockSignals`
   boilerplate replaced across `realm_data.py` and `accounting_export.py`.
+- `BackupsView._refresh()` and `RealmViewModel._on_data_received()` renamed to
+  public slots; `app_window.py` no longer calls private methods on child objects.
+- `backup.py run()` split into `_purge_old_backups()`, `_should_skip_backup()`,
+  and `_prune_auto_backups()` helpers; the loop body is now a readable outline.
+- Protocol `Any` types replaced with concrete model types (`AuctionData`,
+  `RealmStatus`, `AddonVersionInfo`, `WoWInstall`, `AppConfig`, `Path`) in
+  `scheduler.py`; `Any` import removed entirely.
 
 ---
 

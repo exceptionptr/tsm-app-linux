@@ -9,6 +9,9 @@ tsm-app (1.1.2-1) stable; urgency=low
   * Chore: job functions typed with ServiceContainer; defensive getattr removed
   * Chore: HoverIconButton component consolidates four duplicate hover button classes
   * Chore: populate_combo helper added; blockSignals boilerplate removed from views
+  * Chore: BackupsView._refresh and RealmViewModel._on_data_received made public
+  * Chore: backup.py run() refactored into focused helper methods
+  * Chore: scheduler.py protocols typed with concrete model types; Any removed
 
  -- exceptionptr <https://github.com/exceptionptr>  Sat, 28 Mar 2026 00:00:00 +0100
 

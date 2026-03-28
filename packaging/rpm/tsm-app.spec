@@ -82,6 +82,9 @@ ep.write_text(''.join(lines))
 - Chore: job functions typed with ServiceContainer; defensive getattr removed
 - Chore: HoverIconButton component consolidates four duplicate hover button classes
 - Chore: populate_combo helper added; blockSignals boilerplate removed from views
+- Chore: BackupsView._refresh and RealmViewModel._on_data_received made public
+- Chore: backup.py run() refactored into focused helper methods
+- Chore: scheduler.py protocols typed with concrete model types; Any removed
 
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
 - Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)

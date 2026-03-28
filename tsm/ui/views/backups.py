@@ -89,7 +89,7 @@ class BackupsView(QWidget):
         self._backup_svc = backup_service
         self._backup_now_fn = backup_now_fn
         self._setup_ui()
-        self._refresh()
+        self.refresh()
 
     def _setup_ui(self) -> None:
         vbox = QVBoxLayout(self)
@@ -145,7 +145,7 @@ class BackupsView(QWidget):
 
         self._update_backup_btn()
 
-    def _refresh(self) -> None:
+    def refresh(self) -> None:
         backups = _list_backups()
         self._table.setRowCount(len(backups))
         total_bytes = 0
@@ -200,7 +200,7 @@ class BackupsView(QWidget):
 
     def _on_backup_done(self) -> None:
         self._name_input.clear()
-        self._refresh()
+        self.refresh()
 
     def _on_restore(self, row: int) -> None:
         backups = _list_backups()
@@ -244,7 +244,7 @@ class BackupsView(QWidget):
             return
         if not self._backup_svc.delete(zip_path):
             QMessageBox.warning(self, "TSM", "Failed to delete backup.")
-        self._refresh()
+        self.refresh()
 
 
 def _list_backups() -> list[tuple[str, str, int, Path, bool, str]]:
