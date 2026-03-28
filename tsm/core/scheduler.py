@@ -144,7 +144,7 @@ class JobScheduler:
                 )
                 await scheduler.run_until_stopped()
 
-        self._runner_task = asyncio.ensure_future(_scheduler_task())
+        self._runner_task = asyncio.create_task(_scheduler_task())
         self._started = True
 
     async def stop(self) -> None:

@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from tsm.core.services.item_cache import ItemCache
 from tsm.storage.config_store import CONFIG_DIR
 from tsm.ui.components.wow_tooltip import WowItemTooltip
-from tsm.ui.views._utils import set_table_cell
+from tsm.ui.views._utils import populate_combo, set_table_cell
 from tsm.wow.accounts import scan_tsm_accounts
 
 logger = logging.getLogger(__name__)
@@ -492,21 +492,13 @@ class AccountingExportView(QWidget):
 
     def populate(self) -> None:
         self._accounts = scan_tsm_accounts(self._detector)
-        self._account_combo.blockSignals(True)
-        self._account_combo.clear()
-        for acct in sorted(self._accounts):
-            self._account_combo.addItem(acct)
-        self._account_combo.blockSignals(False)
+        populate_combo(self._account_combo, sorted(self._accounts))
         self._on_account_changed(self._account_combo.currentText())
 
     # ── Slots ────────────────────────────────────────────────────────
 
     def _on_account_changed(self, account: str) -> None:
-        self._realm_combo.blockSignals(True)
-        self._realm_combo.clear()
-        for realm in self._accounts.get(account, []):
-            self._realm_combo.addItem(realm)
-        self._realm_combo.blockSignals(False)
+        populate_combo(self._realm_combo, self._accounts.get(account, []))
         self._sv_cache = {}
         self._sv_cache_key = ""
         self._parsed = {}

@@ -12,6 +12,26 @@ All notable changes to tsm-app-linux are documented here.
   installs where `WoW.exe` is absent from the game-version directory (common on some
   Lutris setups). The AppData.lua reader now only requires the game-version directory
   to exist rather than a WoW executable, matching the writer's behavior.
+- WoW account directory scan now accepts account names containing hyphens and dots,
+  which are valid in some localized WoW installs.
+
+### Changed
+
+- API client retries on HTTP 429 (rate-limited) responses, honouring the
+  `Retry-After` header when present, instead of raising immediately.
+- `asyncio.ensure_future()` replaced with `asyncio.create_task()` in the scheduler
+  (the former is deprecated in Python 3.10+).
+
+### Chore
+
+- `_GAME_VERSIONS` constant deduplicated: `accounts.py` now imports it from
+  `utils.py` instead of redefining it.
+- Scheduled job functions are now typed with `ServiceContainer` and the defensive
+  `getattr()/callable()` guards are replaced with direct `is not None` checks.
+- Hover icon button logic consolidated into `HoverIconButton` in
+  `tsm/ui/components/hover_button.py`; four duplicate inner classes removed.
+- `populate_combo()` helper added to `tsm/ui/views/_utils.py`; `blockSignals`
+  boilerplate replaced across `realm_data.py` and `accounting_export.py`.
 
 ---
 

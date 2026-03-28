@@ -172,12 +172,20 @@ class TSMApiClient:
                     # text/plain or other
                     return await resp.text()
             except aiohttp.ClientResponseError as e:
-                if 400 <= e.status < 500:
+                if 400 <= e.status < 500 and e.status != 429:
                     raise
                 if attempt == MAX_RETRIES - 1:
                     raise
+                delay = RETRY_DELAY * (attempt + 1)
+                if e.status == 429:
+                    retry_after = (e.headers or {}).get("Retry-After")
+                    if retry_after:
+                        try:
+                            delay = max(float(retry_after), delay)
+                        except ValueError:
+                            pass
                 logger.warning("API request failed (attempt %d): %s", attempt + 1, e)
-                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                await asyncio.sleep(delay)
             except aiohttp.ClientError as e:
                 if attempt == MAX_RETRIES - 1:
                     raise

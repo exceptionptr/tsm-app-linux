@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.core.services.backup import _BACKUP_DIR, _KEEP_DIR, BackupService
+from tsm.ui.components.hover_button import HoverIconButton
 from tsm.ui.views._utils import set_table_cell, start_rate_limit_countdown
 
 logger = logging.getLogger(__name__)
@@ -71,22 +72,11 @@ def _make_type_tag_cell(is_manual: bool) -> QWidget:
     return w
 
 
-class _IconButton(QPushButton):
-    def __init__(self, icon_normal: QIcon, icon_hover: QIcon, parent=None):
-        super().__init__(parent)
-        self._icon_normal = icon_normal
-        self._icon_hover = icon_hover
-        self.setObjectName("row-action")
-        self.setIcon(icon_normal)
-        self.setIconSize(QSize(14, 14))
-
-    def enterEvent(self, event) -> None:
-        self.setIcon(self._icon_hover)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self.setIcon(self._icon_normal)
-        super().leaveEvent(event)
+def _make_icon_button(icon_normal: QIcon, icon_hover: QIcon) -> HoverIconButton:
+    btn = HoverIconButton(icon_normal, icon_hover)
+    btn.setObjectName("row-action")
+    btn.setIconSize(QSize(14, 14))
+    return btn
 
 
 class BackupsView(QWidget):
@@ -168,11 +158,11 @@ class BackupsView(QWidget):
             set_table_cell(self._table, row, 3, name)
             self._table.setCellWidget(row, 4, _make_type_tag_cell(is_manual))
 
-            restore_btn = _IconButton(_ICON_RESTORE, _ICON_RESTORE_HOVER)
+            restore_btn = _make_icon_button(_ICON_RESTORE, _ICON_RESTORE_HOVER)
             restore_btn.clicked.connect(lambda _=False, r=row: self._on_restore(r))
             self._table.setCellWidget(row, 5, restore_btn)
 
-            delete_btn = _IconButton(_ICON_TRASH, _ICON_TRASH_HOVER)
+            delete_btn = _make_icon_button(_ICON_TRASH, _ICON_TRASH_HOVER)
             delete_btn.clicked.connect(lambda _=False, r=row: self._on_delete(r))
             self._table.setCellWidget(row, 6, delete_btn)
 

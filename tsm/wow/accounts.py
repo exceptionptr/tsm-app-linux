@@ -7,10 +7,9 @@ import re
 from pathlib import Path
 
 from tsm.core.models.config import WoWInstall
+from tsm.wow.utils import _GAME_VERSIONS
 
 logger = logging.getLogger(__name__)
-
-_GAME_VERSIONS = ("_retail_", "_classic_era_", "_classic_", "_anniversary_")
 _SUFFIXES = {
     "_retail_": "",
     "_classic_era_": "-Classic",
@@ -58,7 +57,7 @@ def scan_tsm_accounts(detector) -> dict[str, list[str]]:
             for acct_dir in wtf_accounts.iterdir():
                 if not acct_dir.is_dir():
                     continue
-                if not re.match(r"^[A-Za-z0-9#]+$", acct_dir.name):
+                if not re.match(r"^[A-Za-z0-9#.\-]+$", acct_dir.name):
                     continue
                 if acct_dir.name == "SavedVariables":
                     continue

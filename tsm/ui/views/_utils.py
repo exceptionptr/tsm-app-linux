@@ -6,7 +6,16 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QBrush, QColor
-from PySide6.QtWidgets import QPushButton, QTableWidget, QTableWidgetItem
+from PySide6.QtWidgets import QComboBox, QPushButton, QTableWidget, QTableWidgetItem
+
+
+def populate_combo(combo: QComboBox, items: list[str]) -> None:
+    """Clear and repopulate *combo* without firing currentIndexChanged signals."""
+    combo.blockSignals(True)
+    combo.clear()
+    for item in items:
+        combo.addItem(item)
+    combo.blockSignals(False)
 
 
 def set_table_cell(

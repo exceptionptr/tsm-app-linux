@@ -2,6 +2,13 @@ tsm-app (1.1.2-1) stable; urgency=low
 
   * Fix: status bar no longer shows AppHelper not found on WoW installs where
     WoW.exe is absent from the game-version directory (common on some Lutris setups)
+  * Fix: WoW account directory scan now accepts account names with hyphens and dots
+  * Fix: API client now retries on HTTP 429 responses with Retry-After support
+  * Chore: asyncio.ensure_future replaced with asyncio.create_task (deprecated)
+  * Chore: _GAME_VERSIONS deduplicated; accounts.py imports from utils.py
+  * Chore: job functions typed with ServiceContainer; defensive getattr removed
+  * Chore: HoverIconButton component consolidates four duplicate hover button classes
+  * Chore: populate_combo helper added; blockSignals boilerplate removed from views
 
  -- exceptionptr <https://github.com/exceptionptr>  Sat, 28 Mar 2026 00:00:00 +0100
 

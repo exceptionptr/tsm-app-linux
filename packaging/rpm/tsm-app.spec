@@ -75,6 +75,13 @@ ep.write_text(''.join(lines))
 * Sat Mar 28 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.2-1
 - Fix: status bar no longer shows AppHelper not found on WoW installs where WoW.exe
   is absent from the game-version directory (common on some Lutris setups)
+- Fix: WoW account directory scan now accepts account names with hyphens and dots
+- Fix: API client retries on HTTP 429 with Retry-After header support
+- Chore: asyncio.ensure_future replaced with asyncio.create_task (deprecated)
+- Chore: _GAME_VERSIONS deduplicated; accounts.py imports from utils.py
+- Chore: job functions typed with ServiceContainer; defensive getattr removed
+- Chore: HoverIconButton component consolidates four duplicate hover button classes
+- Chore: populate_combo helper added; blockSignals boilerplate removed from views
 
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
 - Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)
