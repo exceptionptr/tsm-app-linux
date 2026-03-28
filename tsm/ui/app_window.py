@@ -149,11 +149,11 @@ class AppWindow(QMainWindow):
         self._realm_vm.data_updated.connect(self._notify_realm_data)
         self._realm_vm.loading_changed.connect(self._on_loading_changed)
         self._app_vm.backup_notification.connect(self._notify_backup)
-        self._app_vm.backup_notification.connect(lambda _: self._backup_view._refresh())
+        self._app_vm.backup_notification.connect(lambda _: self._backup_view.refresh())
         self._backup_view.stats_updated.connect(self._on_backup_stats)
-        self._backup_view._refresh()
+        self._backup_view.refresh()
         self._app_vm.addon_notification.connect(self._notify_addon)
-        self._app_vm.realm_data_received.connect(self._realm_vm._on_data_received)
+        self._app_vm.realm_data_received.connect(self._realm_vm.on_data_received)
         self._settings_vm.saved.connect(self._on_settings_saved)
         self._update_status()
 
@@ -288,6 +288,7 @@ class AppWindow(QMainWindow):
             wow_detector=self._addon_service,
             parent=self,
         )
+        dlg.logged_out.connect(self._on_logged_out)
         dlg.exec()
 
     # ── Tray ─────────────────────────────────────────────────────────
@@ -375,6 +376,11 @@ class AppWindow(QMainWindow):
             app = QApplication.instance()
             if app is not None:
                 app.quit()
+
+    def _on_logged_out(self) -> None:
+        """Called when the user clicks Logout in Settings - hide and re-show login."""
+        self.hide()
+        self.show_login()
 
     def _on_login_success(self) -> None:
         self.show()

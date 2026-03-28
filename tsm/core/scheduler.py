@@ -8,7 +8,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Protocol
+
+if TYPE_CHECKING:
+    from tsm.api.types import AddonVersionInfo
+    from tsm.core.models.auction import AuctionData, RealmStatus
+    from tsm.core.models.config import AppConfig, WoWInstall
 
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -19,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 class AuctionServiceProtocol(Protocol):
-    async def get_snapshot(self) -> tuple[Any, float]: ...
-    async def refresh_all_realms(self) -> Any: ...
+    async def get_snapshot(self) -> tuple[list[RealmStatus], int]: ...
+    async def refresh_all_realms(self) -> AuctionData: ...
     async def add_realm(self, game_version: str, realm_id: int) -> None: ...
 
 
@@ -29,24 +34,27 @@ class AuthServiceProtocol(Protocol):
 
 
 class UpdateServiceProtocol(Protocol):
-    async def check_and_update(self, addon_versions: list[Any]) -> list[str]: ...
+    async def check_and_update(self, addon_versions: list[AddonVersionInfo]) -> list[str]: ...
 
 
 class ConfigStoreProtocol(Protocol):
-    def load(self) -> Any: ...
-    def save(self, config: Any) -> None: ...
+    def load(self) -> AppConfig: ...
+    def save(self, config: AppConfig) -> None: ...
 
 
 class WoWDetectorProtocol(Protocol):
-    async def scan(self) -> list[Any]: ...
-    async def get_installs(self) -> list[Any]: ...
-    def set_installs(self, installs: list[Any]) -> None: ...
+    async def scan(self) -> list[WoWInstall]: ...
+    async def get_installs(self) -> list[WoWInstall]: ...
+    def set_installs(self, installs: list[WoWInstall]) -> None: ...
 
 
 class BackupServiceProtocol(Protocol):
     def run(
-        self, period_minutes: int, retain_days: int, extra_installs: Any = None
-    ) -> list[Any]: ...
+        self,
+        period_minutes: int,
+        retain_days: int,
+        extra_installs: list[WoWInstall] | None = None,
+    ) -> list[Path]: ...
 
 
 @dataclass
@@ -61,7 +69,7 @@ class ServiceContainer:
     config_store: ConfigStoreProtocol | None = None
     backup_notify_fn: Callable[[str], None] | None = None
     addon_notify_fn: Callable[[str], None] | None = None
-    auction_data_fn: Callable[[Any], None] | None = None
+    auction_data_fn: Callable[[AuctionData], None] | None = None
     wow_warn_fn: Callable[[str], None] | None = None
 
 
@@ -144,7 +152,7 @@ class JobScheduler:
                 )
                 await scheduler.run_until_stopped()
 
-        self._runner_task = asyncio.ensure_future(_scheduler_task())
+        self._runner_task = asyncio.create_task(_scheduler_task())
         self._started = True
 
     async def stop(self) -> None:
@@ -181,7 +189,7 @@ async def _resolve_wow_installs(svc: ServiceContainer, skip_scan: bool = False) 
         # all. If the user has paths in config that are temporarily invalid (e.g. an
         # unmounted drive), do not overwrite them.
         if not cfg.wow_installs:
-            cfg.wow_installs = found
+            cfg = cfg.model_copy(update={"wow_installs": found})
             svc.config_store.save(cfg)
             logger.info("WoW: auto-detected %d install(s), saved to config", len(found))
         else:

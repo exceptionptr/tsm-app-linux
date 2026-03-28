@@ -85,10 +85,15 @@ class RealmViewModel(QObject):
         if self._summaries:
             self.data_updated.emit()
         bridge = AsyncBridge(self)
-        bridge.result_ready.connect(self._on_data_received)
+        bridge.result_ready.connect(self.on_data_received)
         bridge.error_occurred.connect(self._on_error)
         bridge.finished.connect(lambda: self._set_loading(False))
         bridge.run(self._service.refresh_all_realms())
+
+    def remove_local(self, row: int) -> None:
+        """Remove a summary from the local list by index (optimistic UI update)."""
+        if 0 <= row < len(self._summaries):
+            self._summaries.pop(row)
 
     def remove_realm(self, game_version: str, region: str, name: str) -> None:
         """Call realms2/remove API and refresh."""
@@ -135,7 +140,7 @@ class RealmViewModel(QObject):
         ]
         self.data_updated.emit()
 
-    def _on_data_received(self, data: object) -> None:
+    def on_data_received(self, data: object) -> None:
         # data is AuctionData
         # Always record the poll timestamp so the status bar reflects the last check time,
         # even when no realm data is available (AppHelper not yet installed, etc.).

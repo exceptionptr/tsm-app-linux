@@ -4,6 +4,69 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.2] - 2026-03-28
+
+### Security
+
+- Zip extraction in `BackupService.restore()` and `UpdateService` now validates
+  member paths before extracting, preventing zip-slip path traversal attacks.
+- TSM API endpoints probed: only `id.tradeskillmaster.com` (OIDC) has a valid cert.
+  All other `*.tradeskillmaster.com` API hosts have a certificate hostname mismatch
+  and must use plain HTTP. `scripts/check_ssl.py` added to re-verify this during development.
+
+### Fixed
+
+- Login dialog is now fixed size (480x280 px) and cannot be resized; redundant
+  "TradeSkillMaster" title label removed.
+- Logging out via Settings now closes the Settings dialog before showing the login
+  window instead of leaving it open in the background.
+- Status bar no longer shows "⚠ TradeSkillMaster_AppHelper addon not found" on WoW
+  installs where `WoW.exe` is absent from the game-version directory (common on some
+  Lutris setups). The AppData.lua reader now only requires the game-version directory
+  to exist rather than a WoW executable, matching the writer's behavior.
+- WoW account directory scan now accepts account names containing hyphens and dots,
+  which are valid in some localized WoW installs.
+- `ItemCache.get()`, `get_name()`, and `ensure_fetched()` now hold the internal lock
+  while reading `_data`, preventing data races with the background fetch thread.
+- `cfg.wow_installs = found` in the scheduler replaced with immutable
+  `model_copy(update=...)` - Pydantic models must not be mutated in place.
+- `subprocess.Popen` in the Settings backup-folder button replaced with
+  `subprocess.run(check=False)` with return-code logging.
+
+### Changed
+
+- API client retries on HTTP 429 (rate-limited) responses, honouring the
+  `Retry-After` header when present, instead of raising immediately.
+- `asyncio.ensure_future()` replaced with `asyncio.create_task()` in the scheduler
+  (the former is deprecated in Python 3.10+).
+
+### Chore
+
+- `_GAME_VERSIONS` constant deduplicated: `accounts.py` now imports it from
+  `utils.py` instead of redefining it.
+- Scheduled job functions are now typed with `ServiceContainer` and the defensive
+  `getattr()/callable()` guards are replaced with direct `is not None` checks.
+- Hover icon button logic consolidated into `HoverIconButton` in
+  `tsm/ui/components/hover_button.py`; four duplicate inner classes removed.
+- `populate_combo()` helper added to `tsm/ui/views/_utils.py`; `blockSignals`
+  boilerplate replaced across `realm_data.py` and `accounting_export.py`.
+- `BackupsView._refresh()` and `RealmViewModel._on_data_received()` renamed to
+  public slots; `app_window.py` no longer calls private methods on child objects.
+- `backup.py run()` split into `_purge_old_backups()`, `_should_skip_backup()`,
+  and `_prune_auto_backups()` helpers; the loop body is now a readable outline.
+- Protocol `Any` types replaced with concrete model types (`AuctionData`,
+  `RealmStatus`, `AddonVersionInfo`, `WoWInstall`, `AppConfig`, `Path`) in
+  `scheduler.py`; `Any` import removed entirely.
+- `RealmViewModel.summaries.pop(row)` in `realm_data.py` replaced with a new
+  `remove_local(row)` method - views should not mutate ViewModel internals directly.
+- Pure CSV/data functions extracted from `accounting_export.py` into
+  `tsm/ui/views/_accounting_utils.py` for testability; `_setup_ui()` split into
+  `_build_*` helper methods; stray `import contextlib` moved to module top.
+- Unit tests added: `test_saved_variables.py`, `test_wow_tooltip.py`,
+  `test_item_cache.py` (34 new tests, 70 total).
+
+---
+
 ## [1.1.1] - 2026-03-27
 
 ### Added

@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QMessageBox,
-    QPushButton,
     QScrollArea,
     QSizePolicy,
     QTableWidget,
@@ -32,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.api.types import AddonVersionInfo
+from tsm.ui.components.hover_button import HoverIconButton
 from tsm.ui.views._utils import set_table_cell
 
 logger = logging.getLogger(__name__)
@@ -82,24 +82,12 @@ def _addon_sort_key(addon: AddonVersionInfo) -> tuple[int, bool, str]:
     return (_SUFFIX_ORDER.get(suffix, 99), has_underscore, base)
 
 
-class _ActionButton(QPushButton):
+def _make_action_button(normal_icon: QIcon, hover_icon: QIcon) -> HoverIconButton:
     """Row action button that swaps its icon on hover. Always visible."""
-
-    def __init__(self, normal_icon: QIcon, hover_icon: QIcon, parent=None):
-        super().__init__(parent)
-        self._normal_icon = normal_icon
-        self._hover_icon = hover_icon
-        self.setObjectName("row-action")
-        self.setIcon(normal_icon)
-        self.setIconSize(QSize(14, 14))
-
-    def enterEvent(self, event) -> None:
-        self.setIcon(self._hover_icon)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self.setIcon(self._normal_icon)
-        super().leaveEvent(event)
+    btn = HoverIconButton(normal_icon, hover_icon)
+    btn.setObjectName("row-action")
+    btn.setIconSize(QSize(14, 14))
+    return btn
 
 
 _SPINNER_SVG = str(_ASSETS / "loader-circle.svg")
@@ -304,7 +292,7 @@ class _AddonGroupWidget(QWidget):
                 if name in downloading:
                     self._table.setCellWidget(row, 4, _SpinnerWidget())
                 else:
-                    btn = _ActionButton(_DL_ICON, _DL_ICON_HOVER)
+                    btn = _make_action_button(_DL_ICON, _DL_ICON_HOVER)
                     if on_install is not None:
                         btn.clicked.connect(lambda _, n=name, v=latest: on_install(n, v))
                     self._table.setCellWidget(row, 4, btn)
@@ -315,7 +303,7 @@ class _AddonGroupWidget(QWidget):
                 if name in downloading:
                     self._table.setCellWidget(row, 4, _SpinnerWidget())
                 else:
-                    btn = _ActionButton(_REFRESH_ICON, _REFRESH_ICON_HOVER)
+                    btn = _make_action_button(_REFRESH_ICON, _REFRESH_ICON_HOVER)
                     if on_install is not None:
                         btn.clicked.connect(lambda _, n=name, v=latest: on_install(n, v))
                     self._table.setCellWidget(row, 4, btn)
@@ -323,7 +311,7 @@ class _AddonGroupWidget(QWidget):
                 installed_count += 1
                 set_table_cell(self._table, row, 2, inst_ver)
                 self._table.setCellWidget(row, 3, _make_status_cell("Up to date", _GREEN))
-                btn = _ActionButton(_TRASH_ICON, _TRASH_ICON_HOVER)
+                btn = _make_action_button(_TRASH_ICON, _TRASH_ICON_HOVER)
                 if on_delete is not None:
                     btn.clicked.connect(lambda _, n=name: on_delete(n))
                 self._table.setCellWidget(row, 4, btn)

@@ -25,6 +25,7 @@ AppData download flow:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import logging
 import time
@@ -95,7 +96,7 @@ class TSMApiClient:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=120),
-                connector=aiohttp.TCPConnector(ssl=False),  # matches verify=False in original
+                connector=aiohttp.TCPConnector(),
                 headers={"User-Agent": f"TSMApplication/{APP_VERSION}"},
             )
         return self._session
@@ -172,12 +173,18 @@ class TSMApiClient:
                     # text/plain or other
                     return await resp.text()
             except aiohttp.ClientResponseError as e:
-                if 400 <= e.status < 500:
+                if 400 <= e.status < 500 and e.status != 429:
                     raise
                 if attempt == MAX_RETRIES - 1:
                     raise
+                delay = RETRY_DELAY * (attempt + 1)
+                if e.status == 429:
+                    retry_after = e.headers.get("Retry-After") if e.headers else None
+                    if retry_after:
+                        with contextlib.suppress(ValueError):
+                            delay = max(float(retry_after), delay)
                 logger.warning("API request failed (attempt %d): %s", attempt + 1, e)
-                await asyncio.sleep(RETRY_DELAY * (attempt + 1))
+                await asyncio.sleep(delay)
             except aiohttp.ClientError as e:
                 if attempt == MAX_RETRIES - 1:
                     raise

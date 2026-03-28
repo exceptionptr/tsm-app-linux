@@ -33,10 +33,12 @@ class ItemCache:
 
     def get(self, item_id: str) -> ItemData | None:
         """Return cached entry for item_id, or None if not yet fetched."""
-        return self._data.get(item_id)
+        with self._lock:
+            return self._data.get(item_id)
 
     def get_name(self, item_id: str) -> str | None:
-        entry = self._data.get(item_id)
+        with self._lock:
+            entry = self._data.get(item_id)
         if entry:
             name = entry.get("name")
             return str(name) if name else None
@@ -54,7 +56,8 @@ class ItemCache:
         - attempted: all ids that were tried (so callers can fall back for failures)
         Callers must marshal on_done back to the Qt main thread (e.g. via a Signal).
         """
-        missing = [iid for iid in item_ids if iid not in self._data]
+        with self._lock:
+            missing = [iid for iid in item_ids if iid not in self._data]
         if not missing:
             return
         threading.Thread(

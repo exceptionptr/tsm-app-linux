@@ -20,6 +20,7 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 from tsm.api.types import AddonVersionInfo
+from tsm.core.services._zip_utils import safe_extractall
 from tsm.wow.utils import is_valid_wow_version_dir, iter_wow_gv_roots
 
 logger = logging.getLogger(__name__)
@@ -138,7 +139,7 @@ class UpdateService:
                     continue  # only update where already installed
                 try:
                     shutil.rmtree(addon_dir)
-                    zf.extractall(addons_dir)
+                    safe_extractall(zf, addons_dir)
                     logger.info("Installed %s v%s → %s", base_name, latest, addons_dir)
                     installed_any = True
                 except Exception:
@@ -193,7 +194,7 @@ class UpdateService:
                     addon_dir = addons_dir / base_name
                     if addon_dir.exists():
                         shutil.rmtree(addon_dir)
-                    zf.extractall(addons_dir)
+                    safe_extractall(zf, addons_dir)
                     logger.info("Installed %s v%s -> %s", base_name, version, addons_dir)
                     installed_any = True
                 except Exception:

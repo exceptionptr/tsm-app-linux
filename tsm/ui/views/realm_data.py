@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tsm.ui.components.hover_button import HoverIconButton
 from tsm.ui.viewmodels.realm_vm import RealmSummary, RealmViewModel
-from tsm.ui.views._utils import set_table_cell
+from tsm.ui.views._utils import populate_combo, set_table_cell
 
 _ASSETS = Path(__file__).parent.parent / "assets"
 
@@ -79,22 +80,6 @@ def _make_dot_cell(status: str, last_updated: int, is_region: bool) -> QWidget:
 
 _TRASH_ICON = QIcon(str(_ASSETS / "trash.svg"))
 _TRASH_ICON_HOVER = QIcon(str(_ASSETS / "trash-hover.svg"))
-
-
-class _TrashButton(QPushButton):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setObjectName("row-action")
-        self.setIcon(_TRASH_ICON)
-        self.setIconSize(QSize(14, 14))
-
-    def enterEvent(self, event) -> None:
-        self.setIcon(_TRASH_ICON_HOVER)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self.setIcon(_TRASH_ICON)
-        super().leaveEvent(event)
 
 
 class RealmDataView(QWidget):
@@ -203,8 +188,10 @@ class RealmDataView(QWidget):
             set_table_cell(self._table, row, 2, dt_str)
             self._table.setCellWidget(row, 3, self._make_delete_btn(row, s))
 
-    def _make_delete_btn(self, row: int, summary: RealmSummary) -> _TrashButton:
-        btn = _TrashButton()
+    def _make_delete_btn(self, row: int, summary: RealmSummary) -> HoverIconButton:
+        btn = HoverIconButton(_TRASH_ICON, _TRASH_ICON_HOVER)
+        btn.setObjectName("row-action")
+        btn.setIconSize(QSize(14, 14))
         btn.clicked.connect(lambda _, r=row, s=summary: self._on_delete(r, s))
         return btn
 
@@ -221,7 +208,7 @@ class RealmDataView(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._vm.summaries.pop(row)
+            self._vm.remove_local(row)
             self._refresh()
             self._vm.remove_realm(summary.game_version, summary.region, summary.name)
 
@@ -252,11 +239,7 @@ class RealmDataView(QWidget):
     # ── Add Realm ────────────────────────────────────────────────────
 
     def _populate_gv_combo(self) -> None:
-        self._gv_combo.blockSignals(True)
-        self._gv_combo.clear()
-        for gv_label in sorted(self._realm_tree or {}):
-            self._gv_combo.addItem(gv_label)
-        self._gv_combo.blockSignals(False)
+        populate_combo(self._gv_combo, sorted(self._realm_tree or {}))
         retail_idx = self._gv_combo.findText("Retail")
         self._gv_combo.setCurrentIndex(retail_idx if retail_idx >= 0 else 0)
         self._on_gv_changed(self._gv_combo.currentIndex())
@@ -268,11 +251,7 @@ class RealmDataView(QWidget):
             if self._realm_tree
             else []
         )
-        self._region_combo.blockSignals(True)
-        self._region_combo.clear()
-        for r in regions:
-            self._region_combo.addItem(r)
-        self._region_combo.blockSignals(False)
+        populate_combo(self._region_combo, regions)
         self._on_region_changed(0)
 
     def _on_region_changed(self, _: int) -> None:

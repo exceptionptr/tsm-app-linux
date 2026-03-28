@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.1
+Version:        1.1.2
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,31 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sat Mar 28 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.2-1
+- Security: zip extraction validates member paths to prevent zip-slip attacks
+- Security: TSM API SSL probed; app-server/data subdomains use HTTP (cert mismatch);
+  scripts/check_ssl.py added for re-verification during development
+- Fix: login dialog fixed at 480x280; redundant title label removed
+- Fix: logging out via Settings closes the dialog before showing login
+- Fix: status bar no longer shows AppHelper not found on WoW installs where WoW.exe
+  is absent from the game-version directory (common on some Lutris setups)
+- Fix: WoW account directory scan now accepts account names with hyphens and dots
+- Fix: API client retries on HTTP 429 with Retry-After header support
+- Fix: ItemCache read methods hold the internal lock (thread-safety fix)
+- Fix: Pydantic config model no longer mutated in place in scheduler
+- Fix: subprocess.Popen replaced with subprocess.run in Settings backup folder button
+- Chore: asyncio.ensure_future replaced with asyncio.create_task (deprecated)
+- Chore: _GAME_VERSIONS deduplicated; accounts.py imports from utils.py
+- Chore: job functions typed with ServiceContainer; defensive getattr removed
+- Chore: HoverIconButton component consolidates four duplicate hover button classes
+- Chore: populate_combo helper added; blockSignals boilerplate removed from views
+- Chore: BackupsView._refresh and RealmViewModel._on_data_received made public
+- Chore: backup.py run() refactored into focused helper methods
+- Chore: scheduler.py protocols typed with concrete model types; Any removed
+- Chore: pure CSV helpers extracted to _accounting_utils.py; _setup_ui split
+- Chore: RealmViewModel.remove_local() added; view no longer mutates VM internals
+- Test: 34 new unit tests for saved_variables, wow_tooltip, item_cache (70 total)
+
 * Fri Mar 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.1-1
 - Add: WoW auto-detection for Faugus Launcher via games.json prefix paths and ~/Faugus/ subdirectory fallback (Closes: #1)
 - Add: --skip-detection, --skip-auto-sync, --skip-auto-backup CLI flags replace --debug
