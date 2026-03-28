@@ -29,19 +29,13 @@ class LoginView(QDialog):
         self._auth_service = auth_service
         self._setup_ui()
         self.setWindowTitle("TSM - Login")
-        self.setMinimumWidth(360)
+        self.setFixedSize(480, 280)
         self.setModal(True)
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
         layout.setSpacing(16)
         layout.setContentsMargins(32, 32, 32, 32)
-
-        # Title
-        title = QLabel("TradeSkillMaster")
-        title.setObjectName("title")
-        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
 
         subtitle = QLabel("Sign in to your TSM account")
         subtitle.setObjectName("subtitle")

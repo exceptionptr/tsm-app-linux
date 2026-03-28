@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -27,6 +28,8 @@ logger = logging.getLogger(__name__)
 
 
 class SettingsDialog(QDialog):
+    logged_out = Signal()
+
     def __init__(
         self,
         settings_vm: SettingsViewModel,
@@ -310,7 +313,9 @@ class SettingsDialog(QDialog):
         from tsm.core.services.backup import _BACKUP_DIR
 
         _BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-        subprocess.Popen(["xdg-open", str(_BACKUP_DIR)])
+        result = subprocess.run(["xdg-open", str(_BACKUP_DIR)], check=False)
+        if result.returncode != 0:
+            logger.warning("xdg-open exited with code %d", result.returncode)
 
     def _logout_reset(self) -> None:
         """Logout and reset all settings to defaults."""
@@ -323,6 +328,7 @@ class SettingsDialog(QDialog):
             bridge.run(self._auth_service.logout())
 
         self.reject()
+        self.logged_out.emit()
 
 
 _PERIOD_MAP = {

@@ -208,7 +208,7 @@ class RealmDataView(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self._vm.summaries.pop(row)
+            self._vm.remove_local(row)
             self._refresh()
             self._vm.remove_realm(summary.game_version, summary.region, summary.name)
 

@@ -288,6 +288,7 @@ class AppWindow(QMainWindow):
             wow_detector=self._addon_service,
             parent=self,
         )
+        dlg.logged_out.connect(self._on_logged_out)
         dlg.exec()
 
     # ── Tray ─────────────────────────────────────────────────────────
@@ -375,6 +376,11 @@ class AppWindow(QMainWindow):
             app = QApplication.instance()
             if app is not None:
                 app.quit()
+
+    def _on_logged_out(self) -> None:
+        """Called when the user clicks Logout in Settings - hide and re-show login."""
+        self.hide()
+        self.show_login()
 
     def _on_login_success(self) -> None:
         self.show()

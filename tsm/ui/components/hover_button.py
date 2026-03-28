@@ -17,8 +17,8 @@ class HoverIconButton(QPushButton):
 
     def enterEvent(self, event) -> None:
         self.setIcon(self._icon_hover)
-        super().enterEvent(event)  # type: ignore[arg-type]
+        super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
         self.setIcon(self._icon_normal)
-        super().leaveEvent(event)  # type: ignore[arg-type]
+        super().leaveEvent(event)

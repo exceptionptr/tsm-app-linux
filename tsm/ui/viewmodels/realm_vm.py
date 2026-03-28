@@ -90,6 +90,11 @@ class RealmViewModel(QObject):
         bridge.finished.connect(lambda: self._set_loading(False))
         bridge.run(self._service.refresh_all_realms())
 
+    def remove_local(self, row: int) -> None:
+        """Remove a summary from the local list by index (optimistic UI update)."""
+        if 0 <= row < len(self._summaries):
+            self._summaries.pop(row)
+
     def remove_realm(self, game_version: str, region: str, name: str) -> None:
         """Call realms2/remove API and refresh."""
         if self._service is None:

@@ -189,7 +189,7 @@ async def _resolve_wow_installs(svc: ServiceContainer, skip_scan: bool = False) 
         # all. If the user has paths in config that are temporarily invalid (e.g. an
         # unmounted drive), do not overwrite them.
         if not cfg.wow_installs:
-            cfg.wow_installs = found
+            cfg = cfg.model_copy(update={"wow_installs": found})
             svc.config_store.save(cfg)
             logger.info("WoW: auto-detected %d install(s), saved to config", len(found))
         else:

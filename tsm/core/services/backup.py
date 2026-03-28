@@ -26,6 +26,7 @@ import zipfile
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from tsm.core.services._zip_utils import safe_extractall
 from tsm.wow.utils import iter_wow_gv_roots
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class BackupService:
             return False
         try:
             with zipfile.ZipFile(backup_path, "r") as zf:
-                zf.extractall(sv_dir)
+                safe_extractall(zf, sv_dir)
             logger.info("Restored backup %s → %s", backup_path.name, sv_dir)
             return True
         except Exception:

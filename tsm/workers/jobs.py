@@ -47,13 +47,16 @@ async def job_backup(*, services: ServiceContainer) -> None:
     """Back up TSM SavedVariables if period has elapsed."""
     logger.info("job_backup: starting")
     try:
+        if services.config_store is None or services.backup is None:
+            return
         cfg = services.config_store.load()
+        backup = services.backup
         # Ensure wow installs are populated before the sync backup code runs
         await services.wow_detector.get_installs()
         loop = asyncio.get_running_loop()
         created = await loop.run_in_executor(
             None,
-            lambda: services.backup.run(
+            lambda: backup.run(
                 cfg.backup_period_minutes,
                 cfg.backup_retain_days,
                 extra_installs=cfg.wow_installs,

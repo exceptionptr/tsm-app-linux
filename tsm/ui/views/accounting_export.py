@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import csv
 import logging
 from datetime import datetime
@@ -28,6 +29,15 @@ from PySide6.QtWidgets import (
 from tsm.core.services.item_cache import ItemCache
 from tsm.storage.config_store import CONFIG_DIR
 from tsm.ui.components.wow_tooltip import WowItemTooltip
+from tsm.ui.views._accounting_utils import (
+    _TIME_COLS,
+    _base_item_str,
+    _find_col,
+    _fmt_gold,
+    _is_fetchable,
+    _parse_tsm_csv,
+    _to_unified_rows,
+)
 from tsm.ui.views._utils import populate_combo, set_table_cell
 from tsm.wow.accounts import scan_tsm_accounts
 
@@ -53,22 +63,6 @@ _LAST_DIR_FILE = CONFIG_DIR / "last_export_dir"
 _PAGE_SIZE = 50
 _ALL_TIME_FROM = QDate(2004, 11, 23)  # WoW release date
 
-# Column name candidates (case-insensitive) for each semantic field
-_TIME_COLS = ["time", "timestamp", "ts"]
-_PRICE_COLS = ["price", "money", "amount"]
-_QTY_COLS = ["quantity", "qty", "count"]
-_ITEM_COLS = ["itemstring", "item", "itemid"]
-
-# Sign multiplier for copper totals; 0 = excluded from financial summary
-_GOLD_SIGN = {
-    "Sales": 1,
-    "Purchases": -1,
-    "Income": 1,
-    "Expenses": -1,
-    "Expired Auctions": 0,
-    "Canceled Auctions": 0,
-}
-
 _TYPE_SHORT = {
     "Sales": "Sale",
     "Purchases": "Purchase",
@@ -87,76 +81,6 @@ _TYPE_COLOR = {
     "Canceled Auctions": "#888888",
 }
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _find_col(headers_lower: list[str], candidates: list[str]) -> int:
-    for c in candidates:
-        try:
-            return headers_lower.index(c)
-        except ValueError:
-            pass
-    return -1
-
-
-def _parse_tsm_csv(csv_string: str) -> tuple[list[str], list[list[str]]]:
-    lines = csv_string.replace("\\n", "\n").split("\n")
-    all_rows = [r for r in csv.reader([ln for ln in lines if ln.strip()]) if r]
-    if not all_rows:
-        return [], []
-    return all_rows[0], all_rows[1:]
-
-
-def _to_unified_rows(
-    raw_rows: list[list[str]], headers: list[str], label: str
-) -> list[dict]:
-    """Convert raw CSV rows to unified dicts with label/item/qty/copper/timestamp."""
-    hl = [h.lower().strip() for h in headers]
-    t_idx = _find_col(hl, _TIME_COLS)
-    p_idx = _find_col(hl, _PRICE_COLS)
-    q_idx = _find_col(hl, _QTY_COLS)
-    i_idx = _find_col(hl, _ITEM_COLS)
-    sign = _GOLD_SIGN.get(label, 0)
-
-    result = []
-    for row in raw_rows:
-        try:
-            ts = int(row[t_idx]) if 0 <= t_idx < len(row) else 0
-            price = int(row[p_idx]) if 0 <= p_idx < len(row) else 0
-            qty = int(row[q_idx]) if 0 <= q_idx < len(row) else 1
-            item = row[i_idx] if 0 <= i_idx < len(row) else (row[0] if row else "?")
-            item = item.strip().rstrip(":")
-            copper = price * qty * sign
-        except (ValueError, IndexError):
-            continue
-        result.append(
-            {"label": label, "item": item, "qty": qty, "copper": copper, "timestamp": ts}
-        )
-    return result
-
-
-def _base_item_str(item_str: str) -> str:
-    """Return the base item string (i:ID) from a full TSM item string.
-
-    For non-item strings like 'Repair Bill' or 'Money Transfer', returns as-is.
-    """
-    parts = item_str.split(":")
-    if len(parts) >= 2 and parts[0] == "i" and parts[1].isdigit():
-        return f"i:{parts[1]}"
-    return item_str
-
-
-def _is_fetchable(item_id: str) -> bool:
-    """True only for numeric item IDs that Wowhead can resolve."""
-    return item_id.isdigit()
-
-
-
-def _fmt_gold(copper: int, with_sign: bool = False) -> str:
-    gold = copper / 10000
-    if with_sign and gold > 0:
-        return f"+{gold:,.0f}g"
-    return f"{gold:,.0f}g"
 
 
 def _make_gold_cell(copper: int) -> QLabel:
@@ -315,8 +239,20 @@ class AccountingExportView(QWidget):
         vbox = QVBoxLayout(self)
         vbox.setContentsMargins(10, 10, 10, 10)
         vbox.setSpacing(8)
+        vbox.addLayout(self._build_account_row())
+        vbox.addLayout(self._build_date_row())
+        vbox.addLayout(self._build_checkboxes())
+        vbox.addWidget(self._build_summary_widget())
+        vbox.addLayout(self._build_preview_header())
+        vbox.addWidget(self._build_preview_table(), 1)
+        vbox.addLayout(self._build_pagination_row())
+        self._setup_tooltip()
+        self._export_btn = QPushButton("Export to CSV")
+        self._export_btn.setFixedHeight(32)
+        self._export_btn.clicked.connect(self._export)
+        vbox.addWidget(self._export_btn)
 
-        # Account + Realm row
+    def _build_account_row(self) -> QHBoxLayout:
         ar_row = QHBoxLayout()
         ar_row.addWidget(QLabel("Account:"))
         self._account_combo = QComboBox()
@@ -329,9 +265,9 @@ class AccountingExportView(QWidget):
         self._realm_combo.setMinimumWidth(160)
         self._realm_combo.currentTextChanged.connect(self._on_filter_changed)
         ar_row.addWidget(self._realm_combo)
-        vbox.addLayout(ar_row)
+        return ar_row
 
-        # Date range row
+    def _build_date_row(self) -> QHBoxLayout:
         date_row = QHBoxLayout()
         date_row.setSpacing(6)
         date_row.addWidget(QLabel("From:"))
@@ -362,26 +298,22 @@ class AccountingExportView(QWidget):
             btn.setObjectName("secondary")
             btn.clicked.connect(slot)
             date_row.addWidget(btn)
-        vbox.addLayout(date_row)
+        return date_row
 
-        # Checkboxes
+    def _build_checkboxes(self) -> QGridLayout:
         cb_grid = QGridLayout()
         cb_grid.setHorizontalSpacing(24)
         cb_grid.setVerticalSpacing(4)
         self._checkboxes: dict[str, QCheckBox] = {}
-        labels = list(_DB_KEYS.keys())
-        for i, label in enumerate(labels):
+        for i, label in enumerate(_DB_KEYS.keys()):
             cb = QCheckBox(label)
             cb.setChecked(label in ("Sales", "Purchases"))
             cb.stateChanged.connect(self._on_filter_changed)
             self._checkboxes[label] = cb
             cb_grid.addWidget(cb, i // 3, i % 3)
-        vbox.addLayout(cb_grid)
+        return cb_grid
 
-        # Summary bar
-        vbox.addWidget(self._build_summary_widget())
-
-        # Preview header
+    def _build_preview_header(self) -> QHBoxLayout:
         preview_hdr = QHBoxLayout()
         lbl_preview = QLabel("Preview")
         lbl_preview.setObjectName("hint")
@@ -390,9 +322,9 @@ class AccountingExportView(QWidget):
         self._preview_count = QLabel("")
         self._preview_count.setObjectName("hint")
         preview_hdr.addWidget(self._preview_count)
-        vbox.addLayout(preview_hdr)
+        return preview_hdr
 
-        # Preview table
+    def _build_preview_table(self) -> QTableWidget:
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(["Type", "Item", "Qty", "Gold", "Date"])
         self._table.setAlternatingRowColors(True)
@@ -408,9 +340,9 @@ class AccountingExportView(QWidget):
         hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
         hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         self._table.setColumnWidth(3, 80)
-        vbox.addWidget(self._table, 1)
+        return self._table
 
-        # Pagination controls
+    def _build_pagination_row(self) -> QHBoxLayout:
         _assets = Path(__file__).parent.parent / "assets"
         pag_row = QHBoxLayout()
         pag_row.setSpacing(0)
@@ -435,21 +367,15 @@ class AccountingExportView(QWidget):
         pag_row.addWidget(self._page_label)
         pag_row.addStretch()
         pag_row.addWidget(self._btn_next)
-        vbox.addLayout(pag_row)
+        return pag_row
 
-        # Item hover tooltip
+    def _setup_tooltip(self) -> None:
         self._wow_tooltip = WowItemTooltip()
         self._hover_filter = _ItemHoverFilter(
             self._table, self._wow_tooltip, self._item_cache, self
         )
         self._table.viewport().setMouseTracking(True)
         self._table.viewport().installEventFilter(self._hover_filter)
-
-        # Export button
-        self._export_btn = QPushButton("Export to CSV")
-        self._export_btn.setFixedHeight(32)
-        self._export_btn.clicked.connect(self._export)
-        vbox.addWidget(self._export_btn)
 
     def _build_summary_widget(self) -> QWidget:
         box = QWidget()
@@ -688,7 +614,6 @@ class AccountingExportView(QWidget):
 
             dt_str = ""
             if r["timestamp"]:
-                import contextlib
                 with contextlib.suppress(OSError, OverflowError):
                     dt_str = datetime.fromtimestamp(r["timestamp"]).strftime("%d.%m.%y")
             set_table_cell(self._table, i, 4, dt_str)
