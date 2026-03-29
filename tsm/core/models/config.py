@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 @dataclass(frozen=True)
