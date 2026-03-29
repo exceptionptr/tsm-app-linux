@@ -468,10 +468,12 @@ class AddonVersionsView(QWidget):
             return paths
         folder_name = name[: -len(suffix)] if suffix else name
         try:
+            from tsm.wow.utils import normalize_wow_base
+
             for install in self._detector.installs:
-                wow_root = Path(install.path).parent
+                base = normalize_wow_base(Path(install.path))
                 for sub in ("AddOns", "Addons"):
-                    candidate = wow_root / game_ver / "Interface" / sub / folder_name
+                    candidate = base / game_ver / "Interface" / sub / folder_name
                     if candidate.is_dir():
                         paths.append(candidate)
         except Exception:
@@ -508,19 +510,20 @@ class AddonVersionsView(QWidget):
         if self._detector is None:
             return result
         try:
+            from tsm.wow.utils import normalize_wow_base
+
             installs = self._detector.installs if self._detector is not None else []
             for install in installs:
-                # install.path is the _retail_ path; parent is the WoW root
-                wow_root = Path(install.path).parent
+                base = normalize_wow_base(Path(install.path))
                 for suffix, game_ver in {
                     "": "_retail_",
                     "-Classic": "_classic_era_",
                     "-Progression": "_classic_",
                     "-Anniversary": "_anniversary_",
                 }.items():
-                    addons_dir = wow_root / game_ver / "Interface" / "AddOns"
+                    addons_dir = base / game_ver / "Interface" / "AddOns"
                     if not addons_dir.exists():
-                        addons_dir = wow_root / game_ver / "Interface" / "Addons"
+                        addons_dir = base / game_ver / "Interface" / "Addons"
                     if not addons_dir.exists():
                         continue
                     for addon_info in self._api_addons or []:

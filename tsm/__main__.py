@@ -35,7 +35,10 @@ def _setup_logging() -> None:
     stderr_handler = logging.StreamHandler(sys.stderr)
     stderr_handler.setFormatter(fmt)
 
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler, stderr_handler])
+    from tsm.core.log_buffer import get_log_buffer
+    buf_handler = get_log_buffer()
+
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, stderr_handler, buf_handler])
 
     structlog.configure(
         processors=[

@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pydantic import BaseModel, Field
 
 
-class WoWInstall(BaseModel):
+@dataclass(frozen=True)
+class WoWInstall:
+    """Represents a single WoW installation base directory.
+
+    path is the WoW root (e.g. /home/user/Games/world-of-warcraft).
+    Game-version subdirectories (_retail_, _classic_, etc.) are derived on demand.
+    """
+
     path: str
-    version: str  # "_retail_", "_classic_", "_classic_era_"
 
 
 class AppConfig(BaseModel):
-    wow_installs: list[WoWInstall] = Field(default_factory=list)
+    wow_path: str = ""  # WoW base directory (e.g. /home/user/Games/world-of-warcraft)
     minimize_to_tray: bool = True
     notifications_enabled: bool = True
     notify_realm_data: bool = True

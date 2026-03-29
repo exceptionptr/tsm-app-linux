@@ -15,6 +15,8 @@ _GITHUB_URL = "https://github.com/exceptionptr/tsm-app-linux"
 
 _GITHUB_ICON = QIcon(str(_ASSETS / "github.svg"))
 _GITHUB_ICON_HOVER = QIcon(str(_ASSETS / "github-hover.svg"))
+_LOGS_ICON = QIcon(str(_ASSETS / "logs.svg"))
+_LOGS_ICON_HOVER = QIcon(str(_ASSETS / "logs-hover.svg"))
 _SETTINGS_ICON = QIcon(str(_ASSETS / "settings.svg"))
 _SETTINGS_ICON_HOVER = QIcon(str(_ASSETS / "settings-hover.svg"))
 
@@ -31,6 +33,7 @@ def _make_statusbar_button(icon: QIcon, icon_hover: QIcon, tooltip: str) -> Hove
 
 class TSMStatusBar(QStatusBar):
     settings_requested: Signal = Signal()
+    logs_requested: Signal = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -44,6 +47,10 @@ class TSMStatusBar(QStatusBar):
             lambda: QDesktopServices.openUrl(QUrl(_GITHUB_URL))
         )
         self.addPermanentWidget(github_btn)
+
+        logs_btn = _make_statusbar_button(_LOGS_ICON, _LOGS_ICON_HOVER, "View session logs")
+        logs_btn.clicked.connect(self.logs_requested)
+        self.addPermanentWidget(logs_btn)
 
         settings_btn = _make_statusbar_button(_SETTINGS_ICON, _SETTINGS_ICON_HOVER, "Settings")
         settings_btn.clicked.connect(self.settings_requested)

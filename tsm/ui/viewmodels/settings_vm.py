@@ -6,7 +6,7 @@ import logging
 
 from PySide6.QtCore import QObject, Signal
 
-from tsm.core.models.config import AppConfig, WoWInstall
+from tsm.core.models.config import AppConfig
 from tsm.storage.config_store import ConfigStore
 
 logger = logging.getLogger(__name__)
@@ -25,19 +25,24 @@ class SettingsViewModel(QObject):
     def config(self) -> AppConfig:
         return self._config
 
-    def add_wow_path(self, path: str, version: str = "_retail_") -> None:
-        install = WoWInstall(path=path, version=version)
-        if install not in self._config.wow_installs:
-            self._config.wow_installs.append(install)
-            self.config_changed.emit()
+    def add_wow_path(self, path: str) -> None:
+        """Set the WoW base directory. Normalizes game-version paths to base dir."""
+        from pathlib import Path
+
+        from tsm.wow.utils import normalize_wow_base
+
+        base = str(normalize_wow_base(Path(path)))
+        self._config.wow_path = base
+        self.config_changed.emit()
 
     def clear_wow_paths(self) -> None:
-        self._config.wow_installs = []
+        self._config.wow_path = ""
         self.config_changed.emit()
 
     def remove_wow_path(self, path: str) -> None:
-        self._config.wow_installs = [w for w in self._config.wow_installs if w.path != path]
-        self.config_changed.emit()
+        if self._config.wow_path == path:
+            self._config.wow_path = ""
+            self.config_changed.emit()
 
     def set_minimize_to_tray(self, value: bool) -> None:
         self._config.minimize_to_tray = value

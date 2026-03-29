@@ -7,6 +7,62 @@ from pathlib import Path
 
 _GAME_VERSIONS = ("_retail_", "_classic_era_", "_classic_", "_anniversary_")
 
+# Addon folder suffix per game version, matching the Windows TSM app convention.
+# The AppHelper addon is named differently in each game client:
+#   _retail_:      TradeSkillMaster_AppHelper
+#   _classic_era_: TradeSkillMaster_AppHelper-Classic
+#   _classic_:     TradeSkillMaster_AppHelper-Progression
+#   _anniversary_: TradeSkillMaster_AppHelper-Anniversary
+_APPHELPER_SUFFIX: dict[str, str] = {
+    "_retail_": "",
+    "_classic_era_": "-Classic",
+    "_classic_": "-Progression",
+    "_anniversary_": "-Anniversary",
+}
+
+
+def normalize_wow_base(path: Path) -> Path:
+    """Return the WoW base directory.
+
+    If path ends in a game-version subdir (e.g. _retail_), return its parent.
+    Otherwise return path unchanged.
+    """
+    return path.parent if path.name in _GAME_VERSIONS else path
+
+
+def addon_dir(base: Path, gv: str) -> Path:
+    """Return the AddOns directory for a given base and game version."""
+    return base / gv / "Interface" / "AddOns"
+
+
+def apphelper_dir(base: Path, gv: str) -> Path:
+    """Return the TradeSkillMaster_AppHelper addon directory for a given game version.
+
+    Each game client uses a differently named addon folder:
+      _retail_:      .../TradeSkillMaster_AppHelper
+      _classic_era_: .../TradeSkillMaster_AppHelper-Classic
+      _classic_:     .../TradeSkillMaster_AppHelper-Progression
+      _anniversary_: .../TradeSkillMaster_AppHelper-Anniversary
+    """
+    suffix = _APPHELPER_SUFFIX.get(gv, "")
+    return base / gv / "Interface" / "AddOns" / f"TradeSkillMaster_AppHelper{suffix}"
+
+
+def appdata_lua_path(base: Path, gv: str) -> Path:
+    """Return the AppData.lua path for a given base and game version."""
+    return apphelper_dir(base, gv) / "AppData.lua"
+
+
+def wtf_accounts_dir(base: Path, gv: str) -> Path:
+    """Return the WTF/Account directory for a given base and game version."""
+    return base / gv / "WTF" / "Account"
+
+
+def installed_versions(base: Path) -> list[str]:
+    """Return which game versions exist as directories under this base."""
+    return [gv for gv in _GAME_VERSIONS if (base / gv).is_dir()]
+
+
 def is_valid_wow_version_dir(path: Path) -> bool:
     """Return True if path is a valid WoW game-version directory.
 
@@ -21,13 +77,13 @@ def is_valid_wow_version_dir(path: Path) -> bool:
 
 
 def iter_wow_gv_roots(installs) -> Generator[tuple[Path, str], None, None]:
-    """Yield (wow_root, gv_dir) for every (install × game_version) combination.
+    """Yield (wow_base, gv_dir) for every (install x game_version) combination.
 
-    Handles both detector-style paths (ending in a game version subdir like _retail_)
-    and user-configured paths pointing directly at the WoW base directory.
+    Only yields game versions whose directory actually exists under the base.
+    Assumes install.path is the WoW base directory. Also handles legacy paths
+    ending in a game-version subdir by normalizing them first.
     """
     for install in installs:
-        wow_path = Path(install.path)
-        wow_root = wow_path.parent if wow_path.name in _GAME_VERSIONS else wow_path
-        for gv in _GAME_VERSIONS:
-            yield wow_root, gv
+        base = normalize_wow_base(Path(install.path))
+        for gv in installed_versions(base):
+            yield base, gv
