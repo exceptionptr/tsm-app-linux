@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tsm.ui.views.log_viewer import LogViewerWindow
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
@@ -68,7 +72,7 @@ class AppWindow(QMainWindow):
         self._realm_tree_cache: dict | None = None
         self._quitting = False
         self._backup_stats: str = ""
-        self._log_viewer = None
+        self._log_viewer: LogViewerWindow | None = None
 
         from tsm import __version__
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import tomllib
 from pathlib import Path
+from typing import Any
 
 from tsm.core.models.config import AppConfig
 from tsm.wow.utils import normalize_wow_base
@@ -45,7 +46,7 @@ class ConfigStore:
         logger.info("Config saved to %s", self._path)
 
 
-def _migrate(data: dict) -> None:
+def _migrate(data: dict[str, Any]) -> None:
     """Mutate raw TOML data in-place to apply any format migrations.
 
     v1.1.3: wow_installs list[{path, version?}] -> wow_path string.
