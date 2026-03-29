@@ -12,7 +12,6 @@ import threading
 from collections import deque
 from datetime import datetime
 
-
 _MAX_RECORDS = 2000
 
 

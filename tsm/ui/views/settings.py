@@ -124,7 +124,10 @@ class SettingsDialog(QDialog):
         wow_label = QLabel("WoW Directory")
         wow_label.setObjectName("section-title")
         wow_header.addWidget(wow_label)
-        wow_hint = QLabel("Root installation directory containing game version folders (e.g. /Games/World\u00a0of\u00a0Warcraft)")
+        wow_hint = QLabel(
+            "Root installation directory containing game version folders"
+            " (e.g. /Games/World\u00a0of\u00a0Warcraft)"
+        )
         wow_hint.setObjectName("hint")
         wow_header.addWidget(wow_hint)
         vbox.addLayout(wow_header)
