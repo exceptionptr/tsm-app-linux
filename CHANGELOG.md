@@ -4,6 +4,62 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.3] - 2026-03-29
+
+### Changed
+
+- **WoW path storage unified to base directory.** The app now stores and operates
+  on the WoW root folder (e.g. `/home/user/Games/world-of-warcraft`) everywhere
+  instead of individual game-version subdirectories. Game-version paths
+  (`_retail_`, `_classic_`, etc.) are derived on demand. This is a single source
+  of truth and eliminates path inconsistencies across services.
+- Existing configs that stored game-version paths (e.g. `_retail_`) are
+  automatically migrated to the base path on first load. No manual action required.
+- Settings dialog now correctly saves a WoW path typed or pasted into the directory
+  field when clicking Done. Previously only the Browse button updated the config.
+- Settings Browse dialog now saves a single base path instead of multiple
+  game-version entries.
+- `AddonWriterService` now writes `AppData.lua` to all installed game versions
+  under a WoW base directory rather than a single hard-coded version.
+- All path utility functions consolidated in `tsm/wow/utils.py`:
+  `normalize_wow_base`, `addon_dir`, `apphelper_dir`, `appdata_lua_path`,
+  `wtf_accounts_dir`, `installed_versions`.
+
+### Fixed
+
+- Status bar no longer persistently shows "AppHelper not found" on startup for
+  users whose WoW install is in config but `WoW.exe` is absent from `_retail_/`
+  (or otherwise not found by the auto-scanner). A race condition at startup caused
+  `WoWDetectorService.scan()` to overwrite the config-loaded install list with an
+  empty result after `_resolve_wow_installs()` had already populated it.
+  `scan()` now leaves the install list unchanged when `set_installs()` has already
+  been called. Closes #3.
+
+### UI
+
+- Settings: WoW Directory field now shows a hint label explaining that the base
+  folder (containing `_retail_`, `_classic_`, etc.) must be selected, with a
+  path example.
+- Settings: Browse dialog now opens at the currently entered directory instead of
+  the home folder.
+- Login: removed redundant subtitle label; dialog tightened to 480x240.
+- Login: username placeholder changed from "Username or Email" to "Email".
+- Login: HTTP error responses are now mapped to concise user-facing messages
+  (e.g. 401 → "Invalid email or password.") instead of exposing the raw
+  exception string with URL and status details.
+- Login: error label always reserves fixed space in the layout so the dialog
+  does not shift when an error appears or is cleared.
+- **Log viewer** (new): status bar button (between GitHub and Settings) opens a
+  session log window. Displays all records from the current run in a styled
+  table with columns Time / Level / Logger / Message, alternating row backgrounds,
+  and level color-coding (ERROR=red, WARNING=orange). Rows wrap long messages
+  and all cells are top-aligned.
+- Log viewer: Copy to Clipboard button copies the full session log as plain text
+  in the standard log format. Email addresses are automatically redacted before
+  copying so logs are safe to paste into GitHub issues.
+
+---
+
 ## [1.1.2] - 2026-03-28
 
 ### Security
@@ -361,7 +417,7 @@ All notable changes to tsm-app-linux are documented here.
 - `tests/unit/test_wow_detector_service.py` (new): covers empty initial state,
   set_installs, get_installs cache hit/miss, and scan() executor call
 - `tests/unit/test_backup_service.py` (new): covers delete success/missing,
-  restore bad filename, _list_backups parsing, _find_sv_files glob, and
+  restore bad filename, \_list_backups parsing, \_find_sv_files glob, and
   run() with no accounts
 - `tests/unit/test_addon_writer.py` (new): covers write_data with no detector,
   missing addon dir, and successful LuaWriter call

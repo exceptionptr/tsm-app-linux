@@ -177,11 +177,13 @@ class UpdateService:
             logger.error("Downloaded file for %s is not a valid zip", base_name)
             return False
 
+        from tsm.wow.utils import normalize_wow_base
+
         installed_any = False
         with zf:
             for install in installs:
-                wow_root = Path(install.path).parent
-                gv_path = wow_root / game_ver
+                base = normalize_wow_base(Path(install.path))
+                gv_path = base / game_ver
                 addons_dir = _find_addons_dir(gv_path)
                 if addons_dir is None:
                     # Create Interface/AddOns for a fresh WoW install that has

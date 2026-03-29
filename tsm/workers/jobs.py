@@ -59,7 +59,6 @@ async def job_backup(*, services: ServiceContainer) -> None:
             lambda: backup.run(
                 cfg.backup_period_minutes,
                 cfg.backup_retain_days,
-                extra_installs=cfg.wow_installs,
             ),
         )
         if created and services.backup_notify_fn is not None:

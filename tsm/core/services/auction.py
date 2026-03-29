@@ -115,7 +115,7 @@ class AuctionDataService:
                     name=name,
                 )
                 data.realm_statuses.append(rs)
-                await self._process_entry(name, pending, data)
+                await self._process_entry(name, pending, data, gv_dir=gv_dir)
                 if pending:
                     rs.auctiondb_status = "Up to date"
                     # Only update the display timestamp when the primary display tag was
@@ -144,7 +144,7 @@ class AuctionDataService:
                     name=name,
                 )
                 data.realm_statuses.append(rg)
-                await self._process_entry(name, pending, data)
+                await self._process_entry(name, pending, data, gv_dir=gv_dir)
                 if pending:
                     rg.auctiondb_status = "Up to date"
                     # Mirror realm logic: only update when REGION_STAT itself was downloaded.
@@ -160,12 +160,16 @@ class AuctionDataService:
         return data
 
     async def _process_entry(
-        self, name: str, pending: dict[str, AppDataString], data: AuctionData
+        self,
+        name: str,
+        pending: dict[str, AppDataString],
+        data: AuctionData,
+        gv_dir: str = "",
     ) -> None:
         for tag, info in pending.items():
             blob = await self._download_blob(info["url"], tag, name)
             if blob:
-                data.add_entry(tag, name, blob, info["lastModified"])
+                data.add_entry(tag, name, blob, info["lastModified"], gv_dir=gv_dir)
 
     async def _download_blob(self, url: str, tag: str, name: str) -> str | None:
         logger.info("Downloading %s / %s", tag, name)
@@ -181,28 +185,35 @@ class AuctionDataService:
             logger.exception("Failed to download %s/%s", tag, name)
             return None
 
-    async def _get_existing_app_data_files(self) -> dict[str, AppDataFile | None]:
-        """Return {game_version_dir: AppDataFile | None} for each game version."""
-        result: dict[str, AppDataFile | None] = {
-            "_retail_": None,
-            "_classic_era_": None,
-            "_classic_": None,
-            "_anniversary_": None,
+    async def _get_existing_app_data_files(self) -> dict[str, list[AppDataFile]]:
+        """Return {game_version_dir: [AppDataFile, ...]} for each game version.
+
+        Collects one AppDataFile per WoW install per game version. Multiple
+        files arise when the user has more than one WoW installation (e.g. two
+        different Wine prefixes). Callers use the minimum timestamp across all
+        files so that a re-download is triggered when any install is behind.
+        """
+        from tsm.wow.utils import appdata_lua_path
+
+        result: dict[str, list[AppDataFile]] = {
+            "_retail_": [],
+            "_classic_era_": [],
+            "_classic_": [],
+            "_anniversary_": [],
         }
         detector = self._addon_writer.get_detector() if self._addon_writer is not None else None
         if detector is None:
             return result
         installs = await detector.get_installs()
         for install in installs:
-            wow_root = Path(install.path).parent  # install.path is the _retail_ dir
+            base = Path(install.path)
             for gv in result:
-                gv_path = wow_root / gv
+                gv_path = base / gv
                 # Only requires the game-version directory to exist - WoW.exe may be
                 # absent on some Lutris/Wine setups. AppDataFile handles a missing
                 # AppData.lua gracefully (AppHelper not yet installed).
                 if gv_path.is_dir():
-                    path = gv_path / "Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua"
-                    result[gv] = AppDataFile(path)
+                    result[gv].append(AppDataFile(appdata_lua_path(base, gv)))
         return result
 
     async def remove_realm(self, game_version: str, region: str, name: str) -> None:
@@ -232,17 +243,22 @@ class AuctionDataService:
 
 
 def _pending_strings(
-    strings: dict[str, AppDataString], name: str, app_data: AppDataFile | None
+    strings: dict[str, AppDataString], name: str, app_data_files: list[AppDataFile]
 ) -> dict[str, AppDataString]:
-    """Return only the appDataStrings entries newer than local timestamp."""
+    """Return only the appDataStrings entries newer than local timestamp.
+
+    Uses the minimum timestamp across all WoW installs for the same game
+    version, ensuring a re-download when any install is behind.
+    """
     pending = {}
     for tag, info in strings.items():
         last_modified = info["lastModified"]
-        local_ts = app_data.last_update(tag, name) if app_data else 0
+        local_ts = min((f.last_update(tag, name) for f in app_data_files), default=0)
         if last_modified > local_ts:
             pending[tag] = info
     return pending
 
 
-def _local_timestamp(app_data: AppDataFile | None, tag: str, name: str) -> int:
-    return app_data.last_update(tag, name) if app_data else 0
+def _local_timestamp(app_data_files: list[AppDataFile], tag: str, name: str) -> int:
+    """Return the minimum last-update timestamp across all WoW installs."""
+    return min((f.last_update(tag, name) for f in app_data_files), default=0)

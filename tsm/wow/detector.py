@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from tsm.core.models.config import WoWInstall
 from tsm.wow.utils import is_valid_wow_version_dir
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,15 @@ COMMON_BASE_PATHS = [
     / "snap/wine-platform-5-stable/common/.wine/drive_c/Program Files (x86)/World of Warcraft",
 ]
 
-WOW_VERSIONS = ["_retail_", "_classic_", "_classic_era_", "_classic_ptr_", "_retail_ptr_"]
+# All known game versions including PTR variants used only for detection
+WOW_VERSIONS = [
+    "_retail_",
+    "_classic_",
+    "_classic_era_",
+    "_anniversary_",
+    "_classic_ptr_",
+    "_retail_ptr_",
+]
 
 LUTRIS_GAMES_DIR = Path.home() / ".local/share/lutris/games"
 
@@ -57,7 +64,7 @@ def _lutris_base_paths() -> list[Path]:
                 candidate = prefix_path / "drive_c" / pf / "World of Warcraft"
                 if candidate.is_dir():
                     paths.append(candidate)
-                    logger.debug("Lutris config %s → WoW base: %s", yml.name, candidate)
+                    logger.debug("Lutris config %s -> WoW base: %s", yml.name, candidate)
         except Exception:
             logger.debug("Failed to parse Lutris config: %s", yml)
 
@@ -105,50 +112,26 @@ def _faugus_base_paths() -> list[Path]:
     return paths
 
 
-def find_wow_installs(extra_paths: list[Path] | None = None) -> list[WoWInstall]:
-    """Scan common Linux paths and Lutris configs for WoW installations."""
+def find_wow_base(extra_paths: list[Path] | None = None) -> str | None:
+    """Scan common Linux paths and launcher configs for a WoW installation.
+
+    Returns the WoW base directory path as a string, or None if not found.
+    The first matching installation wins; auto-detection is opportunistic.
+    """
     base_paths = list(COMMON_BASE_PATHS)
     base_paths.extend(_lutris_base_paths())
     base_paths.extend(_faugus_base_paths())
     if extra_paths:
         base_paths.extend(extra_paths)
 
-    found: list[WoWInstall] = []
-    seen: set[str] = set()
-
     for base in base_paths:
         if not base.exists():
             continue
         for version in WOW_VERSIONS:
-            p = base / version
-            if is_valid_wow_version_dir(p):
-                key = str(p.resolve())
-                if key not in seen:
-                    seen.add(key)
-                    found.append(WoWInstall(path=str(p.resolve()), version=version))
-                    logger.info("Found WoW install: %s (%s)", p, version)
+            if is_valid_wow_version_dir(base / version):
+                resolved = str(base.resolve())
+                logger.info("Found WoW install: %s", resolved)
+                return resolved
 
-    if not found:
-        logger.info("No WoW installs found in common paths")
-    return found
-
-
-def find_wow_accounts(wow_install: WoWInstall) -> list[str]:
-    """Enumerate WoW accounts under WTF/Account/."""
-    wtf_accounts = Path(wow_install.path) / "WTF" / "Account"
-    if not wtf_accounts.is_dir():
-        return []
-    return [
-        d.name for d in wtf_accounts.iterdir() if d.is_dir() and d.name not in ("SavedVariables",)
-    ]
-
-
-def get_apphelper_data_path(wow_install: WoWInstall) -> Path:
-    """Return the path to AppData.lua inside TradeSkillMaster_AppHelper."""
-    return (
-        Path(wow_install.path)
-        / "Interface"
-        / "AddOns"
-        / "TradeSkillMaster_AppHelper"
-        / "AppData.lua"
-    )
+    logger.info("No WoW install found in common paths")
+    return None

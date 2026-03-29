@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 
 from tsm.core.models.config import WoWInstall
-from tsm.wow.utils import _GAME_VERSIONS
+from tsm.wow.utils import _GAME_VERSIONS, normalize_wow_base
 
 logger = logging.getLogger(__name__)
 _SUFFIXES = {
@@ -20,11 +20,21 @@ _TSM_ADDON_PREFIX = "TradeSkillMaster"
 
 
 def get_account_dirs(install: WoWInstall) -> list[Path]:
-    """Return all WoW account directories for an install."""
-    wtf_accounts = Path(install.path) / "WTF" / "Account"
-    if not wtf_accounts.is_dir():
-        return []
-    return [d for d in wtf_accounts.iterdir() if d.is_dir() and d.name != "SavedVariables"]
+    """Return all WoW account directories for an install.
+
+    install.path is the WoW base directory. This function checks all game
+    version subdirs and aggregates account directories from each.
+    """
+    base = normalize_wow_base(Path(install.path))
+    result: list[Path] = []
+    for gv in _GAME_VERSIONS:
+        wtf_accounts = base / gv / "WTF" / "Account"
+        if not wtf_accounts.is_dir():
+            continue
+        result.extend(
+            d for d in wtf_accounts.iterdir() if d.is_dir() and d.name != "SavedVariables"
+        )
+    return result
 
 
 def get_realm_dirs(account_dir: Path) -> list[Path]:
@@ -48,7 +58,7 @@ def scan_tsm_accounts(detector) -> dict[str, list[str]]:
         return result
     installs = detector.installs
     for install in installs:
-        wow_root = Path(install.path).parent
+        wow_root = normalize_wow_base(Path(install.path))
         for gv in _GAME_VERSIONS:
             suffix = _SUFFIXES.get(gv, "")
             wtf_accounts = wow_root / gv / "WTF" / "Account"

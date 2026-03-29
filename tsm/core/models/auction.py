@@ -31,6 +31,8 @@ class AppHelperEntry(BaseModel):
     # Raw Lua string blob as returned by the API, written verbatim inside [[...]]
     data_blob: str
     download_time: int  # unix timestamp, extracted from data_blob for display
+    # Game version directory this entry belongs to (e.g. "_retail_", "_classic_era_")
+    gv_dir: str = ""
 
 
 class AppInfo(BaseModel):
@@ -66,12 +68,20 @@ class AuctionData(BaseModel):
     # Addon versions from status API: [{name, version_str}, ...]
     addon_versions: list[AddonVersionInfo] = Field(default_factory=list)
 
-    def add_entry(self, tag: str, realm_or_region: str, data_blob: str, download_time: int) -> None:
+    def add_entry(
+        self,
+        tag: str,
+        realm_or_region: str,
+        data_blob: str,
+        download_time: int,
+        gv_dir: str = "",
+    ) -> None:
         self.entries[(tag, realm_or_region)] = AppHelperEntry(
             tag=tag,
             realm_or_region=realm_or_region,
             data_blob=data_blob,
             download_time=download_time,
+            gv_dir=gv_dir,
         )
 
     @property

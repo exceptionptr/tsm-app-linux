@@ -27,7 +27,8 @@ async def test_write_data_addon_dir_missing(tmp_path):
 
 
 async def test_write_data_calls_lua_writer(tmp_path):
-    addon_dir = tmp_path / "Interface" / "AddOns" / "TradeSkillMaster_AppHelper"
+    # New behavior: install.path is the WoW base dir; code iterates installed game versions
+    addon_dir = tmp_path / "_retail_" / "Interface" / "AddOns" / "TradeSkillMaster_AppHelper"
     addon_dir.mkdir(parents=True)
     expected_path = addon_dir / "AppData.lua"
 
@@ -42,5 +43,5 @@ async def test_write_data_calls_lua_writer(tmp_path):
     with patch.object(svc._lua_writer, "write_app_data", return_value=expected_path) as mock_write:
         result = await svc.write_data(data)
 
-    mock_write.assert_called_once_with(data, addon_dir)
+    mock_write.assert_called_once_with(data, addon_dir, gv_dir="_retail_")
     assert result == [expected_path]

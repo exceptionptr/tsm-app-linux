@@ -1,3 +1,27 @@
+tsm-app (1.1.3-1) stable; urgency=medium
+
+  * Change: WoW path storage unified to base directory; game-version paths derived
+    on demand. Old configs with _retail_ paths migrated automatically on load.
+  * Change: Settings dialog now saves manually typed WoW path on Done.
+  * Change: Settings Browse saves single base path instead of per-version entries.
+  * Change: AddonWriterService writes AppData.lua to all installed game versions.
+  * Change: path utilities consolidated in tsm/wow/utils.py.
+  * Fix: startup race condition where scan() could overwrite config-loaded WoW
+    install paths with an empty list, causing a persistent AppHelper-not-found
+    warning even when the install is correctly configured. Closes #3.
+  * UI: Settings WoW Directory field now shows a hint label (base folder containing
+    _retail_, _classic_, etc.) with a path example.
+  * UI: Settings Browse dialog now opens at the currently entered directory.
+  * UI: Login dialog tightened (480x240); subtitle label removed; placeholder
+    changed to "Email".
+  * UI: Login HTTP errors mapped to concise messages (401 -> invalid credentials,
+    etc.) instead of exposing raw exception text.
+  * Feature: Log viewer window accessible via new status bar button. Shows
+    session log records in a styled table with level color-coding and row
+    wrapping. Copy to Clipboard redacts email addresses before copying.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Sun, 29 Mar 2026 00:00:00 +0000
+
 tsm-app (1.1.2-1) stable; urgency=low
 
   * Security: zip extraction validates member paths to prevent zip-slip attacks

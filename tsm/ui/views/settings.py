@@ -119,9 +119,15 @@ class SettingsDialog(QDialog):
         vbox.setSpacing(8)
 
         # WoW Directory
+        wow_header = QVBoxLayout()
+        wow_header.setSpacing(2)
         wow_label = QLabel("WoW Directory")
         wow_label.setObjectName("section-title")
-        vbox.addWidget(wow_label)
+        wow_header.addWidget(wow_label)
+        wow_hint = QLabel("Root installation directory containing game version folders (e.g. /Games/World\u00a0of\u00a0Warcraft)")
+        wow_hint.setObjectName("hint")
+        wow_header.addWidget(wow_hint)
+        vbox.addLayout(wow_header)
 
         dir_row = QHBoxLayout()
         self._wow_dir = QLineEdit()
@@ -241,20 +247,15 @@ class SettingsDialog(QDialog):
         self._backup_period.setCurrentText(_minutes_to_period(cfg.backup_period_minutes))
         self._backup_retain.setCurrentText(_days_to_retain(cfg.backup_retain_days))
 
-        # Prefer detected WoW path from detector (shows WoW root, not _retail_)
+        # Prefer detected WoW path (already normalized to base dir)
         if self._detector is not None:
             installs = self._detector.installs
             if installs:
-                from pathlib import Path
-
-                # install.path is _retail_ directory; show the parent (WoW root)
-                wow_root = str(Path(installs[0].path).parent)
-                self._wow_dir.setText(wow_root)
+                self._wow_dir.setText(installs[0].path)
                 return
-        # Fallback: stored paths in config
-        for install in cfg.wow_installs:
-            self._wow_dir.setText(install.path)
-            break
+        # Fallback: stored path in config
+        if cfg.wow_path:
+            self._wow_dir.setText(cfg.wow_path)
 
     def _save_and_close(self) -> None:
         self._vm.set_minimize_to_tray(self._tray_cb.isChecked())
@@ -265,6 +266,26 @@ class SettingsDialog(QDialog):
         self._vm.set_notify_backup(self._notif_backup.isChecked())
         self._vm.set_backup_period_minutes(_period_to_minutes(self._backup_period.currentText()))
         self._vm.set_backup_retain_days(_retain_to_days(self._backup_retain.currentText()))
+
+        # Save manually-typed WoW directory. add_wow_path normalizes to base dir.
+        typed_path = self._wow_dir.text().strip()
+        if typed_path:
+            from pathlib import Path
+
+            from PySide6.QtWidgets import QMessageBox
+
+            base = Path(typed_path)
+            if base.is_dir():
+                self._vm.clear_wow_paths()
+                self._vm.add_wow_path(str(base))
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Invalid Path",
+                    f"The specified WoW directory does not exist:\n{typed_path}",
+                )
+                return
+
         self._vm.save()
         self.accept()
 
@@ -274,32 +295,21 @@ class SettingsDialog(QDialog):
         from PySide6.QtWidgets import QMessageBox
 
         from tsm.wow.detector import WOW_VERSIONS
-        from tsm.wow.utils import is_valid_wow_version_dir
+        from tsm.wow.utils import normalize_wow_base
 
-        path = QFileDialog.getExistingDirectory(self, "Select WoW Directory")
+        current = self._wow_dir.text().strip()
+        start_dir = current if current and Path(current).is_dir() else str(Path.home())
+        path = QFileDialog.getExistingDirectory(self, "Select WoW Directory", start_dir)
         if not path:
             return
 
         selected = Path(path)
-        # If the user selected a version directory directly (e.g. _retail_),
-        # resolve one level up to get the WoW root and scan from there.
-        base = selected.parent if selected.name in WOW_VERSIONS else selected
+        base = normalize_wow_base(selected)
 
-        # Scan only the selected folder - do not run full auto-detection here.
-        seen: set[str] = set()
-        found: list[tuple[str, str]] = []
-        for version in WOW_VERSIONS:
-            p = base / version
-            if is_valid_wow_version_dir(p):
-                key = str(p.resolve())
-                if key not in seen:
-                    seen.add(key)
-                    found.append((str(p.resolve()), version))
-
-        if found:
+        versions = [gv for gv in WOW_VERSIONS if (base / gv).is_dir()]
+        if versions:
             self._vm.clear_wow_paths()
-            for path_str, version in found:
-                self._vm.add_wow_path(path_str, version)
+            self._vm.add_wow_path(str(base))
             self._wow_dir.setText(str(base))
         else:
             QMessageBox.warning(

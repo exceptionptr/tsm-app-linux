@@ -166,35 +166,39 @@ class JobScheduler:
 
 
 async def _resolve_wow_installs(svc: ServiceContainer, skip_scan: bool = False) -> None:
-    """Load WoW paths from config into the detector; auto-detect if missing or invalid."""
+    """Load WoW path from config into the detector; auto-detect if missing or invalid."""
     if svc.config_store is None:
         return
+    from tsm.core.models.config import WoWInstall
+    from tsm.wow.utils import normalize_wow_base
+
     cfg = svc.config_store.load()
-    valid = [i for i in cfg.wow_installs if Path(i.path).exists()]
-    if valid:
-        svc.wow_detector.set_installs(valid)
-        logger.info("WoW: using %d configured install(s)", len(valid))
-        return
+    if cfg.wow_path:
+        base = str(normalize_wow_base(Path(cfg.wow_path)))
+        if Path(base).is_dir():
+            svc.wow_detector.set_installs([WoWInstall(path=base)])
+            logger.info("WoW: using configured path: %s", base)
+            return
 
     if skip_scan:
         logger.info("WoW: no valid configured path; auto-scan skipped (--skip-detection)")
-        if not cfg.wow_installs and svc.wow_warn_fn is not None:
+        if not cfg.wow_path and svc.wow_warn_fn is not None:
             svc.wow_warn_fn("No WoW installation found. Add path in Settings.")
         return
 
     logger.info("WoW: no valid configured path, running auto-detection")
     found = await svc.wow_detector.scan()
     if found:
-        # Only persist auto-detected paths when config has no user-configured paths at
-        # all. If the user has paths in config that are temporarily invalid (e.g. an
-        # unmounted drive), do not overwrite them.
-        if not cfg.wow_installs:
-            cfg = cfg.model_copy(update={"wow_installs": found})
+        # Only persist auto-detected path when config has no user-configured path at
+        # all. If the user has a path in config that is temporarily invalid (e.g. an
+        # unmounted drive), do not overwrite it.
+        if not cfg.wow_path:
+            cfg = cfg.model_copy(update={"wow_path": found[0].path})
             svc.config_store.save(cfg)
-            logger.info("WoW: auto-detected %d install(s), saved to config", len(found))
+            logger.info("WoW: auto-detected install at %s, saved to config", found[0].path)
         else:
-            logger.info("WoW: auto-detected %d install(s), keeping existing config", len(found))
+            logger.info("WoW: auto-detected install at %s, keeping existing config", found[0].path)
     else:
-        logger.warning("WoW: no installs found; user should configure a path in Settings")
+        logger.warning("WoW: no install found; user should configure a path in Settings")
         if svc.wow_warn_fn is not None:
             svc.wow_warn_fn("No WoW installation found. Add path in Settings.")

@@ -202,7 +202,8 @@ class BackupService:
 
     def _find_accounts(self, extra_installs=None) -> dict[str, Path]:
         """Return {account_key: sv_directory} for accounts with TSM SV files."""
-        from tsm.wow.detector import find_wow_installs
+        from tsm.core.models.config import WoWInstall
+        from tsm.wow.detector import find_wow_base
 
         result: dict[str, Path] = {}
 
@@ -218,7 +219,9 @@ class BackupService:
         # Last resort: run a fresh filesystem scan
         if not installs:
             logger.info("BackupService: no cached installs, running fresh scan")
-            installs = find_wow_installs()
+            base = find_wow_base()
+            if base:
+                installs = [WoWInstall(path=base)]
 
         logger.info("BackupService: scanning %d WoW install(s)", len(installs))
         for wow_root, gv in iter_wow_gv_roots(installs):

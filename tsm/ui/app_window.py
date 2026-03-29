@@ -68,6 +68,7 @@ class AppWindow(QMainWindow):
         self._realm_tree_cache: dict | None = None
         self._quitting = False
         self._backup_stats: str = ""
+        self._log_viewer = None
 
         from tsm import __version__
 
@@ -144,6 +145,7 @@ class AppWindow(QMainWindow):
     def _connect_signals(self) -> None:
         self._app_vm.status_changed.connect(self._status_bar.set_status)
         self._status_bar.settings_requested.connect(self._open_settings)
+        self._status_bar.logs_requested.connect(self._open_log_viewer)
         self._app_vm.authenticated_changed.connect(self._update_status)
         self._realm_vm.data_updated.connect(self._update_status)
         self._realm_vm.data_updated.connect(self._notify_realm_data)
@@ -166,10 +168,10 @@ class AppWindow(QMainWindow):
         if self._addon_service is None:
             return
         cfg = self._settings_vm.config
-        valid = [i for i in cfg.wow_installs if Path(i.path).exists()]
-        if valid:
-            self._addon_service.set_installs(valid)
-            logger.info("Settings saved: pushed %d WoW install(s) to detector", len(valid))
+        if cfg.wow_path and Path(cfg.wow_path).exists():
+            from tsm.core.models.config import WoWInstall
+            self._addon_service.set_installs([WoWInstall(path=cfg.wow_path)])
+            logger.info("Settings saved: pushed WoW path to detector: %s", cfg.wow_path)
         self._update_status()
 
     def notify(self, message: str, critical: bool = False) -> None:
@@ -213,7 +215,6 @@ class AppWindow(QMainWindow):
                 lambda: backup_service.run(
                     period_minutes=0,
                     retain_days=cfg.backup_retain_days,
-                    extra_installs=cfg.wow_installs,
                     keep=True,
                     name=name,
                 ),
@@ -240,8 +241,9 @@ class AppWindow(QMainWindow):
             self._app_vm.set_status(self._backup_stats or "No backups stored.")
             return
         installs = list(self._addon_service.installs) if self._addon_service is not None else []
-        if not installs:
-            installs = list(getattr(self._settings_vm.config, "wow_installs", []) or [])
+        if not installs and self._settings_vm.config.wow_path:
+            from tsm.core.models.config import WoWInstall
+            installs = [WoWInstall(path=self._settings_vm.config.wow_path)]
         has_wow = bool(installs)
         self._set_wow_tabs_enabled(has_wow)
         if not has_wow:
@@ -290,6 +292,16 @@ class AppWindow(QMainWindow):
         )
         dlg.logged_out.connect(self._on_logged_out)
         dlg.exec()
+
+    def _open_log_viewer(self) -> None:
+        from tsm.core.log_buffer import get_log_buffer
+        from tsm.ui.views.log_viewer import LogViewerWindow
+
+        if self._log_viewer is None or not self._log_viewer.isVisible():
+            self._log_viewer = LogViewerWindow(get_log_buffer(), parent=self)
+        self._log_viewer.show()
+        self._log_viewer.raise_()
+        self._log_viewer.activateWindow()
 
     # ── Tray ─────────────────────────────────────────────────────────
 

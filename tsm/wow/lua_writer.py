@@ -172,24 +172,30 @@ def _extract_blob(data_part: str, tag: str, realm: str, store_raw: bool) -> str:
 class LuaWriter:
     """Convenience wrapper: update AppData.lua from AuctionData model."""
 
-    def write_app_data(self, data: AuctionData, addon_dir: Path) -> Path:
-        """Merge new entries into AppData.lua and save atomically."""
+    def write_app_data(self, data: AuctionData, addon_dir: Path, gv_dir: str = "") -> Path:
+        """Merge new entries into AppData.lua and save atomically.
+
+        If gv_dir is given, only entries tagged with that game-version directory
+        are written (plus APP_INFO, which is always written). This ensures that
+        classic realm data is not written to the retail AppHelper and vice versa.
+        """
         target = addon_dir / "AppData.lua"
         app_data = AppDataFile(target)
 
-        # Write APP_INFO
+        # Write APP_INFO - applies to all game versions
         now = int(time.time())
         app_info = data.app_info or AppInfo(version=APP_VERSION, last_sync=now)
-        # APP_INFO blob, stored as the raw inner blob (without [[return ...]]),
-        # AppDataEntry.render() wraps it correctly based on store_raw=False
         app_info_blob = (
             f"{{version={app_info.version},lastSync={app_info.last_sync},"
             f'message={{id={app_info.message_id},msg="{app_info.message_text}"}},news={{}}}}'
         )
         app_data.update("APP_INFO", "Global", app_info_blob, app_info.last_sync)
 
-        # Write all data entries
+        # Write only entries for this game version (or all if gv_dir not specified).
+        # Entries with an empty gv_dir are always included (e.g. future global entries).
         for entry in data.entries.values():
+            if gv_dir and entry.gv_dir and entry.gv_dir != gv_dir:
+                continue
             app_data.update(entry.tag, entry.realm_or_region, entry.data_blob, entry.download_time)
 
         app_data.save()

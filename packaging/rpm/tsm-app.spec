@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.2
+Version:        1.1.3
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,26 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sun Mar 29 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.3-1
+- Change: WoW path storage unified to base directory; game-version paths derived
+  on demand. Old configs with _retail_ paths migrated automatically.
+- Change: Settings now saves manually typed WoW path on Done; Browse saves single
+  base path instead of per-version entries.
+- Change: AddonWriterService writes AppData.lua to all installed game versions.
+- Change: path utilities consolidated in tsm/wow/utils.py.
+- Fix: startup race condition where scan() overwrote config-loaded WoW install
+  paths with an empty list; caused persistent AppHelper-not-found warning even
+  when the install was correctly configured (closes #3)
+- UI: Settings WoW Directory field now shows a hint label (base folder containing
+  _retail_, _classic_, etc.) with a path example
+- UI: Settings Browse dialog now opens at the currently entered directory
+- UI: Login dialog tightened (480x240); subtitle label removed; placeholder
+  changed to "Email"
+- UI: Login HTTP errors mapped to concise messages (401 -> invalid credentials,
+  etc.) instead of exposing raw exception text
+- Feature: Log viewer window via new status bar button; styled table with level
+  color-coding, row wrapping; Copy to Clipboard redacts email addresses
+
 * Sat Mar 28 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.2-1
 - Security: zip extraction validates member paths to prevent zip-slip attacks
 - Security: TSM API SSL probed; app-server/data subdomains use HTTP (cert mismatch);

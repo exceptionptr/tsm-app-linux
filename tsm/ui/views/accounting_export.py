@@ -757,12 +757,15 @@ class AccountingExportView(QWidget):
 # ── Module-level helpers ──────────────────────────────────────────────────────
 
 def _get_wow_root(detector) -> Path | None:
+    """Return the WoW base directory from the first detected install."""
     if detector is None:
         return None
     installs = detector.installs
     if not installs:
         return None
-    return Path(installs[0].path).parent
+    from tsm.wow.utils import normalize_wow_base
+
+    return normalize_wow_base(Path(installs[0].path))
 
 
 def _split_account_suffix(account: str) -> tuple[str, str]:
