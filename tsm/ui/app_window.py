@@ -439,11 +439,11 @@ class AppWindow(QMainWindow):
 
 
 def _make_window_icon() -> QIcon:
-    """Single 16 px icon for the window title bar / taskbar indicator."""
-    p = _ASSETS_DIR / "tsm_16.png"
+    """256 px icon for the window title bar / taskbar indicator."""
+    p = _ASSETS_DIR / "tsm_256.png"
     if p.exists():
         return QIcon(str(p))
-    px = QPixmap(16, 16)
+    px = QPixmap(256, 256)
     px.fill(QColor("#f26522"))
     return QIcon(px)
 
