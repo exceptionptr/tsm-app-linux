@@ -41,7 +41,7 @@ class RealmViewModel(QObject):
         self._last_sync: int = 0
         self._loading = False
         self._had_new_data: bool = False
-        self._apphelper_missing: bool = False
+        self._apphelper_missing_gv: list[str] | None = None
 
     @property
     def loading(self) -> bool:
@@ -64,8 +64,14 @@ class RealmViewModel(QObject):
         return self._had_new_data
 
     @property
-    def apphelper_missing(self) -> bool:
-        return self._apphelper_missing
+    def apphelper_missing_gv(self) -> list[str] | None:
+        """Game-version dirs that are installed but missing the AppHelper addon folder.
+
+        None  = write_data not yet run / no game-version dirs found yet.
+        []    = AppHelper found for every installed game version.
+        [gv]  = these game-version dirs exist but their AppHelper folder is absent.
+        """
+        return self._apphelper_missing_gv
 
     def load_snapshot(self) -> None:
         """Pre-populate the table from the last-known realm list (instant, no network)."""
@@ -152,19 +158,22 @@ class RealmViewModel(QObject):
         if addon_versions:
             self.addons_updated.emit(addon_versions)
 
+        # apphelper_missing_gv is set by write_data() - it is the authoritative signal.
+        # None means no game-version dirs were checked yet (WoW not detected); don't update.
+        missing_gv = getattr(data, "apphelper_missing_gv", None)
+        if missing_gv is not None:
+            if missing_gv:
+                logger.info("on_data_received: AppHelper missing for %s", missing_gv)
+            self._apphelper_missing_gv = missing_gv
+
         statuses = getattr(data, "realm_statuses", [])
         if not statuses:
-            # Service returned no realms, WoW install or AppHelper not detected yet.
-            # Keep existing rows visible; reset any "Updating..." labels.
-            logger.debug("_on_data_received: no realm statuses (last_sync=%s)", new_sync)
-            if new_sync:
-                self._apphelper_missing = True
+            # No realms yet - keep existing rows visible; reset any "Updating..." labels.
             for s in self._summaries:
                 if s.auctiondb_status == "Updating...":
                     s.auctiondb_status = "Up to date"
             self.data_updated.emit()
             return
-        self._apphelper_missing = False
         self._summaries = [
             RealmSummary(
                 display_name=s.display_name,

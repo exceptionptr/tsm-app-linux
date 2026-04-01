@@ -43,6 +43,23 @@ async def job_auth_refresh(*, services: ServiceContainer) -> None:
         logger.exception("job_auth_refresh: failed")
 
 
+async def job_check_update(*, services: ServiceContainer) -> None:
+    """One-shot at startup: check GitHub for a newer release tag."""
+    try:
+        from tsm import __version__
+        from tsm.update_check import fetch_latest_tag, is_newer
+
+        tag = await fetch_latest_tag()
+        if tag and is_newer(tag, __version__):
+            logger.info("job_check_update: newer version %s (current %s)", tag, __version__)
+            if services.update_notify_fn is not None:
+                services.update_notify_fn(tag)
+        else:
+            logger.debug("job_check_update: no update (current=%s, latest=%s)", __version__, tag)
+    except Exception:
+        logger.exception("job_check_update: failed")
+
+
 async def job_backup(*, services: ServiceContainer) -> None:
     """Back up TSM SavedVariables if period has elapsed."""
     logger.info("job_backup: starting")

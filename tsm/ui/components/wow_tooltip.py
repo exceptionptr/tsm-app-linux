@@ -63,7 +63,7 @@ class WowItemTooltip(QWidget):
             if y + self.height() > sg.bottom():
                 y = global_y - self.height() - 4
 
-        # Show first, then move — some WMs override position on first show.
+        # Show first, then move - some WMs override position on first show.
         self.show()
         self.move(x, y)
         self.raise_()

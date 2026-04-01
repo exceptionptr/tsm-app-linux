@@ -68,7 +68,6 @@ class LogViewerWindow(QDialog):
         self.setWindowTitle("Logs - current session")
         self.resize(900, 500)
         self.setModal(False)
-        self._populate()
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -93,7 +92,7 @@ class LogViewerWindow(QDialog):
             "QTableWidget { background-color: #191919; alternate-background-color: #262626; }"
         )
         self._table.verticalHeader().setVisible(False)
-        self._table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self._table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
 
         hdr = self._table.horizontalHeader()
         hdr.setSectionResizeMode(_COL_TIME, QHeaderView.ResizeMode.Fixed)
@@ -159,6 +158,9 @@ class LogViewerWindow(QDialog):
                 if fg:
                     item.setForeground(QColor(fg))
                 self._table.setItem(row, col, item)
+
+        # Resize all rows to fit wrapped content in one pass (O(n) vs O(n²) per-item)
+        self._table.resizeRowsToContents()
 
         # Scroll to the most recent entry
         if records:

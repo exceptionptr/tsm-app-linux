@@ -81,6 +81,56 @@ def scan_tsm_accounts(detector) -> dict[str, list[str]]:
     return result
 
 
+def get_active_factionrealms(install: WoWInstall, game_version: str) -> set[tuple[str, str]]:
+    """Return (region, realm_name) pairs for faction-realms with active characters.
+
+    Reads ``TradeSkillMaster_AppHelper.lua`` (for the region code) and
+    ``TradeSkillMaster.lua`` (for the ``_scopeKeys.factionrealm`` scope keys) from
+    every account directory under ``<wow_base>/<game_version>/WTF/Account/``.
+
+    The returned realm names use the TSM API name format, where faction is
+    appended with a hyphen: ``"Iceblood-Horde"``.  This matches the ``name``
+    field returned by the ``extraClassicRealms`` / ``extraAnniversaryRealms``
+    keys in the status API response.
+
+    Returns an empty set when the game version is not installed, no TSM
+    SavedVariables are found, or the user has no active characters there.
+    """
+    from tsm.wow.saved_variables import get_factionrealm_scopes, read_saved_variables
+
+    base = normalize_wow_base(Path(install.path))
+    wtf_accounts = base / game_version / "WTF" / "Account"
+    if not wtf_accounts.is_dir():
+        return set()
+
+    result: set[tuple[str, str]] = set()
+    for acct_dir in wtf_accounts.iterdir():
+        if not acct_dir.is_dir():
+            continue
+        if not re.match(r"^[A-Za-z0-9#.\-]+$", acct_dir.name):
+            continue
+        if acct_dir.name == "SavedVariables":
+            continue
+
+        sv_dir = acct_dir / "SavedVariables"
+
+        # Region from AppHelper: stored as plain code ("US", "EU") without prefix
+        apphelper_data = read_saved_variables(sv_dir / "TradeSkillMaster_AppHelper.lua")
+        raw_region = apphelper_data.get("region", "")
+        # Guard against "Classic-US" style values (take the last "-"-delimited part)
+        region = raw_region.split("-")[-1] if raw_region else ""
+        if not region:
+            continue
+
+        # Faction-realm scope keys: "Faction - Realm" -> "Realm-Faction"
+        for fr in get_factionrealm_scopes(sv_dir / "TradeSkillMaster.lua"):
+            parts = fr.split(" - ", 1)
+            realm_name = f"{parts[1]}-{parts[0]}" if len(parts) == 2 else fr
+            result.add((region, realm_name))
+
+    return result
+
+
 def scan_realm_names(acct_dir: Path) -> list[str]:
     """Return sorted realm names from WTF Account/ACCOUNT/SERVER structure."""
     realms = [

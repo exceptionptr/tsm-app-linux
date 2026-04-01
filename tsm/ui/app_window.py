@@ -117,6 +117,7 @@ class AppWindow(QMainWindow):
 
         # Wire addon versions update from realm VM
         self._realm_vm.addons_updated.connect(self._addon_view.update_from_api)
+        self._addon_view.install_completed.connect(self._realm_vm.refresh_all)
         # Refresh accounting dropdowns after data sync (detector will have installs by then)
         self._realm_vm.data_updated.connect(self._acct_view.populate)
 
@@ -148,6 +149,7 @@ class AppWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         self._app_vm.status_changed.connect(self._status_bar.set_status)
+        self._app_vm.update_available.connect(self._status_bar.set_update_available)
         self._status_bar.settings_requested.connect(self._open_settings)
         self._status_bar.logs_requested.connect(self._open_log_viewer)
         self._app_vm.authenticated_changed.connect(self._update_status)
@@ -253,8 +255,11 @@ class AppWindow(QMainWindow):
         if not has_wow:
             self._app_vm.set_status("⚠ WoW directory not configured")
             return
-        if self._realm_vm.apphelper_missing:
-            self._app_vm.set_status("⚠ TradeSkillMaster_AppHelper addon not found")
+        missing_gv = self._realm_vm.apphelper_missing_gv
+        if missing_gv:
+            from tsm.wow.utils import apphelper_addon_name
+            names = ", ".join(apphelper_addon_name(gv) for gv in missing_gv)
+            self._app_vm.set_status(f"⚠ No {names} installed")
             return
         last = self._realm_vm.last_sync
         if last:

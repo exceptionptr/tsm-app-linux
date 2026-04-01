@@ -8,13 +8,18 @@
 - `refresh_token()` → re-auth with stored credentials
 - `logout()` → clear keyring, reset session
 
-### AuctionDataService (`core/services/auction.py`, 248 lines)
+### AuctionDataService (`core/services/auction.py`)
 
 - `refresh_all_realms()` → `StatusAPI.get()` → diff → download blobs → write Lua → returns `AuctionData`
+  - Classic Era / Anniversary realms are filtered to those with active characters (reads
+    `TradeSkillMaster.lua` + `TradeSkillMaster_AppHelper.lua` via `get_active_factionrealms()`)
+  - Returns `AuctionData(addon_versions=...)` with `last_sync=0` when no WoW dirs found yet
+    (prevents false "AppHelper not found" warning during startup detection)
 - `get_snapshot()` → `AuctionCache.load_statuses()` → `(list[RealmStatus], int)`
 - `add_realm(game_version, realm_id)` → `RealmsAPI.add()`
 - `remove_realm(game_version, region, name)` → `RealmsAPI.remove()`
-- `_get_existing_app_data_files()` — scans WoW installs for addon dirs (gated on `gv_path.is_dir()`)
+- `_get_existing_app_data_files()` - reads cached `WoWDetectorService.installs` (no scan triggered),
+  returns `{gv_dir: [AppDataFile, ...]}` for each game-version directory that exists
 
 ### UpdateService (`core/services/updater.py`, 216 lines)
 

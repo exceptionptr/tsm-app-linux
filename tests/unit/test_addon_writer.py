@@ -13,9 +13,11 @@ async def test_write_data_no_detector():
     data = AuctionData()
     result = await svc.write_data(data)
     assert result == []
+    assert data.apphelper_missing_gv is None
 
 
-async def test_write_data_addon_dir_missing(tmp_path):
+async def test_write_data_no_gv_dirs(tmp_path):
+    """No game-version directories under the WoW base: apphelper_missing_gv stays None."""
     install = MagicMock()
     install.path = str(tmp_path)
     detector = MagicMock()
@@ -24,6 +26,21 @@ async def test_write_data_addon_dir_missing(tmp_path):
     data = AuctionData()
     result = await svc.write_data(data)
     assert result == []
+    assert data.apphelper_missing_gv is None
+
+
+async def test_write_data_addon_dir_missing(tmp_path):
+    """Game-version dir exists but AppHelper folder is absent: gv is in missing list."""
+    (tmp_path / "_retail_").mkdir()
+    install = MagicMock()
+    install.path = str(tmp_path)
+    detector = MagicMock()
+    detector.get_installs = AsyncMock(return_value=[install])
+    svc = AddonWriterService(wow_detector=detector)
+    data = AuctionData()
+    result = await svc.write_data(data)
+    assert result == []
+    assert data.apphelper_missing_gv == ["_retail_"]
 
 
 async def test_write_data_calls_lua_writer(tmp_path):
@@ -45,3 +62,4 @@ async def test_write_data_calls_lua_writer(tmp_path):
 
     mock_write.assert_called_once_with(data, addon_dir, gv_dir="_retail_")
     assert result == [expected_path]
+    assert data.apphelper_missing_gv == []

@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.3
+Version:        1.1.4
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,16 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Wed Apr 01 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.4-1
+- Add: update notification - amber status bar label when newer GitHub release
+  tag detected at startup; fire-and-forget, does not block startup
+- Fix: AppHelper detection now per-game-version and filesystem-based; reports
+  correct addon name per version (-Classic, -Progression, -Anniversary);
+  eliminates false positives; warning clears immediately after addon install
+- Fix: log viewer opens instantly after long sessions (O(n) row height calculation)
+- Fix: Classic Era and Anniversary realm list filtered to active-character realms,
+  matching Windows app behavior; reads TradeSkillMaster SavedVariables
+
 * Sun Mar 29 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.3-1
 - Change: WoW path storage unified to base directory; game-version paths derived
   on demand. Old configs with _retail_ paths migrated automatically.

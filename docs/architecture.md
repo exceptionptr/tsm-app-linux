@@ -19,8 +19,8 @@ Single-process Linux desktop app (PySide6 GUI + asyncio background loop).
 
 ## Entry Points
 
-- `tsm/__main__.py` — CLI: `--version`, `--skip-detection`, `--skip-auto-sync`, `--skip-auto-backup`
-- `tsm/app.py:create_app()` — DI root: wires all services, returns `(QApplication, AppWindow, AsyncRunner, AuthService)`
+- `tsm/__main__.py` - CLI: `--version`, `--skip-detection`, `--skip-auto-sync`, `--skip-auto-backup`
+- `tsm/app.py:create_app()` - DI root: wires all services, returns `(QApplication, AppWindow, AsyncRunner, AuthService)`
 
 ## Layer Map
 

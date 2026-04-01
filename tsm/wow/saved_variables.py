@@ -16,6 +16,29 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def get_factionrealm_scopes(path: Path) -> list[str]:
+    """Return active faction-realm scope keys from a TradeSkillMaster.lua file.
+
+    Reads the nested ``["_scopeKeys"]["factionrealm"]`` array that TSM writes for
+    each faction-realm the user has characters on.  Values are in TSM's internal
+    format: ``"Faction - Realm"`` (e.g. ``"Horde - Iceblood"``).
+
+    Returns an empty list when the file is absent, the key is missing, or parsing
+    fails.
+    """
+    if not path.exists():
+        return []
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+        m = re.search(r'"factionrealm"\]\s*=\s*\{([^}]*)\}', text, re.DOTALL)
+        if not m:
+            return []
+        return re.findall(r'\[\d+\]\s*=\s*"([^"]*)"', m.group(1))
+    except Exception:
+        logger.exception("Failed to read factionrealm scopes: %s", path)
+        return []
+
+
 def read_saved_variables(path: Path) -> dict[str, str]:
     """Parse a WoW SavedVariables.lua file into a Python dict.
 

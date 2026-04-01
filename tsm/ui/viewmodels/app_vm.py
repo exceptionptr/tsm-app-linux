@@ -18,6 +18,7 @@ class AppViewModel(QObject):
     backup_notification = Signal(str)  # emitted from any thread via invokeMethod
     addon_notification = Signal(str)  # emitted when addon files are actually installed
     realm_data_received = Signal(object)  # emitted by scheduler job with AuctionData result
+    update_available = Signal(str)  # emitted when a newer GitHub release tag is found
 
     def __init__(self, auth_service=None, parent: QObject | None = None):
         super().__init__(parent)
