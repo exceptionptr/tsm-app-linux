@@ -4,6 +4,45 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.4] - 2026-04-01
+
+### Added
+
+- **Update notification in status bar.** At startup the app queries the GitHub
+  tags API and shows an amber "New version vX.Y.Z available" label in the status
+  bar when a newer release is found. The check runs as a fire-and-forget task and
+  does not delay app startup.
+
+### Fixed
+
+- **Log viewer opens instantly** after long sessions. The previous implementation
+  used Qt's `ResizeToContents` vertical header mode, which recalculated all row
+  heights after every cell insertion (O(n²)). After 8+ hours of running
+  (~600-1200 log records) this caused a multi-minute freeze when opening the
+  window. Row heights are now calculated once after the table is fully populated.
+- **AppHelper detection is now per-game-version and filesystem-based.** The old
+  heuristic (empty realm_statuses + non-zero last_sync = AppHelper missing) is
+  replaced by a direct check: `write_data()` tests whether the addon folder
+  exists for each installed game version and records which are missing. Each
+  game version reports its correct addon name in the warning:
+  `TradeSkillMaster_AppHelper` for retail, `TradeSkillMaster_AppHelper-Classic`
+  for Classic Era, `-Progression` for BCC/Progression, `-Anniversary` for
+  Anniversary. False positives at startup are eliminated because the check only
+  runs after `write_data()` has had a chance to scan the filesystem.
+- **AppHelper warning clears immediately** when the addon is installed via the
+  Addon Versions tab. Previously the warning would persist until the next
+  5-minute scheduled poll. Installing any addon now triggers an immediate
+  `refresh_all_realms()` call that re-evaluates AppHelper presence.
+- **Classic Era and Anniversary realm list** now only shows realms the user has
+  active characters on, matching Windows app behavior. Previously all
+  Classic/Anniversary realms from the user's TSM account were displayed even
+  when the user had no characters on those servers. The app reads
+  `TradeSkillMaster.lua` and `TradeSkillMaster_AppHelper.lua` SavedVariables to
+  determine active faction-realms, hiding game versions with no local characters
+  entirely. Retail and Progression realms are unaffected.
+
+---
+
 ## [1.1.3] - 2026-03-29
 
 ### Changed

@@ -16,6 +16,7 @@ Status API keys → game version mapping:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from pathlib import Path
@@ -81,22 +82,53 @@ class AuctionDataService:
 
         data.addon_versions = result.get("addons", [])
 
-        existing = await self._get_existing_app_data_files()
+        existing = self._get_existing_app_data_files()
 
-        # Guard: no valid WoW version directories found, return early with no realms
+        # Guard: no valid WoW version directories found. Return without last_sync so
+        # the viewmodel does not flag AppHelper as missing - this is a transient state
+        # (detection pending) rather than a confirmed AppHelper absence.
         if not any(existing.values()):
             logger.info("No valid WoW game-version directory found, realm list will be empty")
-            return data
+            return AuctionData(addon_versions=data.addon_versions)
+
+        loop = asyncio.get_running_loop()
+        detector = self._addon_writer.get_detector() if self._addon_writer is not None else None
+        installs = detector.installs if detector is not None else []
 
         for realms_key, regions_key, gv_dir, api_gv, region_transform in _REALM_CONFIGS:
             app_data = existing.get(gv_dir)
             if not app_data:
                 continue  # AppHelper not installed for this game version, skip
 
+            # Classic Era and Anniversary: only include realms the user has active
+            # characters on.  Mirrors the Windows app's get_active_*_factionrealms()
+            # filter so users who only play retail are not shown hundreds of extra rows.
+            active_factionrealms: set[tuple[str, str]] | None = None
+            if gv_dir in ("_classic_era_", "_anniversary_"):
+                from tsm.wow.accounts import get_active_factionrealms
+
+                active: set[tuple[str, str]] = set()
+                for install in installs:
+                    active |= await loop.run_in_executor(
+                        None, get_active_factionrealms, install, gv_dir
+                    )
+                if not active:
+                    # No characters on this game version - skip all rows for it
+                    logger.debug("No active %s characters found, skipping realm list", gv_dir)
+                    continue
+                active_factionrealms = active
+
             # Process realms, dynamic key access requires cast (key is a runtime variable)
             for realm in cast(list[RealmEntry], result.get(realms_key, [])):
                 name = realm.get("name", "")
                 region = realm.get("region", "")
+
+                # Character filter: "Classic-US" -> "US", match against active set
+                if active_factionrealms is not None:
+                    region_code = region.split("-")[-1]
+                    if (region_code, name) not in active_factionrealms:
+                        continue
+
                 strings = realm.get("appDataStrings", {})
                 # Apply display-name transform (BCC-EU → Progression-EU)
                 disp_region = region_transform(region) if region_transform else region
@@ -126,8 +158,18 @@ class AuctionDataService:
                         rs.last_updated = pending[_REALM_LAST_UPDATED_TAG]["lastModified"]
 
             # Process regions, dynamic key access requires cast (key is a runtime variable)
+            active_regions = (
+                {r[0] for r in active_factionrealms} if active_factionrealms is not None else None
+            )
             for region_rec in cast(list[RealmEntry], result.get(regions_key, [])):
                 name = region_rec.get("name", "")
+
+                # Character filter: only include regions the user has active realms in
+                if active_regions is not None:
+                    region_code = name.split("-")[-1]  # "Classic-US" -> "US"
+                    if region_code not in active_regions:
+                        continue
+
                 strings = region_rec.get("appDataStrings", {})
                 pending = _pending_strings(strings, name, app_data)
 
@@ -185,13 +227,16 @@ class AuctionDataService:
             logger.exception("Failed to download %s/%s", tag, name)
             return None
 
-    async def _get_existing_app_data_files(self) -> dict[str, list[AppDataFile]]:
+    def _get_existing_app_data_files(self) -> dict[str, list[AppDataFile]]:
         """Return {game_version_dir: [AppDataFile, ...]} for each game version.
 
         Collects one AppDataFile per WoW install per game version. Multiple
         files arise when the user has more than one WoW installation (e.g. two
         different Wine prefixes). Callers use the minimum timestamp across all
         files so that a re-download is triggered when any install is behind.
+
+        Uses the cached install list from WoWDetectorService without triggering
+        a filesystem scan. Detection is handled by the scheduler at startup.
         """
         from tsm.wow.utils import appdata_lua_path
 
@@ -204,7 +249,7 @@ class AuctionDataService:
         detector = self._addon_writer.get_detector() if self._addon_writer is not None else None
         if detector is None:
             return result
-        installs = await detector.get_installs()
+        installs = detector.installs  # sync: no scan triggered here
         for install in installs:
             base = Path(install.path)
             for gv in result:

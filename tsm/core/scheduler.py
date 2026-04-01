@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from tsm.workers.jobs import job_auction_refresh, job_auth_refresh, job_backup
+from tsm.workers.jobs import job_auction_refresh, job_auth_refresh, job_backup, job_check_update
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +71,7 @@ class ServiceContainer:
     addon_notify_fn: Callable[[str], None] | None = None
     auction_data_fn: Callable[[AuctionData], None] | None = None
     wow_warn_fn: Callable[[str], None] | None = None
+    update_notify_fn: Callable[[str], None] | None = None
 
 
 class JobScheduler:
@@ -110,6 +111,9 @@ class JobScheduler:
             # Startup: resolve WoW installs from config, or auto-detect once.
             # No periodic rescanning needed; user can add paths via Settings.
             await _resolve_wow_installs(svc, skip_scan=skip_detection)
+
+            # One-shot update check: fire and forget, does not block scheduler start.
+            asyncio.create_task(job_check_update(services=svc))
 
             async with scheduler:
                 # Auction poller: check TSM API every 5 minutes for new data.

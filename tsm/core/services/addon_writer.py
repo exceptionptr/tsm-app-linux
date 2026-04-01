@@ -29,11 +29,21 @@ class AddonWriterService:
         return self._detector.installs if self._detector is not None else []
 
     async def write_data(self, data: AuctionData) -> list[Path]:
-        """Write auction data Lua files to all detected WoW installs."""
+        """Write auction data Lua files to all detected WoW installs.
+
+        Also sets data.apphelper_missing_gv:
+          None  - no game-version directories found to check
+          []    - every installed game version has its AppHelper addon folder
+          [gv]  - these game-version dirs exist but their AppHelper folder is absent
+        """
         written: list[Path] = []
         if self._detector is None:
             logger.warning("No WoW detector configured")
             return written
+
+        # Per-gv: True once the AppHelper folder is found in at least one install.
+        # Only populated for gv dirs that were actually found on disk.
+        gv_found: dict[str, bool] = {}
 
         installs = await self._detector.get_installs()
         for install in installs:
@@ -42,11 +52,20 @@ class AddonWriterService:
                 addon_folder = ah_dir(base, gv)
                 if not addon_folder.exists():
                     logger.debug("AppHelper addon not found: %s", addon_folder)
+                    if gv not in gv_found:
+                        gv_found[gv] = False
                     continue
+                gv_found[gv] = True
                 try:
                     path = self._lua_writer.write_app_data(data, addon_folder, gv_dir=gv)
                     written.append(path)
                     logger.info("Wrote AppData.lua to %s", path)
                 except Exception:
                     logger.exception("Failed to write AppData.lua to %s", addon_folder)
+
+        if not gv_found:
+            # No game-version directories scanned at all - leave as None.
+            return written
+
+        data.apphelper_missing_gv = [gv for gv, found in gv_found.items() if not found]
         return written

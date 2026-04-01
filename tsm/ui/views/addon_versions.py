@@ -347,6 +347,8 @@ class _AddonGroupWidget(QWidget):
 
 
 class AddonVersionsView(QWidget):
+    install_completed: Signal = Signal()  # emitted after any successful addon install
+
     def __init__(self, wow_detector=None, update_service=None, parent=None):
         super().__init__(parent)
         self._detector = wow_detector
@@ -440,6 +442,7 @@ class AddonVersionsView(QWidget):
         def _done(_) -> None:
             self._downloading.discard(name)
             self._refresh()
+            self.install_completed.emit()
 
         def _error(err: object) -> None:
             logger.error("Install failed for %s: %s", name, err)

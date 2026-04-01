@@ -132,6 +132,7 @@ def create_app(
         addon_notify_fn=_addon_notify,
         auction_data_fn=app_vm.realm_data_received.emit,
         wow_warn_fn=_wow_warn,
+        update_notify_fn=app_vm.update_available.emit,
     )
     scheduler = JobScheduler(
         svc_container,

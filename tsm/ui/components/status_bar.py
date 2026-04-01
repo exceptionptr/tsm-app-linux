@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSize, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QIcon
-from PySide6.QtWidgets import QLabel, QStatusBar
+from PySide6.QtWidgets import QLabel, QSizePolicy, QStatusBar
 
 from tsm.ui.components.hover_button import HoverIconButton
 
@@ -42,6 +42,12 @@ class TSMStatusBar(QStatusBar):
         self._status_label = QLabel("Checking status…")
         self.addWidget(self._status_label, 1)
 
+        self._update_label = QLabel()
+        self._update_label.setStyleSheet("color: #f0a500;")
+        self._update_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self._update_label.setVisible(False)
+        self.addWidget(self._update_label, 0)
+
         github_btn = _make_statusbar_button(_GITHUB_ICON, _GITHUB_ICON_HOVER, "View on GitHub")
         github_btn.clicked.connect(
             lambda: QDesktopServices.openUrl(QUrl(_GITHUB_URL))
@@ -55,6 +61,11 @@ class TSMStatusBar(QStatusBar):
         settings_btn = _make_statusbar_button(_SETTINGS_ICON, _SETTINGS_ICON_HOVER, "Settings")
         settings_btn.clicked.connect(self.settings_requested)
         self.addPermanentWidget(settings_btn)
+
+    def set_update_available(self, version: str) -> None:
+        """Show an amber update notification label to the left of the icon buttons."""
+        self._update_label.setText(f"New version {version} available")
+        self._update_label.setVisible(True)
 
     def set_status(self, msg: str) -> None:
         self._status_label.setText(msg)

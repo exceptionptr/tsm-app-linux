@@ -67,6 +67,11 @@ class AuctionData(BaseModel):
     realm_statuses: list[RealmStatus] = Field(default_factory=list)
     # Addon versions from status API: [{name, version_str}, ...]
     addon_versions: list[AddonVersionInfo] = Field(default_factory=list)
+    # Populated by write_data() after checking each game-version directory.
+    # None  = write_data() not yet run / no game-version dirs found.
+    # []    = every installed game version has its AppHelper addon folder.
+    # [gv]  = these game versions are installed but their AppHelper folder is absent.
+    apphelper_missing_gv: list[str] | None = None
 
     def add_entry(
         self,

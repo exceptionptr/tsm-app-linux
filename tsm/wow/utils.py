@@ -35,6 +35,15 @@ def addon_dir(base: Path, gv: str) -> Path:
     return base / gv / "Interface" / "AddOns"
 
 
+def apphelper_addon_name(gv: str) -> str:
+    """Return the full addon folder name for a given game-version directory.
+
+    e.g. '_retail_' -> 'TradeSkillMaster_AppHelper'
+         '_classic_era_' -> 'TradeSkillMaster_AppHelper-Classic'
+    """
+    return f"TradeSkillMaster_AppHelper{_APPHELPER_SUFFIX.get(gv, '')}"
+
+
 def apphelper_dir(base: Path, gv: str) -> Path:
     """Return the TradeSkillMaster_AppHelper addon directory for a given game version.
 
