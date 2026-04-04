@@ -430,3 +430,8 @@ QLabel#addon-group-summary {
     font-weight: normal;
     background: transparent;
 }
+QLabel#addon-group-wow {
+    color: #555555;
+    font-weight: normal;
+    background: transparent;
+}

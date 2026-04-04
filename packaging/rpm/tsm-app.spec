@@ -78,6 +78,7 @@ ep.write_text(''.join(lines))
   reference; eliminates false "AppHelper missing" for Classic/Era/Anniversary
 - Fix: sync skips game versions without AppHelper folder; previously downloaded
   all blobs and discarded them
+- Add: Addon Versions tab group headers show WoW installation status per game version
 
 * Wed Apr 01 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.4-1
 - Add: update notification - amber status bar label when newer GitHub release

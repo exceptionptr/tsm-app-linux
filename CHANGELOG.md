@@ -22,6 +22,12 @@ All notable changes to tsm-app-linux are documented here.
   version where the AppHelper addon folder is absent, matching Windows app
   behavior.
 
+### Added
+
+- **Addon Versions tab shows WoW installation status per game version.**
+  Each group header (Retail, Classic, Progression, Anniversary) now displays
+  a grey label indicating whether that game version is installed on disk.
+
 ---
 
 ## [1.1.4] - 2026-04-01
