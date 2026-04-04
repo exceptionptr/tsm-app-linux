@@ -99,8 +99,12 @@ def test_wtf_accounts_dir():
 
 
 def test_installed_versions_returns_existing(tmp_path):
-    (tmp_path / "_retail_").mkdir()
-    (tmp_path / "_classic_era_").mkdir()
+    retail = tmp_path / "_retail_"
+    retail.mkdir()
+    (retail / "Wow.exe").touch()
+    classic = tmp_path / "_classic_era_"
+    classic.mkdir()
+    (classic / "WowClassic.exe").touch()
     result = installed_versions(tmp_path)
     assert "_retail_" in result
     assert "_classic_era_" in result

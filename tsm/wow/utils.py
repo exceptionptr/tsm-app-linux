@@ -65,8 +65,13 @@ def wtf_accounts_dir(base: Path, gv: str) -> Path:
 
 
 def installed_versions(base: Path) -> list[str]:
-    """Return which game versions exist as directories under this base."""
-    return [gv for gv in _GAME_VERSIONS if (base / gv).is_dir()]
+    """Return which game versions are installed under this base.
+
+    A game version is considered installed only if its directory exists AND
+    contains a WoW executable - a directory left behind after uninstalling
+    via Battle.net will not match.
+    """
+    return [gv for gv in _GAME_VERSIONS if is_valid_wow_version_dir(base / gv)]
 
 
 def is_valid_wow_version_dir(path: Path) -> bool:
