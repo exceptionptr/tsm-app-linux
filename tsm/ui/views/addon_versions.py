@@ -167,6 +167,10 @@ class _GroupHeader(QWidget):
         name_lbl.setObjectName("addon-group-name")
         layout.addWidget(name_lbl)
 
+        self._wow_lbl = QLabel("")
+        self._wow_lbl.setObjectName("addon-group-wow")
+        layout.addWidget(self._wow_lbl)
+
         layout.addStretch()
 
         self._summary = QLabel("")
@@ -178,6 +182,15 @@ class _GroupHeader(QWidget):
 
     def set_summary(self, text: str) -> None:
         self._summary.setText(text)
+
+    def set_wow_installed(self, installed: bool | None) -> None:
+        """Show WoW installation status. None hides the label (state unknown)."""
+        if installed is None:
+            self._wow_lbl.setText("")
+        elif installed:
+            self._wow_lbl.setText("Installed")
+        else:
+            self._wow_lbl.setText("Not installed")
 
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
@@ -326,7 +339,7 @@ class _AddonGroupWidget(QWidget):
 
         # Update header summary
         if installed_count == 0:
-            summary = "not installed"
+            summary = ""
         elif installed_count == 1:
             summary = "1 installed"
         else:
@@ -344,6 +357,10 @@ class _AddonGroupWidget(QWidget):
         elif self._expanded:
             # Already expanded - keep the height constraint removed
             self._body.setMaximumHeight(16777215)
+
+    def set_wow_installed(self, installed: bool | None) -> None:
+        """Delegate WoW installation status to the group header."""
+        self._header.set_wow_installed(installed)
 
 
 class AddonVersionsView(QWidget):
@@ -410,6 +427,7 @@ class AddonVersionsView(QWidget):
             )
 
         installed = self._get_installed_versions()
+        wow_installed_suffixes = self._get_wow_installed_suffixes()
 
         # Group addons by suffix and update each group widget
         groups: dict[str, list[AddonVersionInfo]] = {}
@@ -428,6 +446,10 @@ class AddonVersionsView(QWidget):
                     on_install=self._install_or_update_addon,
                     downloading=self._downloading,
                 )
+            if wow_installed_suffixes is None:
+                grp.set_wow_installed(None)
+            else:
+                grp.set_wow_installed(suffix in wow_installed_suffixes)
 
     def _install_or_update_addon(self, name: str, version: str) -> None:
         """Download and install the addon via AsyncBridge, then refresh the view."""
@@ -504,6 +526,34 @@ class AddonVersionsView(QWidget):
             except OSError:
                 logger.warning("Failed to delete addon folder: %s", path, exc_info=True)
         self._refresh()
+
+    def _get_wow_installed_suffixes(self) -> set[str] | None:
+        """Return the set of suffixes whose WoW game-version directory exists on disk.
+
+        Returns None if no detector is available (state unknown).
+        """
+        if self._detector is None:
+            return None
+        _game_ver_by_suffix = {
+            "": "_retail_",
+            "-Classic": "_classic_era_",
+            "-Progression": "_classic_",
+            "-Anniversary": "_anniversary_",
+        }
+        result: set[str] = set()
+        try:
+            from tsm.wow.utils import installed_versions, normalize_wow_base
+
+            installs = self._detector.installs if self._detector is not None else []
+            for install in installs:
+                base = normalize_wow_base(Path(install.path))
+                present = installed_versions(base)
+                for suffix, gv in _game_ver_by_suffix.items():
+                    if gv in present:
+                        result.add(suffix)
+        except Exception:
+            logger.debug("Could not determine WoW installed versions", exc_info=True)
+        return result
 
     def _get_installed_versions(self) -> dict[str, tuple[int, str]]:
         """Return {addon_name: (version_type, version_str)} for all installed addons.

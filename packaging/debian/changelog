@@ -1,3 +1,16 @@
+tsm-app (1.1.5-1) stable; urgency=medium
+
+  * Fix: AppHelper addon folder name corrected for non-retail game versions;
+    folder is always TradeSkillMaster_AppHelper regardless of game version,
+    confirmed against Windows reference app; eliminates false "AppHelper
+    missing" warnings for Classic, Classic Era, and Anniversary users.
+  * Fix: sync loop skips game versions where AppHelper folder is absent;
+    previously all realm blobs were downloaded and silently discarded.
+  * Add: Addon Versions tab group headers now show WoW installation status
+    (installed/not installed) per game version as a grey label.
+
+ -- tsm-app <noreply@tsm-app>  Fri, 04 Apr 2026 00:00:00 +0000
+
 tsm-app (1.1.4-1) stable; urgency=medium
 
   * Add: update notification - amber status bar label when newer GitHub release

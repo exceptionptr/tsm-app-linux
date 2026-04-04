@@ -4,6 +4,32 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.5] - 2026-04-04
+
+### Fixed
+
+- **AppHelper addon folder name corrected for non-retail game versions.**
+  The app was looking for `TradeSkillMaster_AppHelper-Progression` (and
+  `-Classic`, `-Anniversary`) on disk, but the actual installed folder is
+  always named `TradeSkillMaster_AppHelper` regardless of game version -
+  confirmed against the Windows reference app. This caused a permanent
+  "AppHelper missing" warning for Classic, Classic Era, and Anniversary
+  users even when AppHelper was correctly installed.
+- **Sync no longer runs for game versions without AppHelper installed.**
+  Previously, if a game-version directory existed (e.g. `_classic_/`) but
+  AppHelper was not installed there, the app would still download all realm
+  data blobs and silently discard them. Now the sync loop skips any game
+  version where the AppHelper addon folder is absent, matching Windows app
+  behavior.
+
+### Added
+
+- **Addon Versions tab shows WoW installation status per game version.**
+  Each group header (Retail, Classic, Progression, Anniversary) now displays
+  a grey label indicating whether that game version is installed on disk.
+
+---
+
 ## [1.1.4] - 2026-04-01
 
 ### Added

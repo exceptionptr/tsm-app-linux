@@ -56,21 +56,21 @@ def test_apphelper_dir_retail():
 def test_apphelper_dir_classic_era():
     base = Path("/home/user/Games/wow")
     assert apphelper_dir(base, "_classic_era_") == Path(
-        "/home/user/Games/wow/_classic_era_/Interface/AddOns/TradeSkillMaster_AppHelper-Classic"
+        "/home/user/Games/wow/_classic_era_/Interface/AddOns/TradeSkillMaster_AppHelper"
     )
 
 
 def test_apphelper_dir_classic_progression():
     base = Path("/home/user/Games/wow")
     assert apphelper_dir(base, "_classic_") == Path(
-        "/home/user/Games/wow/_classic_/Interface/AddOns/TradeSkillMaster_AppHelper-Progression"
+        "/home/user/Games/wow/_classic_/Interface/AddOns/TradeSkillMaster_AppHelper"
     )
 
 
 def test_apphelper_dir_anniversary():
     base = Path("/home/user/Games/wow")
     assert apphelper_dir(base, "_anniversary_") == Path(
-        "/home/user/Games/wow/_anniversary_/Interface/AddOns/TradeSkillMaster_AppHelper-Anniversary"
+        "/home/user/Games/wow/_anniversary_/Interface/AddOns/TradeSkillMaster_AppHelper"
     )
 
 
@@ -86,7 +86,7 @@ def test_appdata_lua_path_classic_era():
     base = Path("/home/user/Games/wow")
     expected = Path(
         "/home/user/Games/wow/_classic_era_/Interface/AddOns"
-        "/TradeSkillMaster_AppHelper-Classic/AppData.lua"
+        "/TradeSkillMaster_AppHelper/AppData.lua"
     )
     assert appdata_lua_path(base, "_classic_era_") == expected
 
@@ -99,8 +99,12 @@ def test_wtf_accounts_dir():
 
 
 def test_installed_versions_returns_existing(tmp_path):
-    (tmp_path / "_retail_").mkdir()
-    (tmp_path / "_classic_era_").mkdir()
+    retail = tmp_path / "_retail_"
+    retail.mkdir()
+    (retail / "Wow.exe").touch()
+    classic = tmp_path / "_classic_era_"
+    classic.mkdir()
+    (classic / "WowClassic.exe").touch()
     result = installed_versions(tmp_path)
     assert "_retail_" in result
     assert "_classic_era_" in result

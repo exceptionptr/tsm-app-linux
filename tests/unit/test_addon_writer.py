@@ -31,7 +31,9 @@ async def test_write_data_no_gv_dirs(tmp_path):
 
 async def test_write_data_addon_dir_missing(tmp_path):
     """Game-version dir exists but AppHelper folder is absent: gv is in missing list."""
-    (tmp_path / "_retail_").mkdir()
+    retail = tmp_path / "_retail_"
+    retail.mkdir()
+    (retail / "Wow.exe").touch()
     install = MagicMock()
     install.path = str(tmp_path)
     detector = MagicMock()
@@ -47,6 +49,7 @@ async def test_write_data_calls_lua_writer(tmp_path):
     # New behavior: install.path is the WoW base dir; code iterates installed game versions
     addon_dir = tmp_path / "_retail_" / "Interface" / "AddOns" / "TradeSkillMaster_AppHelper"
     addon_dir.mkdir(parents=True)
+    (tmp_path / "_retail_" / "Wow.exe").touch()
     expected_path = addon_dir / "AppData.lua"
 
     install = MagicMock()
