@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.4
+Version:        1.1.5
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,13 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Fri Apr 04 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.5-1
+- Fix: AppHelper folder name corrected for non-retail game versions; always
+  TradeSkillMaster_AppHelper regardless of version, confirmed against Windows
+  reference; eliminates false "AppHelper missing" for Classic/Era/Anniversary
+- Fix: sync skips game versions without AppHelper folder; previously downloaded
+  all blobs and discarded them
+
 * Wed Apr 01 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.4-1
 - Add: update notification - amber status bar label when newer GitHub release
   tag detected at startup; fire-and-forget, does not block startup

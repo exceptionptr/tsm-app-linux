@@ -238,7 +238,7 @@ class AuctionDataService:
         Uses the cached install list from WoWDetectorService without triggering
         a filesystem scan. Detection is handled by the scheduler at startup.
         """
-        from tsm.wow.utils import appdata_lua_path
+        from tsm.wow.utils import appdata_lua_path, apphelper_dir
 
         result: dict[str, list[AppDataFile]] = {
             "_retail_": [],
@@ -253,11 +253,12 @@ class AuctionDataService:
         for install in installs:
             base = Path(install.path)
             for gv in result:
-                gv_path = base / gv
-                # Only requires the game-version directory to exist - WoW.exe may be
-                # absent on some Lutris/Wine setups. AppDataFile handles a missing
-                # AppData.lua gracefully (AppHelper not yet installed).
-                if gv_path.is_dir():
+                # Gate on the AppHelper addon folder existing, not just the game-version
+                # directory. Mirrors Windows get_app_data() which returns None when
+                # AppHelper is absent, skipping sync for that game version entirely.
+                # AppDataFile still handles a missing AppData.lua gracefully so that
+                # AppData.lua is created on first run after AppHelper is installed.
+                if apphelper_dir(base, gv).is_dir():
                     result[gv].append(AppDataFile(appdata_lua_path(base, gv)))
         return result
 

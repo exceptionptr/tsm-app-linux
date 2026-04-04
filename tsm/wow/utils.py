@@ -47,14 +47,11 @@ def apphelper_addon_name(gv: str) -> str:
 def apphelper_dir(base: Path, gv: str) -> Path:
     """Return the TradeSkillMaster_AppHelper addon directory for a given game version.
 
-    Each game client uses a differently named addon folder:
-      _retail_:      .../TradeSkillMaster_AppHelper
-      _classic_era_: .../TradeSkillMaster_AppHelper-Classic
-      _classic_:     .../TradeSkillMaster_AppHelper-Progression
-      _anniversary_: .../TradeSkillMaster_AppHelper-Anniversary
+    The addon folder is always named TradeSkillMaster_AppHelper regardless of game version.
+    The game version suffix only determines which game version directory to use, not
+    the addon folder name itself (confirmed from the Windows app reference implementation).
     """
-    suffix = _APPHELPER_SUFFIX.get(gv, "")
-    return base / gv / "Interface" / "AddOns" / f"TradeSkillMaster_AppHelper{suffix}"
+    return base / gv / "Interface" / "AddOns" / "TradeSkillMaster_AppHelper"
 
 
 def appdata_lua_path(base: Path, gv: str) -> Path:
