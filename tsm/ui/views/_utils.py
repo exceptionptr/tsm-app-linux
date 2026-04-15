@@ -45,33 +45,79 @@ def start_rate_limit_countdown(
         button.setText(label)
 
 
-def build_realm_tree(data: dict) -> dict[str, dict[str, list[dict]]]:
-    """Parse raw API realms response into a {gv_label: {region: [realm_dict]}} tree.
+_GV_LABEL_MAP: dict[str, tuple[str, str]] = {
+    "retail": ("Retail", "retail"),
+    "bcc": ("Progression", "bcc"),
+    "classic": ("Classic Era", "classic"),
+    "anniversary": ("Anniversary", "anniversary"),
+}
 
-    Only "retail" and "bcc" game versions are included (matches original TSM behaviour).
+# Status endpoint keys that provide realm lists for game versions not covered
+# by the realms2/list endpoint.  Maps status key -> (gv_label, api_gv).
+_STATUS_REALM_KEYS: dict[str, tuple[str, str]] = {
+    "extraAnniversaryRealms": ("Anniversary", "anniversary"),
+    "extraClassicRealms": ("Classic Era", "classic"),
+}
+
+
+def build_realm_tree(
+    realm_list: dict,
+    status: dict | None = None,
+) -> dict[str, dict[str, list[dict]]]:
+    """Parse API responses into a {gv_label: {region: [realm_dict]}} tree.
+
+    *realm_list* comes from ``realms2/list`` (has retail + bcc).
+    *status* comes from ``GET /v2/status`` and supplies anniversary / classic
+    realms via ``extraAnniversaryRealms`` / ``extraClassicRealms``.
     Each realm dict has keys: id, name, gameVersion.
     """
     tree: dict[str, dict[str, list[dict]]] = {}
-    for game_ver, realms in data.items():
+
+    # 1) realms2/list — retail & bcc (and anything else the API returns)
+    for game_ver, realms in realm_list.items():
         if not isinstance(realms, list):
             continue
-        if game_ver == "retail":
-            gv_label, api_gv = "Retail", "retail"
-        elif game_ver == "bcc":
-            gv_label, api_gv = "Progression", "bcc"
-        else:
+        mapping = _GV_LABEL_MAP.get(game_ver)
+        if mapping is None:
             continue
-        tree.setdefault(gv_label, {})
-        for realm in realms:
-            region = realm.get("region", "")
-            tree[gv_label].setdefault(region, []).append(
-                {
-                    "id": realm.get("id", 0),
-                    "name": realm.get("name", ""),
-                    "gameVersion": api_gv,
-                }
-            )
+        gv_label, api_gv = mapping
+        _insert_realms(tree, gv_label, api_gv, realms)
+
+    # 2) status endpoint — anniversary & classic era
+    if status:
+        for status_key, (gv_label, api_gv) in _STATUS_REALM_KEYS.items():
+            realms = status.get(status_key, [])
+            if isinstance(realms, list) and realms:
+                _insert_realms(tree, gv_label, api_gv, realms)
+
     for gv in tree.values():
         for region in gv:
             gv[region].sort(key=lambda r: r["name"])
     return tree
+
+
+def _insert_realms(
+    tree: dict[str, dict[str, list[dict]]],
+    gv_label: str,
+    api_gv: str,
+    realms: list[dict],
+) -> None:
+    gv_node = tree.setdefault(gv_label, {})
+    seen: set[tuple[str, str]] = set()
+    for existing_realms in gv_node.values():
+        for r in existing_realms:
+            seen.add((r.get("name", ""), r.get("region", "")))
+
+    for realm in realms:
+        name = realm.get("name", "")
+        region = realm.get("region", "")
+        if (name, region) in seen:
+            continue
+        seen.add((name, region))
+        gv_node.setdefault(region, []).append(
+            {
+                "id": realm.get("id", 0),
+                "name": name,
+                "gameVersion": api_gv,
+            }
+        )
