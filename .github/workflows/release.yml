@@ -239,11 +239,19 @@ jobs:
           tsm-app --version
           PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
 
-  # ── 5. Smoke-test .deb on Ubuntu ─────────────────────────────────────────
+  # ── 5. Smoke-test .deb on Ubuntu 24.04 and 26.04 ─────────────────────────
+  # Depends uses "python3-pyside6 | python3-pyside6.qtXxx" alternatives so a
+  # single .deb works on both: 24.04 satisfies via the monolithic package,
+  # 26.04 satisfies via the individual split packages.
   test-deb:
-    name: Test .deb (Ubuntu)
+    name: Test .deb (${{ matrix.ubuntu }})
     needs: build-deb
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        ubuntu: ["24.04", "26.04"]
+    container:
+      image: ubuntu:${{ matrix.ubuntu }}
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -252,14 +260,18 @@ jobs:
 
       - name: Install .deb
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y \
+          apt-get update -qq
+          apt-get install -y \
+            python3-pyside6 \
+            python3-aiohttp python3-pydantic python3-aiosqlite \
+            python3-keyring python3-yaml || \
+          apt-get install -y \
             python3-pyside6.qtcore python3-pyside6.qtgui \
             python3-pyside6.qtnetwork python3-pyside6.qtsvg \
             python3-pyside6.qtwidgets \
             python3-aiohttp python3-pydantic python3-aiosqlite \
             python3-keyring python3-yaml
-          sudo dpkg -i dist/*.deb
+          dpkg -i dist/*.deb
 
       - name: Smoke test
         run: |
