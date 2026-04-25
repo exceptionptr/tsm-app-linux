@@ -1,3 +1,17 @@
+tsm-app (1.1.6-1) stable; urgency=medium
+
+  * Fix: replace python3-pyside6 with individual Qt module packages
+    (python3-pyside6.qtcore/qtgui/qtnetwork/qtsvg/qtwidgets) - the monolithic
+    package no longer exists on Ubuntu 24.04+.
+  * Fix: bundle APScheduler 4.x, structlog, and tomli-w inside the package at
+    /usr/lib/tsm-app/ - Ubuntu repos only carry APScheduler 3.x which is
+    incompatible with this app; shell wrapper sets PYTHONPATH automatically.
+  * Fix: entry script now uses python3 shebang and version-agnostic install
+    path; the previous pip-generated wrapper used /usr/bin/python (absent on
+    Ubuntu 26.04) and a Python-version-pinned dist-packages directory.
+
+ -- tsm-app <noreply@tsm-app>  Tue, 22 Apr 2026 00:00:00 +0000
+
 tsm-app (1.1.5-1) stable; urgency=medium
 
   * Fix: AppHelper addon folder name corrected for non-retail game versions;

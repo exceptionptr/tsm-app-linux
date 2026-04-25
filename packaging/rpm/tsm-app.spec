@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.5
+Version:        1.1.6
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,11 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Tue Apr 22 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.6-1
+- Fix: Debian .deb packaging for Ubuntu 24.04+/26.04: replace python3-pyside6
+  with individual Qt module packages, bundle APScheduler 4.x/structlog/tomli-w,
+  use python3 shebang and version-agnostic install path
+
 * Fri Apr 04 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.5-1
 - Fix: AppHelper folder name corrected for non-retail game versions; always
   TradeSkillMaster_AppHelper regardless of version, confirmed against Windows

@@ -87,13 +87,18 @@ jobs:
           name: wheel
           path: dist/
 
-      - name: Install wheel into staging tree
+      - name: Build staging tree
         run: |
-          pip install installer
-          python -m installer --destdir=staging dist/*.whl
-
-      - name: Add desktop entry and license
-        run: |
+          # Install tsm package (no deps) into bundle dir
+          pip install --no-deps --target=staging/usr/lib/tsm-app dist/*.whl
+          # Bundle Python deps absent from Debian/Ubuntu repos (matches RPM bundling)
+          pip install --pre --target=staging/usr/lib/tsm-app \
+            "apscheduler>=4.0.0a5,<5" structlog tomli-w
+          # Shell wrapper: python3 shebang, version-agnostic path
+          mkdir -p staging/usr/bin
+          printf '#!/bin/sh\nPYTHONPATH=/usr/lib/tsm-app${PYTHONPATH:+:$PYTHONPATH}\nexport PYTHONPATH\nexec python3 -m tsm "$@"\n' \
+            > staging/usr/bin/tsm-app
+          chmod +x staging/usr/bin/tsm-app
           install -Dm644 packaging/tsm-app.desktop \
             staging/usr/share/applications/tsm-app.desktop
           install -Dm644 LICENSE \
@@ -247,18 +252,19 @@ jobs:
 
       - name: Install .deb
         run: |
-          # python3-pyside6 is not in Ubuntu's default apt repos; install via pip
-          # so the deb's Depends can be satisfied when we force-install the package.
-          pip install PySide6
           sudo apt-get update -qq
           sudo apt-get install -y \
+            python3-pyside6.qtcore python3-pyside6.qtgui \
+            python3-pyside6.qtnetwork python3-pyside6.qtsvg \
+            python3-pyside6.qtwidgets \
             python3-aiohttp python3-pydantic python3-aiosqlite \
-            python3-keyring python3-apscheduler python3-structlog \
-            python3-tomli-w python3-yaml
-          sudo dpkg -i --ignore-depends=python3-pyside6 dist/*.deb
+            python3-keyring python3-yaml
+          sudo dpkg -i dist/*.deb
 
       - name: Smoke test
-        run: tsm-app --version
+        run: |
+          tsm-app --version
+          PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
 
   # ── 6. Create GitHub Release ──────────────────────────────────────────────
   github-release:
