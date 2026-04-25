@@ -4,6 +4,38 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.6] - 2026-04-22
+
+### Added
+
+- **Anniversary and Classic Era realms now appear in the Add Realm dropdown.**
+  The `realms2/list` API only returns Retail and Progression realms. The app
+  now also fetches `extraAnniversaryRealms` and `extraClassicRealms` from the
+  status endpoint and merges them into the dropdown tree, so Anniversary and
+  Classic Era realms can be selected and added.
+- **Character filter relaxed for Anniversary and Classic Era.**
+  Previously, if no active characters were found for these game versions, the
+  entire version was skipped and no realms were shown. Now it falls through
+  without filtering, so manually-added realms still appear before the user has
+  logged into WoW with TSM.
+
+### Fixed
+
+- **Debian .deb package installs correctly on Ubuntu 24.04+ and 26.04.**
+  - `python3-pyside6` (which no longer exists) replaced with the individual
+    module packages: `python3-pyside6.qtcore`, `.qtgui`, `.qtnetwork`,
+    `.qtsvg`, `.qtwidgets`.
+  - APScheduler 4.x, structlog, and tomli-w are now bundled inside the
+    package at `/usr/lib/tsm-app/` (the Ubuntu repos only carry APScheduler
+    3.x which is incompatible). A shell wrapper sets `PYTHONPATH`
+    automatically, matching the approach already used by the RPM package.
+  - Entry script now uses `/usr/bin/python3` instead of the pip-generated
+    `/usr/bin/python` wrapper (which does not exist on Ubuntu 26.04).
+  - Install path is no longer pinned to a specific Python version directory;
+    the bundled layout works across all Python 3.x versions.
+
+---
+
 ## [1.1.5] - 2026-04-04
 
 ### Fixed

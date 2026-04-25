@@ -417,14 +417,24 @@ class AppWindow(QMainWindow):
             return
         from tsm.workers.bridge import AsyncBridge
 
+        async def _fetch_both():
+            realm_list = await self._api_client.realms.list()
+            status = await self._api_client.status.get()
+            return realm_list, status
+
         bridge = AsyncBridge(self)
         bridge.result_ready.connect(self._on_realm_list_fetched)
-        bridge.run(self._api_client.realms.list())
+        bridge.run(_fetch_both())
 
     def _on_realm_list_fetched(self, data) -> None:
-        if not isinstance(data, dict):
+        if not isinstance(data, tuple) or len(data) != 2:
             return
-        self._realm_tree_cache = build_realm_tree(data)
+        realm_list, status = data
+        if not isinstance(realm_list, dict):
+            realm_list = {}
+        if not isinstance(status, dict):
+            status = {}
+        self._realm_tree_cache = build_realm_tree(realm_list, status)
         self._realm_view.set_realm_tree(self._realm_tree_cache)
 
     def on_authenticated(self, session) -> None:

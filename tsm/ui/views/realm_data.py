@@ -127,7 +127,7 @@ class RealmDataView(QWidget):
 
         # Left group: realm selectors + add button
         self._gv_combo = QComboBox()
-        self._gv_combo.setFixedWidth(110)
+        self._gv_combo.setFixedWidth(130)
         self._gv_combo.currentIndexChanged.connect(self._on_gv_changed)
         outer.addWidget(self._gv_combo)
 
