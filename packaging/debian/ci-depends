@@ -1,1 +1,1 @@
-python3 (>= 3.11), python3-pyside6 | python3-pyside6.qtcore, python3-pyside6 | python3-pyside6.qtgui, python3-pyside6 | python3-pyside6.qtnetwork, python3-pyside6 | python3-pyside6.qtsvg, python3-pyside6 | python3-pyside6.qtwidgets, python3-aiohttp, python3-keyring, python3-pydantic, python3-aiosqlite, python3-yaml
+python3 (>= 3.11), python3-pyside6.qtcore, python3-pyside6.qtgui, python3-pyside6.qtnetwork, python3-pyside6.qtsvg, python3-pyside6.qtwidgets, python3-aiohttp, python3-keyring, python3-pydantic, python3-aiosqlite, python3-yaml

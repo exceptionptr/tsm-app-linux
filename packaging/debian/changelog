@@ -7,7 +7,8 @@ tsm-app (1.1.6-1) stable; urgency=medium
     when no active characters are found so manually-added realms still appear.
   * Fix: replace python3-pyside6 with individual Qt module packages
     (python3-pyside6.qtcore/qtgui/qtnetwork/qtsvg/qtwidgets) - the monolithic
-    package no longer exists on Ubuntu 24.04+.
+    package does not exist on Ubuntu 26.04; PySide6 is absent from apt on
+    Ubuntu 24.04 and earlier entirely (use pip/wheel on those versions).
   * Fix: bundle APScheduler 4.x, structlog, and tomli-w inside the package at
     /usr/lib/tsm-app/ - Ubuntu repos only carry APScheduler 3.x which is
     incompatible with this app; shell wrapper sets PYTHONPATH automatically.

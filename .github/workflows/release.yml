@@ -239,19 +239,15 @@ jobs:
           tsm-app --version
           PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
 
-  # ── 5. Smoke-test .deb on Ubuntu 24.04 and 26.04 ─────────────────────────
-  # Depends uses "python3-pyside6 | python3-pyside6.qtXxx" alternatives so a
-  # single .deb works on both: 24.04 satisfies via the monolithic package,
-  # 26.04 satisfies via the individual split packages.
+  # ── 5. Smoke-test .deb on Ubuntu 26.04 ───────────────────────────────────
+  # PySide6 is only available in apt on Ubuntu 26.04+ (individual split
+  # packages). Ubuntu 24.04 and earlier do not ship PySide6 in apt at all.
   test-deb:
-    name: Test .deb (${{ matrix.ubuntu }})
+    name: Test .deb (Ubuntu 26.04)
     needs: build-deb
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        ubuntu: ["24.04", "26.04"]
     container:
-      image: ubuntu:${{ matrix.ubuntu }}
+      image: ubuntu:26.04
     steps:
       - uses: actions/download-artifact@v8
         with:
@@ -261,10 +257,6 @@ jobs:
       - name: Install .deb
         run: |
           apt-get update -qq
-          apt-get install -y \
-            python3-pyside6 \
-            python3-aiohttp python3-pydantic python3-aiosqlite \
-            python3-keyring python3-yaml || \
           apt-get install -y \
             python3-pyside6.qtcore python3-pyside6.qtgui \
             python3-pyside6.qtnetwork python3-pyside6.qtsvg \

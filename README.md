@@ -52,16 +52,19 @@ cd tsm-app
 makepkg -si
 ```
 
-### Debian / Ubuntu
+### Debian / Ubuntu 26.04+
+
+The `.deb` package requires **Ubuntu 26.04 or later** - PySide6 is only available
+via apt on 26.04+, and APScheduler 4.x (not in Ubuntu repos) is bundled inside the package.
 
 Download the `.deb` from the [latest release](https://github.com/exceptionptr/tsm-app-linux/releases/latest):
 
 ```bash
-sudo dpkg -i tsm-app_*_all.deb
+sudo apt install ./tsm-app_*_all.deb
 ```
 
-> **Note:** Requires `python3-pyside6` and Python 3.11+. On older Ubuntu releases some
-> Python dependencies may not be packaged. Use the "From source" method in that case.
+**Ubuntu 24.04 or earlier:** PySide6 is not in the apt repos on these versions.
+Install via pip into a virtual environment instead - see [From source / pip wheel](#any-distro--from-source) below.
 
 ### Fedora / RHEL / openSUSE
 
@@ -73,10 +76,18 @@ sudo dnf install tsm-app-*.noarch.rpm
 
 ### Any distro / From source
 
+Recommended for Ubuntu 24.04 and distros without a compatible PySide6 package:
+
 ```bash
+# From the pre-built wheel (no git required)
+python3 -m venv .venv
+source .venv/bin/activate
+pip install tsm_app-*.whl   # download .whl from the latest release
+
+# Or from source
 git clone https://github.com/exceptionptr/tsm-app-linux
 cd tsm-app-linux
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
