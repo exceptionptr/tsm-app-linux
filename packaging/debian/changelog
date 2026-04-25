@@ -1,5 +1,10 @@
 tsm-app (1.1.6-1) stable; urgency=medium
 
+  * Add: Anniversary and Classic Era realms now appear in the Add Realm
+    dropdown; fetched from extraAnniversaryRealms/extraClassicRealms in the
+    status endpoint and merged with the realms2/list response.
+  * Add: character filter relaxed for Anniversary/Classic Era - falls through
+    when no active characters are found so manually-added realms still appear.
   * Fix: replace python3-pyside6 with individual Qt module packages
     (python3-pyside6.qtcore/qtgui/qtnetwork/qtsvg/qtwidgets) - the monolithic
     package no longer exists on Ubuntu 24.04+.
