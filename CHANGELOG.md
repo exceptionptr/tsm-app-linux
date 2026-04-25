@@ -21,12 +21,15 @@ All notable changes to tsm-app-linux are documented here.
 
 ### Fixed
 
-- **Debian .deb package installs correctly on Ubuntu 24.04+ and 26.04.**
-  - `python3-pyside6` (which no longer exists) replaced with the individual
-    module packages: `python3-pyside6.qtcore`, `.qtgui`, `.qtnetwork`,
-    `.qtsvg`, `.qtwidgets`.
+- **Debian .deb package now targets Ubuntu 26.04+ and installs correctly.**
+  Ubuntu 26.04 is the minimum version for the `.deb`: PySide6 is only
+  available via apt on 26.04+ (split into individual module packages;
+  not present in Ubuntu 24.04 or earlier apt repos at all). Ubuntu 24.04
+  users should install via pip - see the README.
+  - `python3-pyside6` replaced with the individual module packages
+    (`python3-pyside6.qtcore`, `.qtgui`, `.qtnetwork`, `.qtsvg`, `.qtwidgets`).
   - APScheduler 4.x, structlog, and tomli-w are now bundled inside the
-    package at `/usr/lib/tsm-app/` (the Ubuntu repos only carry APScheduler
+    package at `/usr/lib/tsm-app/` (Ubuntu repos only carry APScheduler
     3.x which is incompatible). A shell wrapper sets `PYTHONPATH`
     automatically, matching the approach already used by the RPM package.
   - Entry script now uses `/usr/bin/python3` instead of the pip-generated
