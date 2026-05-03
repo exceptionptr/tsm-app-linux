@@ -100,11 +100,11 @@ class AuctionDataService:
             if not app_data:
                 continue  # AppHelper not installed for this game version, skip
 
-            # Classic Era and Anniversary: when active characters are detected,
-            # filter to only those realms.  When none are found (SavedVariables
-            # not yet written, or user added realms manually before logging in),
-            # process all realms the API returns so manually-added realms still
-            # appear in the table.
+            # Classic Era and Anniversary: the API returns all 250+ available
+            # realms regardless of what the user plays.  Filter to only realms
+            # where the user has active characters (SavedVariables scope keys).
+            # If SavedVariables are absent, skip the game version entirely so
+            # the table is not flooded with irrelevant realms.
             active_factionrealms: set[tuple[str, str]] | None = None
             if gv_dir in ("_classic_era_", "_anniversary_"):
                 from tsm.wow.accounts import get_active_factionrealms
@@ -117,7 +117,8 @@ class AuctionDataService:
                 if active:
                     active_factionrealms = active
                 else:
-                    logger.info("No active %s characters found, showing all API realms", gv_dir)
+                    logger.info("No active %s characters found, skipping game version", gv_dir)
+                    continue
 
             # Process realms, dynamic key access requires cast (key is a runtime variable)
             for realm in cast(list[RealmEntry], result.get(realms_key, [])):

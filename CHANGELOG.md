@@ -4,6 +4,19 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.7] - 2026-05-03
+
+### Fixed
+
+- **Anniversary and Classic Era realm filter restored.**
+  The v1.1.6 relaxation ("show all API realms when no active characters found")
+  caused the table to flood with all 250+ HC/SoD/Era realms for users who have
+  those game versions installed but have not yet logged in. The strict filter is
+  back: if no active characters are found in SavedVariables for a game version,
+  that version is skipped entirely in the realm list.
+
+---
+
 ## [1.1.6] - 2026-04-22
 
 ### Added
@@ -13,12 +26,6 @@ All notable changes to tsm-app-linux are documented here.
   now also fetches `extraAnniversaryRealms` and `extraClassicRealms` from the
   status endpoint and merges them into the dropdown tree, so Anniversary and
   Classic Era realms can be selected and added.
-- **Character filter relaxed for Anniversary and Classic Era.**
-  Previously, if no active characters were found for these game versions, the
-  entire version was skipped and no realms were shown. Now it falls through
-  without filtering, so manually-added realms still appear before the user has
-  logged into WoW with TSM.
-
 ### Fixed
 
 - **Debian .deb package now targets Ubuntu 26.04+ and installs correctly.**
