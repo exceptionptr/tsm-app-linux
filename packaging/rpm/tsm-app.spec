@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.6
+Version:        1.1.7
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,12 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sat May 03 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.7-1
+- Fix: restore strict Anniversary/Classic Era realm filter; skip game version
+  entirely when no active characters found in SavedVariables instead of showing
+  all 250+ API realms
+- Fix: install hicolor icons to system icon directories in .deb package
+
 * Tue Apr 22 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.6-1
 - Add: Anniversary and Classic Era realms in Add Realm dropdown via status
   endpoint extraAnniversaryRealms/extraClassicRealms fields

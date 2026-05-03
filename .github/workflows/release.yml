@@ -101,6 +101,11 @@ jobs:
           chmod +x staging/usr/bin/tsm-app
           install -Dm644 packaging/tsm-app.desktop \
             staging/usr/share/applications/tsm-app.desktop
+          install -Dm644 tsm/ui/assets/tsm_16.png  staging/usr/share/icons/hicolor/16x16/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_32.png  staging/usr/share/icons/hicolor/32x32/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_48.png  staging/usr/share/icons/hicolor/48x48/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_128.png staging/usr/share/icons/hicolor/128x128/apps/tsm-app.png
+          install -Dm644 tsm/ui/assets/tsm_256.png staging/usr/share/icons/hicolor/256x256/apps/tsm-app.png
           install -Dm644 LICENSE \
             staging/usr/share/doc/tsm-app/copyright
 
