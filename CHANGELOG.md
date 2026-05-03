@@ -14,6 +14,10 @@ All notable changes to tsm-app-linux are documented here.
   those game versions installed but have not yet logged in. The strict filter is
   back: if no active characters are found in SavedVariables for a game version,
   that version is skipped entirely in the realm list.
+- **Debian .deb package now installs app icons to system icon directories.**
+  The hicolor icon theme entries (16, 32, 48, 128, 256 px) were missing from
+  the `.deb` staging tree; the app icon now appears in desktop launchers and
+  task switchers after installing the `.deb`, matching the `.rpm` behavior.
 
 ---
 
