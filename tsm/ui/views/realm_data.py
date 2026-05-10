@@ -274,7 +274,7 @@ class RealmDataView(QWidget):
         if idx >= len(realm_list):
             return
         realm = realm_list[idx]
-        self._vm.add_realm(realm["gameVersion"], realm["id"])
+        self._vm.add_realm(realm["gameVersion"], realm["id"], region, realm["name"])
 
 
 def fmt_ts(ts: int) -> str:

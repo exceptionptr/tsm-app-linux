@@ -76,6 +76,8 @@ ep.write_text(''.join(lines))
 - Fix: Anniversary region parsing corrected - region code is the first segment
   for _anniversary_ (contributed by Korkd)
 - Fix: factionrealm scope parser handles un-indexed Anniversary SavedVariables entries
+- Fix: manually-added Classic Era / Anniversary realms now sync immediately; stored
+  locally in SQLite on Add Realm, unioned with SavedVariables active-character set
 
 * Sat May 03 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.7-1
 - Fix: restore strict Anniversary/Classic Era realm filter; skip game version

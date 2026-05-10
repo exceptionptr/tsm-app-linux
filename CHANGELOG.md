@@ -17,6 +17,12 @@ All notable changes to tsm-app-linux are documented here.
   The regex for reading `_scopeKeys.factionrealm` was tightened to require an
   explicit `[n] =` index, which missed Anniversary SavedVariables that omit the
   index. The index prefix is now optional so both formats are parsed correctly.
+- **Manually-added Classic Era and Anniversary realms now sync immediately.**
+  Previously, Classic Era and Anniversary realms only appeared in the sync list
+  when active characters were detected in SavedVariables. Realms added via the
+  Add Realm dropdown are now stored locally and included in the filter even
+  before logging in on that realm. The game version is still skipped entirely
+  if no realms have been added and no characters are present.
 
 ---
 
