@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.7
+Version:        1.1.8
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,11 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sat May 10 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.8-1
+- Fix: Anniversary region parsing corrected - region code is the first segment
+  for _anniversary_ (contributed by Korkd)
+- Fix: factionrealm scope parser handles un-indexed Anniversary SavedVariables entries
+
 * Sat May 03 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.7-1
 - Fix: restore strict Anniversary/Classic Era realm filter; skip game version
   entirely when no active characters found in SavedVariables instead of showing

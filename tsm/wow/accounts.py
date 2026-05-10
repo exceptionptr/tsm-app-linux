@@ -117,7 +117,7 @@ def get_active_factionrealms(install: WoWInstall, game_version: str) -> set[tupl
         # Region from AppHelper: stored as plain code ("US", "EU") without prefix
         apphelper_data = read_saved_variables(sv_dir / "TradeSkillMaster_AppHelper.lua")
         raw_region = apphelper_data.get("region", "")
-        if game_version is "_anniversary_":
+        if game_version == "_anniversary_":
             region = raw_region.split("-")[0] if raw_region else ""
         else:
             # Guard against "Classic-US" style values (take the last "-"-delimited part)

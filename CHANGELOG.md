@@ -4,6 +4,22 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.8] - 2026-05-10
+
+### Fixed
+
+- **Anniversary realm region parsing corrected (contributed by Korkd).**
+  `TradeSkillMaster_AppHelper.lua` stores the region for Anniversary installs
+  with the region code as the first segment (e.g. `"US-Anniversary"`) rather
+  than the last. The parser now uses the first segment for `_anniversary_` and
+  keeps the existing last-segment logic for all other game versions.
+- **SavedVariables factionrealm scope parser now handles un-indexed table entries.**
+  The regex for reading `_scopeKeys.factionrealm` was tightened to require an
+  explicit `[n] =` index, which missed Anniversary SavedVariables that omit the
+  index. The index prefix is now optional so both formats are parsed correctly.
+
+---
+
 ## [1.1.7] - 2026-05-03
 
 ### Fixed

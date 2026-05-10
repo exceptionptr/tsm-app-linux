@@ -1,3 +1,13 @@
+tsm-app (1.1.8-1) stable; urgency=medium
+
+  * Fix: Anniversary region parsing corrected - region code is the first
+    segment of the AppHelper region value for _anniversary_ (e.g. "US-Anniversary"),
+    not the last; contributed by Korkd.
+  * Fix: factionrealm scope parser now handles un-indexed table entries in
+    Anniversary SavedVariables; index prefix made optional in regex.
+
+ -- tsm-app <noreply@tsm-app>  Sat, 10 May 2026 00:00:00 +0000
+
 tsm-app (1.1.7-1) stable; urgency=medium
 
   * Fix: restore strict Anniversary/Classic Era realm filter - when no active
