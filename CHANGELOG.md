@@ -4,6 +4,28 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.8] - 2026-05-10
+
+### Fixed
+
+- **Anniversary realm region parsing corrected (contributed by Korkd).**
+  `TradeSkillMaster_AppHelper.lua` stores the region for Anniversary installs
+  with the region code as the first segment (e.g. `"US-Anniversary"`) rather
+  than the last. The parser now uses the first segment for `_anniversary_` and
+  keeps the existing last-segment logic for all other game versions.
+- **SavedVariables factionrealm scope parser now handles un-indexed table entries.**
+  The regex for reading `_scopeKeys.factionrealm` was tightened to require an
+  explicit `[n] =` index, which missed Anniversary SavedVariables that omit the
+  index. The index prefix is now optional so both formats are parsed correctly.
+- **Manually-added Classic Era and Anniversary realms now sync immediately.**
+  Previously, Classic Era and Anniversary realms only appeared in the sync list
+  when active characters were detected in SavedVariables. Realms added via the
+  Add Realm dropdown are now stored locally and included in the filter even
+  before logging in on that realm. The game version is still skipped entirely
+  if no realms have been added and no characters are present.
+
+---
+
 ## [1.1.7] - 2026-05-03
 
 ### Fixed

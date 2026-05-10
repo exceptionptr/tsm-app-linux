@@ -9,7 +9,7 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 CREATE_AUCTION_CACHE = """
 CREATE TABLE IF NOT EXISTS auction_cache (
@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS realm_snapshot (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     statuses_json TEXT NOT NULL,
     saved_at INTEGER NOT NULL
+);
+"""
+
+CREATE_USER_ADDED_REALMS = """
+CREATE TABLE IF NOT EXISTS user_added_realms (
+    game_version TEXT NOT NULL,
+    region TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (game_version, region, name)
 );
 """
 
@@ -59,6 +68,7 @@ class Database:
         await self._db.execute(CREATE_SCHEMA_VERSION)
         await self._db.execute(CREATE_AUCTION_CACHE)
         await self._db.execute(CREATE_REALM_SNAPSHOT)
+        await self._db.execute(CREATE_USER_ADDED_REALMS)
         await self._db.commit()
 
     @property

@@ -101,23 +101,30 @@ class AuctionDataService:
                 continue  # AppHelper not installed for this game version, skip
 
             # Classic Era and Anniversary: the API returns all 250+ available
-            # realms regardless of what the user plays.  Filter to only realms
-            # where the user has active characters (SavedVariables scope keys).
-            # If SavedVariables are absent, skip the game version entirely so
-            # the table is not flooded with irrelevant realms.
-            active_factionrealms: set[tuple[str, str]] | None = None
+            # realms regardless of what the user plays. Build a combined allow-set
+            # from active characters (SavedVariables) and realms the user explicitly
+            # added via the Add Realm dropdown. Skip the game version only when
+            # both sources are empty.
+            realm_filter: set[tuple[str, str]] | None = None
             if gv_dir in ("_classic_era_", "_anniversary_"):
                 from tsm.wow.accounts import get_active_factionrealms
+
+                api_gv_key = "anniversary" if gv_dir == "_anniversary_" else "classic"
+                user_added: set[tuple[str, str]] = (
+                    await self._cache.get_user_realms(api_gv_key) if self._cache else set()
+                )
 
                 active: set[tuple[str, str]] = set()
                 for install in installs:
                     active |= await loop.run_in_executor(
                         None, get_active_factionrealms, install, gv_dir
                     )
-                if active:
-                    active_factionrealms = active
-                else:
-                    logger.info("No active %s characters found, skipping game version", gv_dir)
+
+                realm_filter = active | user_added
+                if not realm_filter:
+                    logger.info(
+                        "No active %s characters and no manually added realms, skipping", gv_dir
+                    )
                     continue
 
             # Process realms, dynamic key access requires cast (key is a runtime variable)
@@ -125,10 +132,9 @@ class AuctionDataService:
                 name = realm.get("name", "")
                 region = realm.get("region", "")
 
-                # Character filter: "Classic-US" -> "US", match against active set
-                if active_factionrealms is not None:
+                if realm_filter is not None:
                     region_code = region.split("-")[-1]
-                    if (region_code, name) not in active_factionrealms:
+                    if (region_code, name) not in realm_filter:
                         continue
 
                 strings = realm.get("appDataStrings", {})
@@ -160,16 +166,13 @@ class AuctionDataService:
                         rs.last_updated = pending[_REALM_LAST_UPDATED_TAG]["lastModified"]
 
             # Process regions, dynamic key access requires cast (key is a runtime variable)
-            active_regions = (
-                {r[0] for r in active_factionrealms} if active_factionrealms is not None else None
-            )
+            region_filter = {r[0] for r in realm_filter} if realm_filter is not None else None
             for region_rec in cast(list[RealmEntry], result.get(regions_key, [])):
                 name = region_rec.get("name", "")
 
-                # Character filter: only include regions the user has active realms in
-                if active_regions is not None:
+                if region_filter is not None:
                     region_code = name.split("-")[-1]  # "Classic-US" -> "US"
-                    if region_code not in active_regions:
+                    if region_code not in region_filter:
                         continue
 
                 strings = region_rec.get("appDataStrings", {})
@@ -268,11 +271,19 @@ class AuctionDataService:
         if self._client is None:
             return
         await self._client.realms.remove(game_version, region, name)
+        if game_version in ("anniversary", "classic") and self._cache:
+            region_code = region.split("-")[-1]
+            await self._cache.remove_user_realm(game_version, region_code, name)
 
-    async def add_realm(self, game_version: str, realm_id: int) -> None:
+    async def add_realm(
+        self, game_version: str, realm_id: int, region: str = "", name: str = ""
+    ) -> None:
         if self._client is None:
             return
         await self._client.realms.add(game_version, realm_id)
+        if game_version in ("anniversary", "classic") and self._cache and region and name:
+            region_code = region.split("-")[-1]
+            await self._cache.add_user_realm(game_version, region_code, name)
 
     async def get_snapshot(self) -> tuple[list[RealmStatus], int]:
         """Load last-known realm list from DB for immediate display at startup.

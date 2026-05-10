@@ -33,7 +33,7 @@ def get_factionrealm_scopes(path: Path) -> list[str]:
         m = re.search(r'"factionrealm"\]\s*=\s*\{([^}]*)\}', text, re.DOTALL)
         if not m:
             return []
-        return re.findall(r'\[\d+\]\s*=\s*"([^"]*)"', m.group(1))
+        return re.findall(r'(?:\s*\[\d+\]\s*=\s*)?"([^"]+)"', m.group(1))
     except Exception:
         logger.exception("Failed to read factionrealm scopes: %s", path)
         return []

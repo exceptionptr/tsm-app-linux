@@ -109,13 +109,15 @@ class RealmViewModel(QObject):
         bridge.result_ready.connect(lambda _: self.refresh_all())
         bridge.run(self._service.remove_realm(game_version, region, name))
 
-    def add_realm(self, game_version: str, realm_id: int) -> None:
+    def add_realm(
+        self, game_version: str, realm_id: int, region: str = "", name: str = ""
+    ) -> None:
         """Call realms2/add API and refresh."""
         if self._service is None:
             return
         bridge = AsyncBridge(self)
         bridge.result_ready.connect(lambda _: self.refresh_all())
-        bridge.run(self._service.add_realm(game_version, realm_id))
+        bridge.run(self._service.add_realm(game_version, realm_id, region, name))
 
     def _on_snapshot_received(self, result: object) -> None:
         """Called with (statuses, saved_at) from DB. Shows cached data immediately."""

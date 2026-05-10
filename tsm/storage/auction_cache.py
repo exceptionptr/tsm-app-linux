@@ -92,6 +92,34 @@ class AuctionCache:
             logger.warning("Failed to deserialise realm snapshot, ignoring")
             return [], 0
 
+    async def add_user_realm(self, game_version: str, region: str, name: str) -> None:
+        """Persist a manually-added Classic Era / Anniversary realm."""
+        db = self._db.connection
+        await db.execute(
+            "INSERT OR IGNORE INTO user_added_realms (game_version, region, name) VALUES (?, ?, ?)",
+            (game_version, region, name),
+        )
+        await db.commit()
+
+    async def remove_user_realm(self, game_version: str, region: str, name: str) -> None:
+        """Remove a manually-added Classic Era / Anniversary realm."""
+        db = self._db.connection
+        await db.execute(
+            "DELETE FROM user_added_realms WHERE game_version=? AND region=? AND name=?",
+            (game_version, region, name),
+        )
+        await db.commit()
+
+    async def get_user_realms(self, game_version: str) -> set[tuple[str, str]]:
+        """Return {(region, name)} for all manually-added realms of *game_version*."""
+        db = self._db.connection
+        async with db.execute(
+            "SELECT region, name FROM user_added_realms WHERE game_version=?",
+            (game_version,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return {(row["region"], row["name"]) for row in rows}
+
     async def delete_old(self, older_than_seconds: int = 86400 * 7) -> int:
         cutoff = int(time.time()) - older_than_seconds
         db = self._db.connection
