@@ -1,3 +1,11 @@
+tsm-app (1.1.9-1) stable; urgency=medium
+
+  * Fix: addon installation crash when TSM API returns JSON redirect instead
+    of raw zip bytes; downloader now follows the redirect URL to the CDN,
+    remaining compatible with the old direct-bytes response.
+
+ -- tsm-app <noreply@tsm-app>  Thu, 14 May 2026 00:00:00 +0000
+
 tsm-app (1.1.8-1) stable; urgency=medium
 
   * Fix: Anniversary region parsing corrected - region code is the first

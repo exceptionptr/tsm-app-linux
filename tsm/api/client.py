@@ -217,6 +217,13 @@ class TSMApiClient:
                 continue
         raise RuntimeError(f"raw_download failed for {url}: {last_exc}")
 
+    async def fetch_bytes(self, url: str) -> bytes:
+        """Fetch raw bytes from an arbitrary URL (e.g. CDN redirect for addon zip)."""
+        session = await self._get_session()
+        async with session.get(url, allow_redirects=True) as resp:
+            resp.raise_for_status()
+            return await resp.read()
+
     # ------------------------------------------------------------------ #
     # User info accessors
     # ------------------------------------------------------------------ #
@@ -291,10 +298,23 @@ class AddonAPI:
 
     async def download(self, name: str, channel: str = "release", tsm_version: str = "") -> bytes:
         """Download addon zip file."""
-        result: bytes = await self._c.api_request(
+        result = await self._c.api_request(
             "addon", name, channel=channel, tsm_version=tsm_version
         )
-        return result
+        if isinstance(result, bytes):
+            return result
+        if isinstance(result, dict):
+            url = (
+                result.get("url")
+                or result.get("download_url")
+                or result.get("downloadUrl")
+                or result.get("zip_url")
+                or result.get("zipUrl")
+            )
+            if not url:
+                raise ValueError(f"Addon download returned JSON with no URL: {result}")
+            return await self._c.fetch_bytes(url)
+        raise TypeError(f"Unexpected addon download response type: {type(result).__name__}")
 
     async def get_status(self, channel: str = "release", tsm_version: str = "") -> StatusResponse:
         """Get status response (includes addon versions and realm data URLs)."""
