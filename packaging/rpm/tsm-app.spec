@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.8
+Version:        1.1.9
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,10 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Thu May 14 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.9-1
+- Fix: addon installation crash when TSM API returns JSON redirect instead of
+  raw zip bytes; downloader follows redirect URL to CDN, backward compatible
+
 * Sat May 10 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.8-1
 - Fix: Anniversary region parsing corrected - region code is the first segment
   for _anniversary_ (contributed by Korkd)

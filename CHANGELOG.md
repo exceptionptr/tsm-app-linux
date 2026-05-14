@@ -4,6 +4,20 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.9] - 2026-05-14
+
+### Fixed
+
+- **Addon installation crash when TSM API returns a JSON redirect.**
+  The addon download endpoint now returns `{"url": "..."}` pointing to a CDN
+  instead of raw zip bytes. The app crashed with
+  `TypeError: a bytes-like object is required, not 'dict'` and AppHelper was
+  never installed, leaving the realm list empty. The downloader now follows the
+  redirect URL and fetches the zip from the CDN, while remaining compatible with
+  the old direct-bytes response for servers that have not yet migrated.
+
+---
+
 ## [1.1.8] - 2026-05-10
 
 ### Fixed
