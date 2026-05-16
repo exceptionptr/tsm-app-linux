@@ -23,12 +23,16 @@ jobs:
       - name: Check AUR version
         id: check
         run: |
-          AUR_VERSION=$(curl -fsSL "https://aur.archlinux.org/rpc/v5/info/tsm-app" \
+          AUR_VERSION=$(curl -fsSL --retry 3 --retry-delay 5 --retry-all-errors \
+            "https://aur.archlinux.org/rpc/v5/info/tsm-app" \
             | python3 -c "
           import sys, json
-          d = json.load(sys.stdin)
-          print(d['results'][0]['Version'].split('-')[0] if d['results'] else '')
-          ")
+          try:
+              d = json.load(sys.stdin)
+              print(d['results'][0]['Version'].split('-')[0] if d['results'] else '')
+          except Exception:
+              print('')
+          " 2>/dev/null) || AUR_VERSION=""
           TARGET="${{ steps.resolve.outputs.version }}"
           echo "aur_version=$AUR_VERSION" >> "$GITHUB_OUTPUT"
           if [ "$AUR_VERSION" = "$TARGET" ]; then
