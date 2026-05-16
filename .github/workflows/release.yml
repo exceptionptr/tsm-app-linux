@@ -237,7 +237,14 @@ jobs:
           path: dist/
 
       - name: Install RPM
-        run: zypper --non-interactive install --allow-unsigned-rpm dist/*.rpm
+        run: |
+          # Tumbleweed mirrors can briefly have inconsistent metadata during snapshot
+          # transitions (repomd.xml references a file not yet propagated). Attempt the
+          # refresh so successfully-updated repos are current, then install using
+          # --no-refresh so the Docker image's pre-populated metadata cache is used
+          # for any repo that failed to refresh.
+          zypper --non-interactive --gpg-auto-import-keys refresh || true
+          zypper --non-interactive install --no-refresh --allow-unsigned-rpm dist/*.rpm
 
       - name: Smoke test
         run: |
