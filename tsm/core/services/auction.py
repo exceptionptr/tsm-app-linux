@@ -118,9 +118,8 @@ class AuctionDataService:
                 name = realm.get("name", "")
                 region = realm.get("region", "")
 
-                if realm_filter is not None:
-                    if (region, name) not in realm_filter:
-                        continue
+                if realm_filter is not None and (region, name) not in realm_filter:
+                    continue
 
                 strings = realm.get("appDataStrings", {})
                 # Apply display-name transform (BCC-EU → Progression-EU)
@@ -155,9 +154,8 @@ class AuctionDataService:
             for region_rec in cast(list[RealmEntry], result.get(regions_key, [])):
                 name = region_rec.get("name", "")
 
-                if region_filter is not None:
-                    if name not in region_filter:
-                        continue
+                if region_filter is not None and name not in region_filter:
+                    continue
 
                 strings = region_rec.get("appDataStrings", {})
                 pending = _pending_strings(strings, name, app_data)
