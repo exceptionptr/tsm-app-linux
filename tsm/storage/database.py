@@ -9,7 +9,7 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 CREATE_AUCTION_CACHE = """
 CREATE TABLE IF NOT EXISTS auction_cache (
@@ -66,9 +66,27 @@ class Database:
         if self._db is None:
             raise RuntimeError("Database not connected")
         await self._db.execute(CREATE_SCHEMA_VERSION)
-        await self._db.execute(CREATE_AUCTION_CACHE)
-        await self._db.execute(CREATE_REALM_SNAPSHOT)
-        await self._db.execute(CREATE_USER_ADDED_REALMS)
+        await self._db.commit()
+
+        async with self._db.execute("SELECT version FROM schema_version") as cur:
+            row = await cur.fetchone()
+        current_version = row["version"] if row else 0
+
+        if current_version < 1:
+            await self._db.execute(CREATE_AUCTION_CACHE)
+            await self._db.execute(CREATE_REALM_SNAPSHOT)
+            await self._db.execute(CREATE_USER_ADDED_REALMS)
+
+        if current_version < 3:
+            # region column changed from a two-letter suffix ("EU") to the full API
+            # region string ("HC-EU"). Old entries are incompatible with the new exact
+            # matching filter, so wipe and require re-add via the UI.
+            await self._db.execute("DELETE FROM user_added_realms")
+
+        await self._db.execute(
+            "INSERT OR REPLACE INTO schema_version (version) VALUES (?)",
+            (SCHEMA_VERSION,),
+        )
         await self._db.commit()
 
     @property

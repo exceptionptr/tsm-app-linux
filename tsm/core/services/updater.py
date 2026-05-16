@@ -115,7 +115,7 @@ class UpdateService:
         """Download zip for base_name and install into every game version dir
         where the addon folder already exists."""
         assert self._client is not None
-        logger.info("Downloading addon %s v%s", base_name, latest)
+        logger.info("Downloading addon %s %s", base_name, latest)
         try:
             zip_bytes = await self._client.addon.download(base_name, tsm_version=latest)
         except Exception:
@@ -164,7 +164,7 @@ class UpdateService:
         if not game_ver:
             return False
 
-        logger.info("Downloading %s v%s for %s", base_name, version, game_ver)
+        logger.info("Downloading %s %s for %s", base_name, version, game_ver)
         try:
             zip_bytes = await self._client.addon.download(base_name, tsm_version=version)
         except Exception:

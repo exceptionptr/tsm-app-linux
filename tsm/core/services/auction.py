@@ -16,7 +16,6 @@ Status API keys → game version mapping:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import time
 from pathlib import Path
@@ -91,40 +90,27 @@ class AuctionDataService:
             logger.info("No valid WoW game-version directory found, realm list will be empty")
             return AuctionData(addon_versions=data.addon_versions)
 
-        loop = asyncio.get_running_loop()
-        detector = self._addon_writer.get_detector() if self._addon_writer is not None else None
-        installs = detector.installs if detector is not None else []
-
         for realms_key, regions_key, gv_dir, api_gv, region_transform in _REALM_CONFIGS:
             app_data = existing.get(gv_dir)
             if not app_data:
                 continue  # AppHelper not installed for this game version, skip
 
-            # Classic Era and Anniversary: the API returns all 250+ available
-            # realms regardless of what the user plays. Build a combined allow-set
-            # from active characters (SavedVariables) and realms the user explicitly
-            # added via the Add Realm dropdown. Skip the game version only when
-            # both sources are empty.
+            # Classic Era, Anniversary, SoD: the API returns all 250+ available
+            # realms. Only sync game versions where the user explicitly added a
+            # realm via the Add Realm dropdown.
             realm_filter: set[tuple[str, str]] | None = None
-            if gv_dir in ("_classic_era_", "_anniversary_"):
-                from tsm.wow.accounts import get_active_factionrealms
-
-                api_gv_key = "anniversary" if gv_dir == "_anniversary_" else "classic"
-                user_added: set[tuple[str, str]] = (
+            if gv_dir in ("_classic_era_", "_anniversary_", "_classic_"):
+                _GV_TO_API_KEY = {
+                    "_anniversary_": "anniversary",
+                    "_classic_era_": "classic",
+                    "_classic_": "bcc",
+                }
+                api_gv_key = _GV_TO_API_KEY[gv_dir]
+                realm_filter = (
                     await self._cache.get_user_realms(api_gv_key) if self._cache else set()
                 )
-
-                active: set[tuple[str, str]] = set()
-                for install in installs:
-                    active |= await loop.run_in_executor(
-                        None, get_active_factionrealms, install, gv_dir
-                    )
-
-                realm_filter = active | user_added
                 if not realm_filter:
-                    logger.info(
-                        "No active %s characters and no manually added realms, skipping", gv_dir
-                    )
+                    logger.info("No manually added realms for %s, skipping", gv_dir)
                     continue
 
             # Process realms, dynamic key access requires cast (key is a runtime variable)
@@ -133,8 +119,7 @@ class AuctionDataService:
                 region = realm.get("region", "")
 
                 if realm_filter is not None:
-                    region_code = region.split("-")[-1]
-                    if (region_code, name) not in realm_filter:
+                    if (region, name) not in realm_filter:
                         continue
 
                 strings = realm.get("appDataStrings", {})
@@ -171,8 +156,7 @@ class AuctionDataService:
                 name = region_rec.get("name", "")
 
                 if region_filter is not None:
-                    region_code = name.split("-")[-1]  # "Classic-US" -> "US"
-                    if region_code not in region_filter:
+                    if name not in region_filter:
                         continue
 
                 strings = region_rec.get("appDataStrings", {})
@@ -271,9 +255,8 @@ class AuctionDataService:
         if self._client is None:
             return
         await self._client.realms.remove(game_version, region, name)
-        if game_version in ("anniversary", "classic") and self._cache:
-            region_code = region.split("-")[-1]
-            await self._cache.remove_user_realm(game_version, region_code, name)
+        if game_version in ("anniversary", "classic", "bcc") and self._cache:
+            await self._cache.remove_user_realm(game_version, region, name)
 
     async def add_realm(
         self, game_version: str, realm_id: int, region: str = "", name: str = ""
@@ -281,9 +264,8 @@ class AuctionDataService:
         if self._client is None:
             return
         await self._client.realms.add(game_version, realm_id)
-        if game_version in ("anniversary", "classic") and self._cache and region and name:
-            region_code = region.split("-")[-1]
-            await self._cache.add_user_realm(game_version, region_code, name)
+        if game_version in ("anniversary", "classic", "bcc") and self._cache and region and name:
+            await self._cache.add_user_realm(game_version, region, name)
 
     async def get_snapshot(self) -> tuple[list[RealmStatus], int]:
         """Load last-known realm list from DB for immediate display at startup.

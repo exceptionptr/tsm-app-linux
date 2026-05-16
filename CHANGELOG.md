@@ -4,6 +4,39 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.10] - 2026-05-16
+
+### Fixed
+
+- **Addon download fails with "Invalid request" after v1.1.9 fix.**
+  The `version_str` field from the TSM API includes a `v` prefix (e.g. `v4.14.7`).
+  This was forwarded verbatim as the `tsm_version` query parameter, which the API
+  rejects. The prefix is now stripped before the request. The log format was also
+  corrected so the version no longer appears doubled (e.g. `vv4.14.7`).
+- **API error envelopes now surface a clear error message.**
+  When the TSM API returns `{"success": false, "error": "..."}` the app now raises
+  `ValueError: Addon download failed: <message>` instead of the confusing
+  `Addon download returned JSON with no URL`.
+- **Classic Era, SoD, and HC now only sync realms explicitly added via the
+  Add Realm dropdown.**
+  Previously, active characters found in SavedVariables were included in the sync
+  filter alongside manually-added realms. This caused unexpected game versions
+  (e.g. Classic-EU, SoD-EU) to appear in the sync table whenever the user had
+  old characters on those versions from prior gameplay. The filter now uses
+  only the locally persisted user-added realm list. A game version is skipped
+  entirely until at least one realm is added for it via the dropdown. SoD
+  (`_classic_`) is now covered by this filter as well - it previously had no
+  filter at all. Manually-added SoD realms are persisted to the local database.
+- **Classic-EU and SoD-EU appeared alongside HC-EU after adding one HC realm.**
+  The realm and region match used only the last hyphen-separated segment of the
+  region string ("EU") instead of the full value ("HC-EU"). Any EU region from
+  any game version passed the filter, causing Classic-EU and SoD-EU to appear
+  when only an HC-EU realm was added. The filter now uses exact region matching.
+  A DB migration (schema version 3) clears `user_added_realms`; realms must be
+  re-added via the dropdown after this upgrade.
+
+---
+
 ## [1.1.9] - 2026-05-14
 
 ### Fixed
