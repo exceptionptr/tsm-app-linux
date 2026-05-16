@@ -244,7 +244,7 @@ jobs:
           # --no-refresh so the Docker image's pre-populated metadata cache is used
           # for any repo that failed to refresh.
           zypper --non-interactive --gpg-auto-import-keys refresh || true
-          zypper --non-interactive install --no-refresh --allow-unsigned-rpm dist/*.rpm
+          zypper --no-refresh --non-interactive install --allow-unsigned-rpm dist/*.rpm
 
       - name: Smoke test
         run: |
