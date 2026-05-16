@@ -76,6 +76,12 @@ ep.write_text(''.join(lines))
 - Fix: strip leading "v" from version_str before sending as tsm_version query
   param; API rejects "v4.14.7", expects "4.14.7", causing Invalid request error
 - Fix: API error envelope {success: false, error: ...} now surfaces the message
+- Fix: Classic Era/SoD/HC now only sync realms added via Add Realm dropdown;
+  SavedVariables character detection removed from filter (caused unexpected
+  game versions from old characters); _classic_ (SoD) now filtered too
+- Fix: realm and region filter now uses exact region match ("HC-EU") instead of
+  two-letter suffix ("EU"); prevents Classic-EU/SoD-EU from appearing when only
+  an HC-EU realm is added; DB migrated to schema version 3 (clears user_added_realms)
 
 * Thu May 14 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.9-1
 - Fix: addon installation crash when TSM API returns JSON redirect instead of

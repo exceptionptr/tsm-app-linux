@@ -17,6 +17,23 @@ All notable changes to tsm-app-linux are documented here.
   When the TSM API returns `{"success": false, "error": "..."}` the app now raises
   `ValueError: Addon download failed: <message>` instead of the confusing
   `Addon download returned JSON with no URL`.
+- **Classic Era, SoD, and HC now only sync realms explicitly added via the
+  Add Realm dropdown.**
+  Previously, active characters found in SavedVariables were included in the sync
+  filter alongside manually-added realms. This caused unexpected game versions
+  (e.g. Classic-EU, SoD-EU) to appear in the sync table whenever the user had
+  old characters on those versions from prior gameplay. The filter now uses
+  only the locally persisted user-added realm list. A game version is skipped
+  entirely until at least one realm is added for it via the dropdown. SoD
+  (`_classic_`) is now covered by this filter as well - it previously had no
+  filter at all. Manually-added SoD realms are persisted to the local database.
+- **Classic-EU and SoD-EU appeared alongside HC-EU after adding one HC realm.**
+  The realm and region match used only the last hyphen-separated segment of the
+  region string ("EU") instead of the full value ("HC-EU"). Any EU region from
+  any game version passed the filter, causing Classic-EU and SoD-EU to appear
+  when only an HC-EU realm was added. The filter now uses exact region matching.
+  A DB migration (schema version 3) clears `user_added_realms`; realms must be
+  re-added via the dropdown after this upgrade.
 
 ---
 

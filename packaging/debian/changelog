@@ -5,6 +5,15 @@ tsm-app (1.1.10-1) stable; urgency=medium
     "Invalid request" and a failed addon download after the v1.1.9 fix.
   * Fix: API error envelope {success: false, error: ...} now surfaces the error
     message instead of the misleading "no URL" ValueError.
+  * Fix: Classic Era, SoD, and HC now only sync realms explicitly added via
+    the Add Realm dropdown; SavedVariables active-character detection removed
+    from the filter to prevent unexpected game versions appearing from old
+    characters. SoD (_classic_) also now covered by this filter - previously
+    it had no filter at all. Manually-added SoD realms persisted to local DB.
+  * Fix: realm and region filter now uses exact region match ("HC-EU") rather
+    than a two-letter suffix ("EU"), preventing Classic-EU and SoD-EU from
+    appearing when only an HC-EU realm is added. DB migrated to schema version 3
+    (clears user_added_realms; re-add realms via the dropdown after upgrade).
 
  -- tsm-app <noreply@tsm-app>  Sat, 16 May 2026 00:00:00 +0000
 
