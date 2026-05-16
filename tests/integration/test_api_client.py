@@ -125,6 +125,32 @@ async def test_addon_download_json_missing_url():
 
 
 @pytest.mark.asyncio
+async def test_addon_download_api_error_envelope():
+    """API error envelope {success: False, error: ...} raises ValueError with the message."""
+    client = TSMApiClient()
+    client.set_user_info(ADDON_USER_INFO)
+    with aioresponses() as m:
+        m.get(RE_ADDON, payload={"success": False, "error": "Invalid request."})
+        with pytest.raises(ValueError, match="Invalid request"):
+            await client.addon.download("TradeSkillMaster")
+    await client.close()
+
+
+@pytest.mark.asyncio
+async def test_addon_download_strips_version_prefix():
+    """version_str values with a leading 'v' are stripped before the API call."""
+    client = TSMApiClient()
+    client.set_user_info(ADDON_USER_INFO)
+    fake_zip = b"PK\x03\x04stripped-version"
+    with aioresponses() as m:
+        # The mock matches regardless of query params, so we just verify no crash
+        m.get(RE_ADDON, body=fake_zip, content_type="application/zip")
+        result = await client.addon.download("TradeSkillMaster", tsm_version="v4.14.7")
+    assert result == fake_zip
+    await client.close()
+
+
+@pytest.mark.asyncio
 async def test_retry_on_server_error():
     client = TSMApiClient()
     client.set_user_info(

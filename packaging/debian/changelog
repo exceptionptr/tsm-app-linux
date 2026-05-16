@@ -1,3 +1,13 @@
+tsm-app (1.1.10-1) stable; urgency=medium
+
+  * Fix: strip leading "v" from version_str before sending as tsm_version query
+    param; the API rejects "v4.14.7" and only accepts "4.14.7", causing
+    "Invalid request" and a failed addon download after the v1.1.9 fix.
+  * Fix: API error envelope {success: false, error: ...} now surfaces the error
+    message instead of the misleading "no URL" ValueError.
+
+ -- tsm-app <noreply@tsm-app>  Sat, 16 May 2026 00:00:00 +0000
+
 tsm-app (1.1.9-1) stable; urgency=medium
 
   * Fix: addon installation crash when TSM API returns JSON redirect instead

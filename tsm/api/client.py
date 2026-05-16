@@ -298,12 +298,18 @@ class AddonAPI:
 
     async def download(self, name: str, channel: str = "release", tsm_version: str = "") -> bytes:
         """Download addon zip file."""
+        # API expects a bare version number; strip any leading "v" from version_str values.
+        normalized_version = tsm_version.lstrip("v") if tsm_version else tsm_version
         result = await self._c.api_request(
-            "addon", name, channel=channel, tsm_version=tsm_version
+            "addon", name, channel=channel, tsm_version=normalized_version
         )
         if isinstance(result, bytes):
             return result
         if isinstance(result, dict):
+            if not result.get("success", True):
+                raise ValueError(
+                    f"Addon download failed: {result.get('error', result)}"
+                )
             url = (
                 result.get("url")
                 or result.get("download_url")

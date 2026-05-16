@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.9
+Version:        1.1.10
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,11 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sat May 16 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.10-1
+- Fix: strip leading "v" from version_str before sending as tsm_version query
+  param; API rejects "v4.14.7", expects "4.14.7", causing Invalid request error
+- Fix: API error envelope {success: false, error: ...} now surfaces the message
+
 * Thu May 14 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.9-1
 - Fix: addon installation crash when TSM API returns JSON redirect instead of
   raw zip bytes; downloader follows redirect URL to CDN, backward compatible

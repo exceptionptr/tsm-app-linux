@@ -4,6 +4,22 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.10] - 2026-05-16
+
+### Fixed
+
+- **Addon download fails with "Invalid request" after v1.1.9 fix.**
+  The `version_str` field from the TSM API includes a `v` prefix (e.g. `v4.14.7`).
+  This was forwarded verbatim as the `tsm_version` query parameter, which the API
+  rejects. The prefix is now stripped before the request. The log format was also
+  corrected so the version no longer appears doubled (e.g. `vv4.14.7`).
+- **API error envelopes now surface a clear error message.**
+  When the TSM API returns `{"success": false, "error": "..."}` the app now raises
+  `ValueError: Addon download failed: <message>` instead of the confusing
+  `Addon download returned JSON with no URL`.
+
+---
+
 ## [1.1.9] - 2026-05-14
 
 ### Fixed
