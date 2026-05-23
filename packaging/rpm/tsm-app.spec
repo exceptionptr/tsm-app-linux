@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.10
+Version:        1.1.11
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,13 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sat May 23 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.11-1
+- Fix: auto-detect WoW installed via Steam Proton; scan all compatdata/<appid>/pfx
+  entries under ~/.local/share/Steam and ~/.steam/steam; previously only
+  steamapps/common was checked (native Steam, not Proton)
+- Fix: log message "No valid WoW game-version directory found" replaced with
+  "TradeSkillMaster AppHelper not found in any WoW install" to identify the real cause
+
 * Sat May 16 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.10-1
 - Fix: strip leading "v" from version_str before sending as tsm_version query
   param; API rejects "v4.14.7", expects "4.14.7", causing Invalid request error

@@ -83,11 +83,13 @@ class AuctionDataService:
 
         existing = self._get_existing_app_data_files()
 
-        # Guard: no valid WoW version directories found. Return without last_sync so
-        # the viewmodel does not flag AppHelper as missing - this is a transient state
-        # (detection pending) rather than a confirmed AppHelper absence.
+        # Guard: AppHelper addon not found in any game-version directory. Return without
+        # last_sync so the viewmodel does not flag AppHelper as missing - this is a
+        # transient state (detection pending or AppHelper not yet installed).
         if not any(existing.values()):
-            logger.info("No valid WoW game-version directory found, realm list will be empty")
+            logger.info(
+                "TradeSkillMaster AppHelper not found in any WoW install, realm list will be empty"
+            )
             return AuctionData(addon_versions=data.addon_versions)
 
         for realms_key, regions_key, gv_dir, api_gv, region_transform in _REALM_CONFIGS:
