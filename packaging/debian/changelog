@@ -1,3 +1,15 @@
+tsm-app (1.1.11-1) stable; urgency=medium
+
+  * Fix: auto-detect WoW installed via Steam Proton (compatdata prefixes);
+    previously only steamapps/common was checked, which is the native Steam
+    path; now all compatdata/<appid>/pfx/drive_c/ entries are scanned under
+    both ~/.local/share/Steam and ~/.steam/steam.
+  * Fix: log message "No valid WoW game-version directory found" was misleading
+    when only AppHelper was missing; now reads "TradeSkillMaster AppHelper not
+    found in any WoW install".
+
+ -- tsm-app <noreply@tsm-app>  Sat, 23 May 2026 00:00:00 +0000
+
 tsm-app (1.1.10-1) stable; urgency=medium
 
   * Fix: strip leading "v" from version_str before sending as tsm_version query

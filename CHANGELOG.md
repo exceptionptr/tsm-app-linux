@@ -4,6 +4,27 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.11] - 2026-05-23
+
+### Fixed
+
+- **Steam Proton installs are now auto-detected.**
+  The detector previously only checked `steamapps/common/`, which is the native
+  Steam path. Proton/Steam Play installs live under
+  `steamapps/compatdata/<appid>/pfx/drive_c/`, a completely different tree.
+  The detector now scans all compatdata prefixes under both
+  `~/.local/share/Steam` and `~/.steam/steam` (handles the symlink case),
+  so WoW installed via Proton is found automatically without requiring a manual
+  path in Settings.
+- **Log message now correctly identifies a missing AppHelper addon.**
+  "No valid WoW game-version directory found" was logged whenever the
+  TradeSkillMaster AppHelper addon folder was absent, even though the WoW
+  directory itself was correctly detected. The message now reads
+  "TradeSkillMaster AppHelper not found in any WoW install" to make the
+  actual cause clear.
+
+---
+
 ## [1.1.10] - 2026-05-16
 
 ### Fixed

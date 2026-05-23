@@ -32,6 +32,13 @@ WOW_VERSIONS = [
     "_retail_ptr_",
 ]
 
+# Steam Proton installs WoW into a Wine prefix under compatdata, not steamapps/common.
+# Scan both the XDG Steam path and the legacy ~/.steam symlink target.
+_STEAM_ROOTS = [
+    Path.home() / ".local/share/Steam",
+    Path.home() / ".steam/steam",
+]
+
 LUTRIS_GAMES_DIR = Path.home() / ".local/share/lutris/games"
 
 FAUGUS_PREFIX_DIR = Path.home() / "Faugus"
@@ -68,6 +75,33 @@ def _lutris_base_paths() -> list[Path]:
         except Exception:
             logger.debug("Failed to parse Lutris config: %s", yml)
 
+    return paths
+
+
+def _proton_base_paths() -> list[Path]:
+    """Scan Steam compatdata prefixes for a WoW installation (Proton/Steam Play)."""
+    paths: list[Path] = []
+    seen: set[str] = set()
+
+    for steam_root in _STEAM_ROOTS:
+        compatdata = steam_root / "steamapps" / "compatdata"
+        if not compatdata.is_dir():
+            continue
+        try:
+            entries = list(compatdata.iterdir())
+        except PermissionError:
+            continue
+        for app_dir in entries:
+            if not app_dir.is_dir():
+                continue
+            for pf in ["Program Files (x86)", "Program Files"]:
+                candidate = app_dir / "pfx" / "drive_c" / pf / "World of Warcraft"
+                key = str(candidate.resolve()) if candidate.exists() else str(candidate)
+                if key not in seen:
+                    seen.add(key)
+                    if candidate.is_dir():
+                        paths.append(candidate)
+                        logger.debug("Proton prefix %s -> WoW base: %s", app_dir.name, candidate)
     return paths
 
 
@@ -120,6 +154,7 @@ def find_wow_base(extra_paths: list[Path] | None = None) -> str | None:
     """
     base_paths = list(COMMON_BASE_PATHS)
     base_paths.extend(_lutris_base_paths())
+    base_paths.extend(_proton_base_paths())
     base_paths.extend(_faugus_base_paths())
     if extra_paths:
         base_paths.extend(extra_paths)
