@@ -17,7 +17,7 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # hatch-vcs needs full tag history
 
@@ -50,7 +50,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0   # hatch-vcs needs full tag history
 
@@ -80,7 +80,7 @@ jobs:
     env:
       VERSION: ${{ needs.build-wheel.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: actions/download-artifact@v8
         with:
@@ -144,7 +144,7 @@ jobs:
     env:
       VERSION: ${{ needs.build-wheel.outputs.version }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: actions/download-artifact@v8
         with:

@@ -13,7 +13,7 @@ jobs:
     # Version check below guards against re-publishing what AUR already has.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Resolve target version
         id: resolve
