@@ -100,6 +100,44 @@ python -m tsm
 tsm-app
 ```
 
+### Headless Mode (Terminal & Automation)
+
+The app supports a fully functional headless mode designed for command-line use and automation (e.g. via `cron` or systemd timers) without any PySide6/Qt GUI dependencies.
+
+#### CLI Arguments:
+* `--headless`: Explicitly run in headless mode.
+* `-l`, `--login`: Interactive registration (sign-up) and authentication (login) in the terminal.
+* `-s`, `--sync`: Run a single synchronization pass (download auction data + check/install addon updates) and exit.
+* `-b`, `--backup`: Run a single SavedVariables backup pass and exit.
+* `-i`, `--install-addons`: Download and install/bootstrap TSM addons for all detected WoW game versions.
+* `--wow-path <path>`: Configure/update the WoW base directory path in the configuration file.
+* `--skip-detection`: Skip auto-scanning the filesystem for WoW paths.
+
+*Note: Headless mode is implicitly enabled if any headless-specific flag (`--login`, `--sync`, `--backup`, `--install-addons`, `--wow-path`) is specified.*
+
+#### Getting Started (Sign-up, Auth & Addon Installation):
+1. Run the login command:
+   ```bash
+   tsm-app --login
+   ```
+2. Select Option 2 to register a new account on the TSM website (which will be opened in your browser), or Option 1 to log in. Enter your credentials securely in the terminal; they will be stored securely via the keyring.
+
+3. **Install TSM Addons:** By default, `--sync` only updates addons that are **already installed** in your `Interface/AddOns` folder to avoid installing unwanted addons on clients you do not play. 
+   
+   If you have a fresh WoW install, run the app once with:
+   ```bash
+   tsm-app --install-addons
+   ```
+   This will download and install both `TradeSkillMaster` and `TradeSkillMaster_AppHelper` for all detected game versions.
+
+#### Automation / Cronjob Setup:
+Since system keyrings may not be available in non-interactive/cron shell sessions, pass your credentials using `TSM_EMAIL` and `TSM_PASSWORD` environment variables:
+
+```cron
+# Run TSM synchronization every hour
+0 * * * * TSM_EMAIL="user@example.com" TSM_PASSWORD="securepassword" /home/username/src/tsm-app-linux/.venv/bin/tsm-app --sync
+```
+
 ## File Locations
 
 | Purpose       | Path                                          |

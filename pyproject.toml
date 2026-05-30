@@ -76,6 +76,7 @@ module = [
     "tsm.core.services.addon_writer",
     "tsm.core.services.updater",
     "tsm.app",
+    "tsm.headless",
 ]
 disallow_untyped_defs = false
 disallow_untyped_calls = false

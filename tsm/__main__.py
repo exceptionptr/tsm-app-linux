@@ -60,6 +60,40 @@ def main() -> None:
         help="Print version and exit",
     )
     parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run completely in headless (terminal) mode",
+    )
+    parser.add_argument(
+        "--login",
+        "-l",
+        action="store_true",
+        help="Perform interactive sign-up / login in terminal",
+    )
+    parser.add_argument(
+        "--sync",
+        "-s",
+        action="store_true",
+        help="Perform a single data synchronization and exit",
+    )
+    parser.add_argument(
+        "--backup",
+        "-b",
+        action="store_true",
+        help="Perform a single SavedVariables backup and exit",
+    )
+    parser.add_argument(
+        "--install-addons",
+        "-i",
+        action="store_true",
+        help="Download and install/bootstrap TSM addons for all WoW game versions",
+    )
+    parser.add_argument(
+        "--wow-path",
+        type=str,
+        help="Configure WoW installation path in settings",
+    )
+    parser.add_argument(
         "--skip-detection",
         action="store_true",
         help="Skip WoW install auto-detection at startup",
@@ -74,12 +108,44 @@ def main() -> None:
         action="store_true",
         help="Do not schedule the periodic backup job",
     )
+    parser.add_argument(
+        "-h",
+        "--help",
+        action="store_true",
+        help="Show this help message and exit",
+    )
     known, qt_argv = parser.parse_known_args()
+
+    if known.help:
+        parser.print_help()
+        return
 
     if known.version:
         from tsm import __version__
 
         print(__version__)
+        return
+
+    is_headless = (
+        known.headless
+        or known.login
+        or known.sync
+        or known.backup
+        or known.install_addons
+        or (known.wow_path is not None)
+    )
+
+    if is_headless:
+        _setup_logging()
+        import asyncio
+
+        from tsm.headless import run_headless
+
+        try:
+            asyncio.run(run_headless(known))
+        except KeyboardInterrupt:
+            print("\nInterrupted by user.")
+            sys.exit(1)
         return
 
     _setup_logging()
@@ -124,3 +190,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
