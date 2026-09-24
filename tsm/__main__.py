@@ -98,13 +98,16 @@ def main() -> None:
     # Make Ctrl+C work: Qt blocks Python's default SIGINT handler.
     # Install a handler that calls QApplication.quit(), and use a 200ms
     # timer so the Python interpreter gets a chance to check for signals.
+    # SIGTERM is how a session manager ends the app on logout, so it takes the
+    # same route and gets the scheduler and database closed on the way out.
     signal.signal(signal.SIGINT, lambda *_: qt_app.quit())
+    signal.signal(signal.SIGTERM, lambda *_: qt_app.quit())
     from PySide6.QtCore import QTimer
 
-    _sigint_timer = QTimer()
-    _sigint_timer.setInterval(200)
-    _sigint_timer.timeout.connect(lambda: None)  # wake event loop for Python
-    _sigint_timer.start()
+    _signal_timer = QTimer()
+    _signal_timer.setInterval(200)
+    _signal_timer.timeout.connect(lambda: None)  # wake event loop for Python
+    _signal_timer.start()
 
     bridge = AsyncBridge()  # no parent; lives until callback fires
 

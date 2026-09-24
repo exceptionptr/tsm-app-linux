@@ -4,6 +4,33 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **The app cancelled reboot and shutdown on KDE Plasma** (#21). Closing the
+  window hides it to the tray, which is the point of the tray icon, but the
+  session manager announces a logout by asking windows to close. Hiding refused
+  that request, and a client that refuses one cancels the logout for the whole
+  session, so the desktop reported `Logout cancelled by ''` and stayed put until
+  the app was quit by hand. With `show_confirmation_on_exit` on it was worse: a
+  question box appeared mid-logout and waited for an answer. The app now takes a
+  logout notice from the session manager and obeys close requests from then on,
+  without hiding and without asking. An ordinary session save is deliberately
+  left alone, since that is not a logout and the app should survive it.
+- **The desktop had no name for the app.** Nothing set the desktop file name, so
+  Qt fell back to the interpreter and the window went out identified as
+  `python3`. That is why the logout notice above had empty quotes where the
+  culprit's name belongs. The app now identifies itself as `tsm-app`, matching
+  the installed desktop entry, which also lets the panel pair the window with
+  its icon.
+- **A logout killed the app mid-write.** Session managers end a program with
+  `SIGTERM`, which went unhandled, so the process died without closing the
+  scheduler, the API session or the database. `SIGTERM` now takes the same route
+  as Ctrl+C and shuts everything down in order.
+
+---
+
 ## [1.1.15] - 2026-08-27
 
 ### Added

@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tsm.ui._window_close import CloseAction, close_action
 from tsm.ui.components.status_bar import TSMStatusBar
 from tsm.ui.viewmodels.app_vm import AppViewModel
 from tsm.ui.viewmodels.realm_vm import RealmViewModel
@@ -71,6 +72,7 @@ class AppWindow(QMainWindow):
         self._updater_service = updater_service
         self._realm_tree_cache: dict | None = None
         self._quitting = False
+        self._session_ending = False
         self._backup_stats: str = ""
         self._log_viewer: LogViewerWindow | None = None
 
@@ -342,47 +344,52 @@ class AppWindow(QMainWindow):
             self.raise_()
             self.activateWindow()
 
+    def begin_session_end(self) -> None:
+        """The desktop session is ending, so stop holding the window open.
+
+        Called when the session manager announces a logout. From here on a
+        close request is obeyed instead of being turned into a tray hide or a
+        question box, either of which would cancel the logout.
+        """
+        self._session_ending = True
+
+    def _confirm_quit(self) -> bool:
+        from PySide6.QtWidgets import QMessageBox
+
+        reply = QMessageBox.question(
+            self,
+            "Quit TSM",
+            "Are you sure you want to quit TradeSkillMaster?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return reply == QMessageBox.StandardButton.Yes
+
     def closeEvent(self, event) -> None:
         if self._quitting:
             event.accept()
             return
         cfg = self._settings_vm.config
-        if cfg.minimize_to_tray:
+        action = close_action(
+            session_ending=self._session_ending,
+            minimize_to_tray=cfg.minimize_to_tray,
+            confirm_on_exit=cfg.show_confirmation_on_exit,
+        )
+        if action is CloseAction.HIDE:
             event.ignore()
             self.hide()
             return
-        if cfg.show_confirmation_on_exit:
-            from PySide6.QtWidgets import QMessageBox
-
-            reply = QMessageBox.question(
-                self,
-                "Quit TSM",
-                "Are you sure you want to quit TradeSkillMaster?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                event.ignore()
-                return
+        if action is CloseAction.CONFIRM and not self._confirm_quit():
+            event.ignore()
+            return
         event.accept()
         app = QApplication.instance()
         if app is not None:
             app.quit()
 
     def _quit(self) -> None:
-        cfg = self._settings_vm.config
-        if cfg.show_confirmation_on_exit:
-            from PySide6.QtWidgets import QMessageBox
-
-            reply = QMessageBox.question(
-                self,
-                "Quit TSM",
-                "Are you sure you want to quit TradeSkillMaster?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                return
+        if self._settings_vm.config.show_confirmation_on_exit and not self._confirm_quit():
+            return
         self._quitting = True
         app = QApplication.instance()
         if app is not None:
