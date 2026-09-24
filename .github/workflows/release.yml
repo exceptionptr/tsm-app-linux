@@ -5,287 +5,38 @@ on:
     tags:
       - "v*.*.*"
 
-env:
-  PYTHON_VERSION: "3.11"
-
 jobs:
-  # ── 0. Tests (gate: all build jobs require this to pass) ──────────────────
-  test:
-    name: Test (Python ${{ matrix.python-version }})
+  # ── 0. The tag is the source of truth for the version ────────────────────
+  # The app reads its version from the tag through hatch-vcs, but the Nix flake,
+  # the Flatpak manifest and the distribution changelogs cannot, so they carry
+  # it themselves. A forgotten bump there is silent: nix run would report the
+  # previous version. Fail the release instead.
+  check-version:
+    name: Check version consistency
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0   # hatch-vcs needs full tag history
+      - run: python3 scripts/check_version.py "${{ github.ref_name }}"
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ matrix.python-version }}
+  # ── 1. Wheel, deb and rpm, with their smoke tests ─────────────────────────
+  build:
+    name: Build
+    needs: check-version
+    uses: ./.github/workflows/build.yml
+    with:
+      version: ${{ github.ref_name }}
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+  # ── 2. Flatpak, AppImage and Nix ─────────────────────────────────────────
+  # Defined in packaging.yml so the same builds also run on develop pushes.
+  packaging:
+    name: Packaging
+    needs: build
+    uses: ./.github/workflows/packaging.yml
 
-      - name: Lint with ruff
-        run: ruff check tsm/ tests/
-
-      - name: Type check with mypy
-        run: mypy tsm/
-
-      - name: Run unit tests
-        run: pytest tests/unit/ -v
-
-      - name: Run integration tests
-        run: pytest tests/integration/ -v
-
-  # ── 1. Build Python wheel ─────────────────────────────────────────────────
-  build-wheel:
-    name: Build wheel
-    needs: test
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.value }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0   # hatch-vcs needs full tag history
-
-      - uses: actions/setup-python@v6
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Extract version from tag
-        id: version
-        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Build wheel
-        run: |
-          pip install build hatch-vcs
-          python -m build --wheel
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: wheel
-          path: dist/*.whl
-
-  # ── 2. Build .deb ─────────────────────────────────────────────────────────
-  build-deb:
-    name: Build .deb
-    needs: build-wheel
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.build-wheel.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: wheel
-          path: dist/
-
-      - name: Build staging tree
-        run: |
-          # Install tsm package (no deps) into bundle dir
-          pip install --no-deps --target=staging/usr/lib/tsm-app dist/*.whl
-          # Bundle Python deps absent from Debian/Ubuntu repos (matches RPM bundling)
-          pip install --pre --target=staging/usr/lib/tsm-app \
-            "apscheduler>=4.0.0a5,<5" structlog tomli-w
-          # Shell wrapper: python3 shebang, version-agnostic path
-          mkdir -p staging/usr/bin
-          printf '#!/bin/sh\nPYTHONPATH=/usr/lib/tsm-app${PYTHONPATH:+:$PYTHONPATH}\nexport PYTHONPATH\nexec python3 -m tsm "$@"\n' \
-            > staging/usr/bin/tsm-app
-          chmod +x staging/usr/bin/tsm-app
-          install -Dm644 packaging/tsm-app.desktop \
-            staging/usr/share/applications/tsm-app.desktop
-          install -Dm644 tsm/ui/assets/tsm_16.png  staging/usr/share/icons/hicolor/16x16/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_32.png  staging/usr/share/icons/hicolor/32x32/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_48.png  staging/usr/share/icons/hicolor/48x48/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_128.png staging/usr/share/icons/hicolor/128x128/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_256.png staging/usr/share/icons/hicolor/256x256/apps/tsm-app.png
-          install -Dm644 LICENSE \
-            staging/usr/share/doc/tsm-app/copyright
-
-      - name: Write DEBIAN/control
-        run: |
-          mkdir -p staging/DEBIAN
-          # Deps are canonical in packaging/debian/ci-depends (no dpkg substitution vars).
-          DEPENDS=$(cat packaging/debian/ci-depends)
-          cat > staging/DEBIAN/control << EOF
-          Package: tsm-app
-          Version: ${VERSION}
-          Architecture: all
-          Maintainer: exceptionptr <https://github.com/exceptionptr>
-          Depends: ${DEPENDS}
-          Homepage: https://github.com/exceptionptr/tsm-app-linux
-          Description: TradeSkillMaster Desktop App for Linux
-           Downloads auction house data from the TSM API and writes Lua files for
-           the TradeSkillMaster WoW addon running under Wine, Lutris, or Steam.
-          EOF
-
-      - name: Build .deb
-        run: |
-          dpkg-deb --root-owner-group --build staging \
-            "dist/tsm-app_${VERSION}_all.deb"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: deb
-          path: dist/*.deb
-
-  # ── 3. Build .rpm ─────────────────────────────────────────────────────────
-  build-rpm:
-    name: Build .rpm
-    needs: build-wheel
-    runs-on: ubuntu-latest
-    env:
-      VERSION: ${{ needs.build-wheel.outputs.version }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: wheel
-          path: dist/
-
-      - name: Install fpm
-        run: |
-          sudo apt-get install -y ruby ruby-dev rpm
-          sudo gem install fpm --no-document
-
-      - name: Build staging tree
-        run: |
-          # Install the app package itself (no deps - RPM Requires provides them)
-          pip install --no-deps --target=staging/usr/lib/tsm-app dist/*.whl
-          # Bundle Python deps absent from Fedora/openSUSE repos
-          pip install --pre --target=staging/usr/lib/tsm-app \
-            "apscheduler>=4.0.0a1,<5" structlog tomli-w
-          # Shell wrapper: version-agnostic, avoids Ubuntu-generated shebang/path issues
-          mkdir -p staging/usr/bin
-          printf '#!/bin/sh\nPYTHONPATH=/usr/lib/tsm-app${PYTHONPATH:+:$PYTHONPATH}\nexport PYTHONPATH\nexec python3 -m tsm "$@"\n' \
-            > staging/usr/bin/tsm-app
-          chmod +x staging/usr/bin/tsm-app
-          # Desktop entry, icons, license
-          install -Dm644 packaging/tsm-app.desktop \
-            staging/usr/share/applications/tsm-app.desktop
-          install -Dm644 tsm/ui/assets/tsm_16.png  staging/usr/share/icons/hicolor/16x16/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_32.png  staging/usr/share/icons/hicolor/32x32/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_48.png  staging/usr/share/icons/hicolor/48x48/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_128.png staging/usr/share/icons/hicolor/128x128/apps/tsm-app.png
-          install -Dm644 tsm/ui/assets/tsm_256.png staging/usr/share/icons/hicolor/256x256/apps/tsm-app.png
-          install -Dm644 LICENSE \
-            staging/usr/share/licenses/tsm-app/LICENSE
-
-      - name: Build .rpm with fpm
-        run: |
-          # RPM requires list excludes bundled packages (apscheduler, structlog, tomli-w)
-          FPM_DEPS=$(tr ',' '\n' < packaging/rpm/rpm-requires \
-            | sed 's/^ *//;s/ *$//' \
-            | awk 'NF {print "--depends "$0}' \
-            | tr '\n' ' ')
-          fpm -s dir -t rpm \
-            --name tsm-app \
-            --version "${VERSION}" \
-            --architecture noarch \
-            --maintainer "exceptionptr" \
-            --url "https://github.com/exceptionptr/tsm-app-linux" \
-            --description "TradeSkillMaster Desktop App for Linux" \
-            --license MIT \
-            ${FPM_DEPS} \
-            --package "dist/tsm-app-${VERSION}-1.noarch.rpm" \
-            -C staging .
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: rpm
-          path: dist/*.rpm
-
-  # ── 4. Smoke-test .rpm on Fedora and openSUSE ────────────────────────────
-  test-rpm-fedora:
-    name: Test .rpm (Fedora)
-    needs: build-rpm
-    runs-on: ubuntu-latest
-    container:
-      image: fedora:latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: rpm
-          path: dist/
-
-      - name: Install RPM
-        run: dnf install -y dist/*.rpm
-
-      - name: Smoke test
-        run: |
-          tsm-app --version
-          PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
-
-  test-rpm-opensuse:
-    name: Test .rpm (openSUSE)
-    needs: build-rpm
-    runs-on: ubuntu-latest
-    container:
-      image: opensuse/tumbleweed:latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: rpm
-          path: dist/
-
-      - name: Install RPM
-        run: |
-          # Tumbleweed mirrors can briefly have inconsistent metadata during snapshot
-          # transitions (repomd.xml references a file not yet propagated). Attempt the
-          # refresh so successfully-updated repos are current, then install using
-          # --no-refresh so the Docker image's pre-populated metadata cache is used
-          # for any repo that failed to refresh.
-          zypper --non-interactive --gpg-auto-import-keys refresh || true
-          zypper --no-refresh --non-interactive install --allow-unsigned-rpm dist/*.rpm
-
-      - name: Smoke test
-        run: |
-          tsm-app --version
-          PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
-
-  # ── 5. Smoke-test .deb on Ubuntu 26.04 ───────────────────────────────────
-  # PySide6 is only available in apt on Ubuntu 26.04+ (individual split
-  # packages). Ubuntu 24.04 and earlier do not ship PySide6 in apt at all.
-  test-deb:
-    name: Test .deb (Ubuntu 26.04)
-    needs: build-deb
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:26.04
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          name: deb
-          path: dist/
-
-      - name: Install .deb
-        run: |
-          apt-get update -qq
-          apt-get install -y \
-            python3-pyside6.qtcore python3-pyside6.qtgui \
-            python3-pyside6.qtnetwork python3-pyside6.qtsvg \
-            python3-pyside6.qtwidgets \
-            python3-aiohttp python3-pydantic python3-aiosqlite \
-            python3-keyring python3-yaml
-          dpkg -i dist/*.deb
-
-      - name: Smoke test
-        run: |
-          tsm-app --version
-          PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
-
-  # ── 6. Create GitHub Release ──────────────────────────────────────────────
+  # ── 3. Create GitHub Release ─────────────────────────────────────────────
   github-release:
     name: GitHub Release
-    needs: [build-wheel, build-deb, build-rpm, test-rpm-fedora, test-rpm-opensuse, test-deb]
+    needs: [build, packaging]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -302,3 +53,5 @@ jobs:
             artifacts/wheel/*.whl
             artifacts/deb/*.deb
             artifacts/rpm/*.rpm
+            artifacts/flatpak/*.flatpak
+            artifacts/appimage/*.AppImage

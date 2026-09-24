@@ -78,6 +78,10 @@ def create_app(
 
     qt_app.setApplicationVersion(__version__)
     qt_app.setOrganizationName("tsm-app")
+    # Names the app to the desktop: without it Qt falls back to the interpreter,
+    # so the window carries no usable identity and KDE had nothing to put in
+    # "Logout cancelled by ''" (issue #21). Matches packaging/tsm-app.desktop.
+    qt_app.setDesktopFileName("tsm-app")
 
     load_theme(qt_app, "tsm_dark")
     qt_app.setWindowIcon(_make_window_icon())
@@ -180,5 +184,12 @@ def create_app(
 
     qt_app.aboutToQuit.connect(lambda: async_runner.submit(_shutdown()).result(timeout=5))
     qt_app.aboutToQuit.connect(async_runner.stop)
+
+    # Logging out is announced as commitDataRequest. Take it as notice to stop
+    # guarding the window, but do not quit here: the session manager decides
+    # when clients die, and quitting early loses the rest of its handshake.
+    # saveStateRequest is deliberately left alone. It also fires on an ordinary
+    # session save, which is not a logout.
+    qt_app.commitDataRequest.connect(lambda _manager: window.begin_session_end())
 
     return qt_app, window, async_runner, auth_svc

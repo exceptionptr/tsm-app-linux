@@ -1,0 +1,101 @@
+name: Publish to Flathub
+
+# Pushes a release into the Flathub app repository, the same way the AUR
+# workflow pushes into the AUR one.
+#
+# This only works once the app has been accepted on Flathub. The first release
+# is a manual pull request against flathub/flathub, reviewed by a person, and it
+# also needs an exception granted for the host filesystem permission. See
+# docs/packaging.md. Flathub creates the repository below on acceptance.
+#
+# Needs a FLATHUB_TOKEN secret: a GitHub token with write access to
+# flathub/io.github.exceptionptr.tsm-app-linux.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.1.16)"
+        required: true
+
+env:
+  APP_ID: io.github.exceptionptr.tsm-app-linux
+
+jobs:
+  publish-flathub:
+    name: Publish to Flathub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out this repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          path: source
+
+      - name: Check out the Flathub app repository
+        uses: actions/checkout@v6
+        with:
+          repository: flathub/io.github.exceptionptr.tsm-app-linux
+          token: ${{ secrets.FLATHUB_TOKEN }}
+          path: flathub
+          fetch-depth: 0
+
+      - name: Resolve the tag and its commit
+        id: resolve
+        working-directory: source
+        run: |
+          TAG="v${{ github.event.inputs.version }}"
+          if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG does not exist. Tag the release first." >&2
+            exit 1
+          fi
+          {
+            echo "tag=$TAG"
+            echo "commit=$(git rev-parse "$TAG")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Update the manifest
+        run: |
+          cp source/packaging/flatpak/"${APP_ID}".metainfo.xml flathub/
+          cp source/packaging/flatpak/"${APP_ID}".desktop flathub/
+          cp source/packaging/flatpak/python3-deps.yaml flathub/
+          cp source/packaging/flatpak/python3-build-backend.yaml flathub/
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          app_id = os.environ["APP_ID"]
+          version = "${{ github.event.inputs.version }}"
+          tag = "${{ steps.resolve.outputs.tag }}"
+          commit = "${{ steps.resolve.outputs.commit }}"
+
+          text = pathlib.Path("source/packaging/flatpak", f"{app_id}.yml").read_text()
+          # Flathub builds a tag pinned to its commit, never a moving branch.
+          text = re.sub(r"^(\s*)tag: .*$", rf"\g<1>tag: {tag}\n\g<1>commit: {commit}",
+                        text, count=1, flags=re.M)
+          text = re.sub(r"SETUPTOOLS_SCM_PRETEND_VERSION=[0-9][^\s]*",
+                        f"SETUPTOOLS_SCM_PRETEND_VERSION={version}", text)
+          pathlib.Path("flathub", f"{app_id}.yml").write_text(text)
+          PY
+
+      - name: Open a pull request
+        working-directory: flathub
+        env:
+          GH_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if git diff --quiet; then
+            echo "Flathub is already at ${VERSION}, nothing to publish."
+            exit 0
+          fi
+          git config user.name "exceptionptr"
+          git config user.email "${{ secrets.AUR_EMAIL }}"
+          git checkout -b "update-${VERSION}"
+          git add -A
+          git commit -m "Update to v${VERSION}"
+          git push -u origin "update-${VERSION}" --force
+          gh pr create \
+            --title "Update to v${VERSION}" \
+            --body "Automated from the release workflow. Merging publishes the build." \
+            --head "update-${VERSION}" \
+            --base master

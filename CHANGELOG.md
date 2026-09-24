@@ -4,6 +4,52 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [1.1.16] - 2026-09-24
+
+### Added
+
+- **Flatpak, AppImage and a Nix flake**, all built by CI alongside the existing
+  deb and rpm.
+  - **Flatpak**: a single-file bundle is attached to each release, so
+    `flatpak install ./io.github.exceptionptr.tsm-app-linux.flatpak` is enough.
+    It carries its own Python and Qt, so no distro PySide6 is needed. The app id
+    is `io.github.exceptionptr.tsm-app-linux`, which is also what a Flathub
+    listing would use. It asks for access to the whole filesystem, because the
+    app exists to write Lua into World of Warcraft installs and those live
+    wherever the user keeps games, including separate drives.
+  - **AppImage**: one executable file with Python, Qt and every dependency
+    inside, for distributions that package none of them. Around 240 MB.
+  - **Nix flake**: `nix run github:exceptionptr/tsm-app-linux` runs it, and the
+    flake's overlay adds `tsm-app` for NixOS configurations. APScheduler 4 is
+    still a pre-release and absent from nixpkgs, so the flake carries it.
+- **A packaging workflow that runs on pushes to develop**, so a broken manifest
+  turns up before a release is tagged rather than in the middle of one.
+
+### Fixed
+
+- **The app cancelled reboot and shutdown on KDE Plasma** (#21). Closing the
+  window hides it to the tray, which is the point of the tray icon, but the
+  session manager announces a logout by asking windows to close. Hiding refused
+  that request, and a client that refuses one cancels the logout for the whole
+  session, so the desktop reported `Logout cancelled by ''` and stayed put until
+  the app was quit by hand. With `show_confirmation_on_exit` on it was worse: a
+  question box appeared mid-logout and waited for an answer. The app now takes a
+  logout notice from the session manager and obeys close requests from then on,
+  without hiding and without asking. An ordinary session save is deliberately
+  left alone, since that is not a logout and the app should survive it.
+- **The desktop had no name for the app.** Nothing set the desktop file name, so
+  Qt fell back to the interpreter and the window went out identified as
+  `python3`. That is why the logout notice above had empty quotes where the
+  culprit's name belongs. The app now identifies itself as `tsm-app`, matching
+  the installed desktop entry, which also lets the panel pair the window with
+  its icon.
+- **A logout killed the app mid-write.** Session managers end a program with
+  `SIGTERM`, which went unhandled, so the process died without closing the
+  scheduler, the API session or the database. `SIGTERM` now takes the same route
+  as Ctrl+C and shuts everything down in order.
+
+---
+
 ## [1.1.15] - 2026-08-27
 
 ### Added

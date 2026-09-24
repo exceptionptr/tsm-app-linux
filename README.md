@@ -29,14 +29,19 @@ TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloa
 - Atomic `AppData.lua` writes: no partial/corrupt addon data
 - Scheduled SavedVariables backups with restore support
 - TSM addon version checking with auto-update on each sync; manual install, update, and uninstall per addon per game version from the Addon Versions tab
-- Accounting tab: browse sales, purchases, income, and expenses from WoW SavedVariables with date filtering, paginated preview (50 rows/page), item names resolved via Wowhead API with WoW-style tooltips on hover, and CSV export
+- Accounting dashboard: player gold over time with a hover readout and 1D to All ranges, headline figures (high, low, daily sales and purchases, top sale and purchase), Sales / Expenses / Profit panels with totals, per-day averages and leading items, and every item traded with its icon framed in its quality colour, earned, spent and profit columns, WoW-style tooltips on hover, and CSV export
 - Status bar with GitHub link and Settings shortcut; system tray icon with minimise-to-tray support
 
 ## Requirements
 
+- World of Warcraft running via Wine, Lutris, Proton, Faugus Launcher, or Steam on Linux
+- A TradeSkillMaster account
+
+The Flatpak, AppImage and Nix packages carry everything else they need. Only the
+deb, rpm, AUR and from-source installs require the system to provide:
+
 - Python 3.11+
 - PySide6 (Qt6)
-- World of Warcraft running via Wine, Lutris, or Steam on Linux
 
 ## Installation
 
@@ -74,6 +79,90 @@ Download the `.rpm` from the [latest release](https://github.com/exceptionptr/ts
 sudo dnf install tsm-app-*.noarch.rpm
 ```
 
+### Flatpak (any distro)
+
+Download the bundle from the [latest release](https://github.com/exceptionptr/tsm-app-linux/releases/latest).
+It carries its own Python and Qt, so no distro PySide6 is needed:
+
+```bash
+flatpak install ./io.github.exceptionptr.tsm-app-linux.flatpak
+flatpak run io.github.exceptionptr.tsm-app-linux
+```
+
+The bundle is not a repository, so it does not update itself. Install a newer
+release the same way to upgrade.
+
+### AppImage (any distro)
+
+One file with Python, Qt and every dependency inside. Around 240 MB:
+
+```bash
+chmod +x TSM_Desktop_App-*.AppImage
+./TSM_Desktop_App-*.AppImage
+```
+
+If it will not start, your system is probably missing FUSE. Either install
+`fuse2`, or run it without FUSE:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./TSM_Desktop_App-*.AppImage
+```
+
+It bundles Python and Qt, but still uses a few libraries from the host: glib,
+fontconfig, libGL, dbus, and the usual xcb set on X11. Every desktop
+installation has these; a minimal container may not. `tsm-app --self-test` says
+which one is missing if it fails.
+
+### NixOS
+
+Run it straight from the flake:
+
+```bash
+nix run github:exceptionptr/tsm-app-linux
+```
+
+Or install it on NixOS, in your system's `flake.nix`:
+
+```nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    tsm-app.url = "github:exceptionptr/tsm-app-linux";
+  };
+
+  outputs = { nixpkgs, tsm-app, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./configuration.nix
+        (
+          { pkgs, ... }:
+          {
+            # Builds against your nixpkgs, so it shares the Qt and Python you
+            # already have instead of pulling in a second copy of both.
+            nixpkgs.overlays = [ tsm-app.overlays.default ];
+            environment.systemPackages = [ pkgs.tsm-app ];
+          }
+        )
+      ];
+    };
+  };
+}
+```
+
+The overlay only adds `tsm-app` and `apscheduler4`, and overrides nothing, so it
+cannot trigger rebuilds elsewhere in your system.
+
+If your nixpkgs is too old to evaluate the package, take it pre-built against
+the version this flake pins instead. That always builds, at the cost of a second
+Qt closure in your store:
+
+```nix
+environment.systemPackages = [
+  tsm-app.packages.${pkgs.stdenv.hostPlatform.system}.default
+];
+```
+
 ### Any distro / From source
 
 Recommended for Ubuntu 24.04 and distros without a compatible PySide6 package:
@@ -99,6 +188,18 @@ python -m tsm
 # or after package / pip install:
 tsm-app
 ```
+
+## Troubleshooting
+
+If the app will not start, check whether the GUI stack loads:
+
+```bash
+tsm-app --self-test
+```
+
+It prints the Python, PySide6 and Qt versions and the Qt platform plugin in use,
+without touching your database, keyring or credentials. Include its output when
+reporting a problem.
 
 ## File Locations
 

@@ -1,0 +1,20 @@
+name: CI
+
+# Runs the same build jobs a release runs, on every push and pull request, so a
+# failure shows up on the branch instead of during a release. Packaging has its
+# own workflow because those builds are slow and only worth running when
+# packaging actually changed.
+on:
+  push:
+    branches: [develop, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    with:
+      # Not a release, so the packages carry a placeholder version. The wheel
+      # still takes its real version from hatch-vcs.
+      version: 0.0.0

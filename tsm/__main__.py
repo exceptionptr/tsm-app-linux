@@ -60,6 +60,11 @@ def main() -> None:
         help="Print version and exit",
     )
     parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Check that the GUI stack loads, then exit",
+    )
+    parser.add_argument(
         "--skip-detection",
         action="store_true",
         help="Skip WoW install auto-detection at startup",
@@ -82,6 +87,13 @@ def main() -> None:
         print(__version__)
         return
 
+    if known.self_test:
+        # Deliberately ahead of everything else: it must not open the database,
+        # read the keyring or take the single instance lock.
+        from tsm.ui.self_test import run_self_test
+
+        sys.exit(run_self_test())
+
     _setup_logging()
 
     from tsm.app import create_app
@@ -98,13 +110,16 @@ def main() -> None:
     # Make Ctrl+C work: Qt blocks Python's default SIGINT handler.
     # Install a handler that calls QApplication.quit(), and use a 200ms
     # timer so the Python interpreter gets a chance to check for signals.
+    # SIGTERM is how a session manager ends the app on logout, so it takes the
+    # same route and gets the scheduler and database closed on the way out.
     signal.signal(signal.SIGINT, lambda *_: qt_app.quit())
+    signal.signal(signal.SIGTERM, lambda *_: qt_app.quit())
     from PySide6.QtCore import QTimer
 
-    _sigint_timer = QTimer()
-    _sigint_timer.setInterval(200)
-    _sigint_timer.timeout.connect(lambda: None)  # wake event loop for Python
-    _sigint_timer.start()
+    _signal_timer = QTimer()
+    _signal_timer.setInterval(200)
+    _signal_timer.timeout.connect(lambda: None)  # wake event loop for Python
+    _signal_timer.start()
 
     bridge = AsyncBridge()  # no parent; lives until callback fires
 

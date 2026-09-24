@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.15
+Version:        1.1.16
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,15 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Wed Sep 24 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.16-1
+- Fix: the app cancelled reboot and shutdown on KDE Plasma. Closing to the tray
+  refused the session manager's request to close, which cancels the logout for
+  the whole session
+- Fix: the app identifies itself to the desktop as tsm-app instead of falling
+  back to the interpreter, which is why the logout notice named no application
+- Fix: SIGTERM shuts the scheduler, API session and database down in order
+  instead of killing the process where it stands
+- Add: Flatpak, AppImage and Nix flake packaging
 * Thu Aug 27 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.15-1
 - Add: Accounting rebuilt as a dashboard: player gold over time with a hover
   crosshair and 1D..All ranges, headline figures, Sales/Expenses/Profit panels,

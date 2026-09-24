@@ -1,3 +1,20 @@
+tsm-app (1.1.16-1) stable; urgency=medium
+
+  * Fix: the app cancelled reboot and shutdown on KDE Plasma. Closing the window
+    hides it to the tray, but a session manager announces a logout by asking
+    windows to close, and refusing that request cancels the logout for the whole
+    session. The app now takes the logout notice and obeys close requests from
+    then on, without hiding and without asking for confirmation.
+  * Fix: nothing set the desktop file name, so the window went out identified as
+    the interpreter and the desktop had no name to put in its logout notice. The
+    app now identifies itself as tsm-app.
+  * Fix: SIGTERM, which is how a session manager ends a program, went unhandled
+    and cut the process down before the scheduler, API session and database
+    closed. It now shuts everything down in order.
+  * Add: Flatpak, AppImage and Nix flake packaging, all built by CI.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Wed, 24 Sep 2026 12:00:00 +0000
+
 tsm-app (1.1.15-1) stable; urgency=medium
 
   * Add: the Accounting tab is now a dashboard. Player gold over time from the
