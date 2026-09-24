@@ -60,6 +60,11 @@ def main() -> None:
         help="Print version and exit",
     )
     parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Check that the GUI stack loads, then exit",
+    )
+    parser.add_argument(
         "--skip-detection",
         action="store_true",
         help="Skip WoW install auto-detection at startup",
@@ -81,6 +86,13 @@ def main() -> None:
 
         print(__version__)
         return
+
+    if known.self_test:
+        # Deliberately ahead of everything else: it must not open the database,
+        # read the keyring or take the single instance lock.
+        from tsm.ui.self_test import run_self_test
+
+        sys.exit(run_self_test())
 
     _setup_logging()
 

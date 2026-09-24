@@ -99,6 +99,10 @@ jobs:
         run: |
           flatpak install --user -y --noninteractive "${APP_ID}.flatpak"
           flatpak run "${APP_ID}" --version
+          # --version returns before PySide6 is ever imported, so it would pass
+          # with a completely broken Qt. --self-test builds a QApplication and
+          # shows a window, which is what a bundled Qt tends to fail at.
+          flatpak run --env=QT_QPA_PLATFORM=offscreen "${APP_ID}" --self-test
 
       - name: Check against Flathub's linter
         continue-on-error: true   # host filesystem access needs a granted exception
@@ -138,9 +142,16 @@ jobs:
 
       - name: Smoke test
         run: |
+          # Qt needs these from the host even though the AppImage carries Qt
+          # itself. The runner image does not guarantee them.
+          sudo apt-get install -y \
+            libgl1 libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
           APPIMAGE=$(find dist -name '*.AppImage' | head -1)
           chmod +x "$APPIMAGE"
           APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --version
+          # --version returns before PySide6 is imported, so it proves nothing
+          # about the bundled Qt. --self-test builds a QApplication.
+          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --self-test
 
       - uses: actions/upload-artifact@v7
         with:
@@ -168,4 +179,8 @@ jobs:
         run: nix build .#tsm-app --print-build-logs
 
       - name: Smoke test
-        run: ./result/bin/tsm-app --version
+        run: |
+          ./result/bin/tsm-app --version
+          # Proves wrapQtAppsHook wired the plugin path up, which --version
+          # cannot: it returns before PySide6 is imported.
+          QT_QPA_PLATFORM=offscreen ./result/bin/tsm-app --self-test

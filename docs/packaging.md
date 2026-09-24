@@ -59,6 +59,26 @@ No new accounts beyond GitHub. Flathub and nixpkgs both authenticate with it.
 For nixpkgs, add yourself to `maintainers/maintainer-list.nix` in your first pull
 request. Afterwards the nixpkgs update bot proposes version bumps on its own.
 
+## Smoke tests
+
+Every package is checked with `--self-test`, not just `--version`. The
+difference matters: `--version` returns before PySide6 is ever imported, so it
+passes even when Qt is completely broken, which is the failure these bundles are
+most prone to. `--self-test` constructs a QApplication and shows a window, then
+reports the Python, PySide6 and Qt versions and the platform plugin that loaded.
+
+```bash
+QT_QPA_PLATFORM=offscreen tsm-app --self-test
+```
+
+It opens no database, reads no keyring, makes no network call and takes no
+single instance lock, so it is safe to run while the app is already running, and
+it is a useful thing to ask for in a bug report.
+
+CI runs it inside each package: through `flatpak run`, through the AppImage, and
+through the Nix wrapper, where it also proves `wrapQtAppsHook` wired the plugin
+path up.
+
 ## Why PySide6-Essentials
 
 The Flatpak and AppImage install `PySide6-Essentials` rather than `PySide6`. The

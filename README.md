@@ -184,6 +184,18 @@ python -m tsm
 tsm-app
 ```
 
+## Troubleshooting
+
+If the app will not start, check whether the GUI stack loads:
+
+```bash
+tsm-app --self-test
+```
+
+It prints the Python, PySide6 and Qt versions and the Qt platform plugin in use,
+without touching your database, keyring or credentials. Include its output when
+reporting a problem.
+
 ## File Locations
 
 | Purpose       | Path                                          |
