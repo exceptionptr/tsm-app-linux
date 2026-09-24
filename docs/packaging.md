@@ -59,6 +59,33 @@ No new accounts beyond GitHub. Flathub and nixpkgs both authenticate with it.
 For nixpkgs, add yourself to `maintainers/maintainer-list.nix` in your first pull
 request. Afterwards the nixpkgs update bot proposes version bumps on its own.
 
+## Versions
+
+The app reads its own version from the git tag, through hatch-vcs. Tagging
+`v1.1.16` and building gives a wheel of exactly `1.1.16`; building an untagged
+commit gives something like `1.1.16.dev7+gc16b8879`. Nothing needs to be edited
+for the wheel, deb, rpm or AppImage to be right.
+
+Three things cannot read the tag and carry the version themselves:
+
+- **`flake.nix`**, and this is the one that bites. A flake has no access to git
+  tags, so its hardcoded `version` is what `nix run` reports to users. Forget to
+  bump it and NixOS silently reports the previous release.
+- **The Flatpak manifest**, which pins the tag it builds and the version it
+  stamps. CI rewrites both from the tag, so a stale value only affects someone
+  building by hand.
+- **The distribution changelogs and the AppStream metadata**, which are what
+  users read.
+
+`scripts/check_version.py` checks all nine places against a version:
+
+```bash
+python scripts/check_version.py v1.1.16
+```
+
+The release workflow runs it before anything else, so a forgotten bump fails the
+release rather than shipping a wrong version.
+
 ## Smoke tests
 
 Every package is checked with `--self-test`, not just `--version`. The

@@ -6,9 +6,22 @@ on:
       - "v*.*.*"
 
 jobs:
+  # ── 0. The tag is the source of truth for the version ────────────────────
+  # The app reads its version from the tag through hatch-vcs, but the Nix flake,
+  # the Flatpak manifest and the distribution changelogs cannot, so they carry
+  # it themselves. A forgotten bump there is silent: nix run would report the
+  # previous version. Fail the release instead.
+  check-version:
+    name: Check version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 scripts/check_version.py "${{ github.ref_name }}"
+
   # ── 1. Wheel, deb and rpm, with their smoke tests ─────────────────────────
   build:
     name: Build
+    needs: check-version
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ github.ref_name }}
