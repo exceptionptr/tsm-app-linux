@@ -78,6 +78,9 @@ python3Packages.buildPythonApplication rec {
   ]
   ++ [ apscheduler4 ];
 
+  # wrapQtAppsHook reads the plugin prefix off qtbase, and fails with
+  # "qtPluginPrefix is unset" when it is not among the build inputs.
+  buildInputs = [ qt6.qtbase ];
   nativeBuildInputs = [ qt6.wrapQtAppsHook ];
   dontWrapQtApps = true;
   preFixup = ''

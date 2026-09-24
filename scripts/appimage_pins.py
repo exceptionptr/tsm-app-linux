@@ -70,7 +70,12 @@ def main() -> None:
     if shell_unsafe:
         raise SystemExit(f"refusing to emit shell-unsafe requirements: {shell_unsafe}")
 
-    target.write_text("\n".join([*pins, wheel]) + "\n")
+    # --no-deps because the pins above are the full resolved set, and
+    # pyproject.toml asks for PySide6 while the pins carry PySide6-Essentials.
+    # Without it pip installs the full PySide6 on top, Addons and all, which
+    # triples the bundle. python-appimage joins its pip arguments into a shell
+    # string, so the flag and the path arrive as two arguments.
+    target.write_text("\n".join([*pins, f"--no-deps {wheel}"]) + "\n")
     print(f"    {len(pins)} pinned dependencies")
 
 

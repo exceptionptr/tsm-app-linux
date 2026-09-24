@@ -177,7 +177,9 @@ jobs:
             experimental-features = nix-command flakes
 
       - name: Check the flake
-        run: nix flake check --all-systems --print-build-logs
+        # Evaluation only. The build step below does the building, and without
+        # this the check builds the whole Qt closure a second time.
+        run: nix flake check --no-build --all-systems
 
       - name: Build
         run: nix build .#tsm-app --print-build-logs

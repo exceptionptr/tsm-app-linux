@@ -46,9 +46,25 @@ if [ -z "${APPDIR}" ]; then
 fi
 echo "==> AppDir: $(basename "${APPDIR}")"
 
+# The whole point of pinning PySide6-Essentials is to leave the Addons half
+# out. If a change to python-appimage ever defeats that, the bundle silently
+# triples in size, so check rather than trust.
+if find "${APPDIR}" -maxdepth 6 -name "pyside6_addons*" | grep -q .; then
+    echo "PySide6 Addons ended up in the bundle: the --no-deps pin is not working" >&2
+    exit 1
+fi
+
 echo "==> Packaging"
 mkdir -p dist
+# python-appimage only fetches appimagetool when it packages an image itself,
+# which --no-packaging skips, so ask for it explicitly. Without this "which"
+# returns nothing on a cold cache and the packaging line runs an empty command.
+python -c 'from python_appimage.utils.deps import ensure_appimagetool; ensure_appimagetool()'
 APPIMAGETOOL="$(python -m python_appimage which appimagetool)"
+if [ -z "${APPIMAGETOOL}" ]; then
+    echo "appimagetool could not be located" >&2
+    exit 1
+fi
 VERSION="$(basename "${WHEEL}" | cut -d- -f2)"
 TARGET="dist/TSM_Desktop_App-${VERSION}-$(uname -m).AppImage"
 # Runs inside containers and CI, where FUSE is usually unavailable.

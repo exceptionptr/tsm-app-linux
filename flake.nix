@@ -86,6 +86,9 @@
           # buildPythonApplication does not do on its own. The hook is told to
           # keep its hands off so its arguments can be folded into the single
           # wrapper the Python builder already creates.
+          # wrapQtAppsHook reads the plugin prefix off qtbase, and fails with
+          # "qtPluginPrefix is unset" when it is not among the build inputs.
+          buildInputs = [ final.qt6.qtbase ];
           nativeBuildInputs = [ final.qt6.wrapQtAppsHook ];
           dontWrapQtApps = true;
           preFixup = ''

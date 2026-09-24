@@ -54,7 +54,11 @@ modules:
     build-commands:
       # hatch-vcs reads the version from git tags, which are not available to an
       # offline build, so it is passed in instead.
-      - SETUPTOOLS_SCM_PRETEND_VERSION=1.1.16 pip3 install --no-index
+      # --no-deps because python3-deps already installed everything, and
+      # pyproject.toml asks for PySide6 while what is installed is
+      # PySide6-Essentials. Those are different distributions, so without this
+      # pip goes looking for PySide6 and fails with no index to search.
+      - SETUPTOOLS_SCM_PRETEND_VERSION=1.1.16 pip3 install --no-index --no-deps
         --no-build-isolation --prefix=${FLATPAK_DEST} .
       - install -Dm644 packaging/flatpak/io.github.exceptionptr.tsm-app-linux.desktop
         ${FLATPAK_DEST}/share/applications/io.github.exceptionptr.tsm-app-linux.desktop
