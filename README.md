@@ -121,6 +121,22 @@ Run it straight from the flake:
 nix run github:exceptionptr/tsm-app-linux
 ```
 
+Nix ships with flakes turned off unless you are on NixOS, so that may fail with
+`experimental Nix feature 'nix-command' is disabled`. Either pass them for one
+command:
+
+```bash
+nix --extra-experimental-features 'nix-command flakes' \
+  run github:exceptionptr/tsm-app-linux
+```
+
+or turn them on for good:
+
+```bash
+mkdir -p ~/.config/nix
+echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
+```
+
 Or install it on NixOS, in your system's `flake.nix`:
 
 ```nix
