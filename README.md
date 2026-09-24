@@ -29,14 +29,19 @@ TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloa
 - Atomic `AppData.lua` writes: no partial/corrupt addon data
 - Scheduled SavedVariables backups with restore support
 - TSM addon version checking with auto-update on each sync; manual install, update, and uninstall per addon per game version from the Addon Versions tab
-- Accounting tab: browse sales, purchases, income, and expenses from WoW SavedVariables with date filtering, paginated preview (50 rows/page), item names resolved via Wowhead API with WoW-style tooltips on hover, and CSV export
+- Accounting dashboard: player gold over time with a hover readout and 1D to All ranges, headline figures (high, low, daily sales and purchases, top sale and purchase), Sales / Expenses / Profit panels with totals, per-day averages and leading items, and every item traded with its icon framed in its quality colour, earned, spent and profit columns, WoW-style tooltips on hover, and CSV export
 - Status bar with GitHub link and Settings shortcut; system tray icon with minimise-to-tray support
 
 ## Requirements
 
+- World of Warcraft running via Wine, Lutris, Proton, Faugus Launcher, or Steam on Linux
+- A TradeSkillMaster account
+
+The Flatpak, AppImage and Nix packages carry everything else they need. Only the
+deb, rpm, AUR and from-source installs require the system to provide:
+
 - Python 3.11+
 - PySide6 (Qt6)
-- World of Warcraft running via Wine, Lutris, or Steam on Linux
 
 ## Installation
 

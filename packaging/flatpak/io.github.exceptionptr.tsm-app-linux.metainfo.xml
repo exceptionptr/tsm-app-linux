@@ -40,16 +40,16 @@
 
   <screenshots>
     <screenshot type="default">
+      <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/4.png</image>
+      <caption>Gold over time, with sales, expenses and profit per item</caption>
+    </screenshot>
+    <screenshot>
       <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/1.png</image>
-      <caption>Realm data with auction downloads per realm</caption>
+      <caption>Auction data status for each realm</caption>
     </screenshot>
     <screenshot>
       <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/3.png</image>
-      <caption>Detected World of Warcraft installs</caption>
-    </screenshot>
-    <screenshot>
-      <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/4.png</image>
-      <caption>Settings for sync, backups and addon updates</caption>
+      <caption>Scheduled backups of the addon's saved variables</caption>
     </screenshot>
   </screenshots>
 

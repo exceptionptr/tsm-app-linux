@@ -17,6 +17,48 @@ they run where no suitable PySide6 exists. The Nix flake builds from nixpkgs.
 `packaging.yml` also runs on pushes to `develop` that touch packaging, so a
 broken manifest surfaces before a release is tagged rather than during one.
 
+## What is automated, and what is not
+
+Tagging a release builds everything and attaches it to the GitHub release. That
+is the whole of the automation for formats that have no store.
+
+| Target | On a tag | Publishing | Needs |
+|---|---|---|---|
+| wheel, deb, rpm | built and attached | GitHub release only | nothing |
+| AppImage | built and attached | GitHub release only | nothing |
+| Flatpak bundle | built and attached | GitHub release only | nothing |
+| Nix flake | built and checked | nothing to publish | nothing |
+| AUR | not built | `aur.yml`, run by hand | `AUR_SSH_KEY`, `AUR_EMAIL` |
+| Flathub | not pushed | `flathub.yml`, run by hand | `FLATHUB_TOKEN` |
+| nixpkgs | not pushed | pull request, by hand | a nixpkgs pull request |
+
+Three things are worth being clear about:
+
+- **A Nix flake has no store.** `nix run github:exceptionptr/tsm-app-linux`
+  resolves the flake straight from the repository as soon as the tag exists.
+  Nothing needs publishing. nixpkgs is a separate, optional distribution channel
+  that takes a pull request.
+- **An AppImage has no store either.** The file on the GitHub release is the
+  distribution. [AppImageHub](https://github.com/AppImage/appimage.github.io) is
+  an optional catalogue listing, added by a pull request.
+- **Flathub cannot be automated for the first release.** It is a pull request
+  against `flathub/flathub`, reviewed by a person, and this app additionally
+  needs an exception granted for its filesystem permission. Once accepted,
+  Flathub creates `flathub/io.github.exceptionptr.tsm-app-linux` and later
+  releases go through `flathub.yml`.
+
+### Accounts and secrets
+
+No new accounts beyond GitHub. Flathub and nixpkgs both authenticate with it.
+
+| Secret | Used by | What it is |
+|---|---|---|
+| `AUR_SSH_KEY`, `AUR_EMAIL` | `aur.yml` | already configured |
+| `FLATHUB_TOKEN` | `flathub.yml` | a GitHub token with write access to the Flathub app repository, created after acceptance |
+
+For nixpkgs, add yourself to `maintainers/maintainer-list.nix` in your first pull
+request. Afterwards the nixpkgs update bot proposes version bumps on its own.
+
 ## Why PySide6-Essentials
 
 The Flatpak and AppImage install `PySide6-Essentials` rather than `PySide6`. The
