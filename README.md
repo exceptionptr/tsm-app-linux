@@ -116,15 +116,46 @@ Run it straight from the flake:
 nix run github:exceptionptr/tsm-app-linux
 ```
 
-Or add the overlay in `configuration.nix`:
+Or install it on NixOS, in your system's `flake.nix`:
 
 ```nix
 {
-  inputs.tsm-app.url = "github:exceptionptr/tsm-app-linux";
-  # in your system configuration:
-  nixpkgs.overlays = [ inputs.tsm-app.overlays.default ];
-  environment.systemPackages = [ pkgs.tsm-app ];
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    tsm-app.url = "github:exceptionptr/tsm-app-linux";
+  };
+
+  outputs = { nixpkgs, tsm-app, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        ./configuration.nix
+        (
+          { pkgs, ... }:
+          {
+            # Builds against your nixpkgs, so it shares the Qt and Python you
+            # already have instead of pulling in a second copy of both.
+            nixpkgs.overlays = [ tsm-app.overlays.default ];
+            environment.systemPackages = [ pkgs.tsm-app ];
+          }
+        )
+      ];
+    };
+  };
 }
+```
+
+The overlay only adds `tsm-app` and `apscheduler4`, and overrides nothing, so it
+cannot trigger rebuilds elsewhere in your system.
+
+If your nixpkgs is too old to evaluate the package, take it pre-built against
+the version this flake pins instead. That always builds, at the cost of a second
+Qt closure in your store:
+
+```nix
+environment.systemPackages = [
+  tsm-app.packages.${pkgs.stdenv.hostPlatform.system}.default
+];
 ```
 
 ### Any distro / From source
