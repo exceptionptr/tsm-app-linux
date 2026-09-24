@@ -74,6 +74,54 @@ Download the `.rpm` from the [latest release](https://github.com/exceptionptr/ts
 sudo dnf install tsm-app-*.noarch.rpm
 ```
 
+### Flatpak (any distro)
+
+Download the bundle from the [latest release](https://github.com/exceptionptr/tsm-app-linux/releases/latest).
+It carries its own Python and Qt, so no distro PySide6 is needed:
+
+```bash
+flatpak install ./io.github.exceptionptr.tsm-app-linux.flatpak
+flatpak run io.github.exceptionptr.tsm-app-linux
+```
+
+The bundle is not a repository, so it does not update itself. Install a newer
+release the same way to upgrade.
+
+### AppImage (any distro)
+
+One file with Python, Qt and every dependency inside. Around 240 MB:
+
+```bash
+chmod +x TSM_Desktop_App-*.AppImage
+./TSM_Desktop_App-*.AppImage
+```
+
+If it will not start, your system is probably missing FUSE. Either install
+`fuse2`, or run it without FUSE:
+
+```bash
+APPIMAGE_EXTRACT_AND_RUN=1 ./TSM_Desktop_App-*.AppImage
+```
+
+### NixOS
+
+Run it straight from the flake:
+
+```bash
+nix run github:exceptionptr/tsm-app-linux
+```
+
+Or add the overlay in `configuration.nix`:
+
+```nix
+{
+  inputs.tsm-app.url = "github:exceptionptr/tsm-app-linux";
+  # in your system configuration:
+  nixpkgs.overlays = [ inputs.tsm-app.overlays.default ];
+  environment.systemPackages = [ pkgs.tsm-app ];
+}
+```
+
 ### Any distro / From source
 
 Recommended for Ubuntu 24.04 and distros without a compatible PySide6 package:

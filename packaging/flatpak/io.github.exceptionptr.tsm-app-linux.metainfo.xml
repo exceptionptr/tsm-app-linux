@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.exceptionptr.tsm-app-linux</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>TSM Desktop App</name>
+  <summary>Download WoW auction data for the TradeSkillMaster addon</summary>
+
+  <description>
+    <p>
+      An unofficial Linux desktop client for TradeSkillMaster. It signs in to the
+      TSM API, downloads auction house data for your realms, and writes the Lua
+      files the TradeSkillMaster addon reads, so pricing data stays current in a
+      World of Warcraft install running under Wine, Lutris, Proton or Steam.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Finds World of Warcraft installs, including Lutris, Steam Proton and Faugus Launcher prefixes</li>
+      <li>Keeps auction data current in the background and writes AppData.lua atomically</li>
+      <li>An accounting dashboard for gold over time, sales, expenses and profit per item</li>
+      <li>Keeps the addons up to date and backs up TSM saved variables on a schedule</li>
+      <li>Stores your credentials in the system keyring, never in a config file</li>
+    </ul>
+    <p>
+      This is a community project and is not affiliated with or endorsed by
+      TradeSkillMaster or Blizzard Entertainment.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.exceptionptr.tsm-app-linux.desktop</launchable>
+
+  <url type="homepage">https://github.com/exceptionptr/tsm-app-linux</url>
+  <url type="bugtracker">https://github.com/exceptionptr/tsm-app-linux/issues</url>
+  <url type="vcs-browser">https://github.com/exceptionptr/tsm-app-linux</url>
+
+  <developer id="io.github.exceptionptr">
+    <name>exceptionptr</name>
+  </developer>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/1.png</image>
+      <caption>Realm data with auction downloads per realm</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/3.png</image>
+      <caption>Detected World of Warcraft installs</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/exceptionptr/tsm-app-linux/master/media/4.png</image>
+      <caption>Settings for sync, backups and addon updates</caption>
+    </screenshot>
+  </screenshots>
+
+  <categories>
+    <category>Game</category>
+    <category>Utility</category>
+  </categories>
+
+  <keywords>
+    <keyword>WoW</keyword>
+    <keyword>TradeSkillMaster</keyword>
+    <keyword>TSM</keyword>
+    <keyword>auction</keyword>
+  </keywords>
+
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+
+  <recommends>
+    <display_length compare="ge">768</display_length>
+  </recommends>
+
+  <content_rating type="oars-1.1"/>
+
+  <releases>
+    <release version="1.1.16" date="2026-09-24">
+      <description>
+        <p>
+          Fixes an app that cancelled reboot and shutdown on KDE Plasma, and adds
+          Flatpak, AppImage and Nix packaging.
+        </p>
+      </description>
+    </release>
+  </releases>
+</component>

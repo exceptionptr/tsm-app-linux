@@ -4,7 +4,26 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
-## [Unreleased]
+## [1.1.16] - 2026-09-24
+
+### Added
+
+- **Flatpak, AppImage and a Nix flake**, all built by CI alongside the existing
+  deb and rpm.
+  - **Flatpak**: a single-file bundle is attached to each release, so
+    `flatpak install ./io.github.exceptionptr.tsm-app-linux.flatpak` is enough.
+    It carries its own Python and Qt, so no distro PySide6 is needed. The app id
+    is `io.github.exceptionptr.tsm-app-linux`, which is also what a Flathub
+    listing would use. It asks for access to the whole filesystem, because the
+    app exists to write Lua into World of Warcraft installs and those live
+    wherever the user keeps games, including separate drives.
+  - **AppImage**: one executable file with Python, Qt and every dependency
+    inside, for distributions that package none of them. Around 240 MB.
+  - **Nix flake**: `nix run github:exceptionptr/tsm-app-linux` runs it, and the
+    flake's overlay adds `tsm-app` for NixOS configurations. APScheduler 4 is
+    still a pre-release and absent from nixpkgs, so the flake carries it.
+- **A packaging workflow that runs on pushes to develop**, so a broken manifest
+  turns up before a release is tagged rather than in the middle of one.
 
 ### Fixed
 

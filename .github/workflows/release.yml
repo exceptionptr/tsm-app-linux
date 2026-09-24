@@ -282,10 +282,19 @@ jobs:
           tsm-app --version
           PYTHONPATH=/usr/lib/tsm-app python3 -c "import apscheduler, structlog, tomli_w; print('vendor imports OK')"
 
+  # ── 5b. Flatpak, AppImage and Nix ────────────────────────────────────────
+  # Defined in packaging.yml so the same builds can run on develop pushes,
+  # which keeps a broken manifest from surfacing only during a release.
+  packaging:
+    name: Packaging
+    needs: test
+    uses: ./.github/workflows/packaging.yml
+
   # ── 6. Create GitHub Release ──────────────────────────────────────────────
   github-release:
     name: GitHub Release
-    needs: [build-wheel, build-deb, build-rpm, test-rpm-fedora, test-rpm-opensuse, test-deb]
+    needs: [build-wheel, build-deb, build-rpm, test-rpm-fedora, test-rpm-opensuse,
+            test-deb, packaging]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -302,3 +311,5 @@ jobs:
             artifacts/wheel/*.whl
             artifacts/deb/*.deb
             artifacts/rpm/*.rpm
+            artifacts/flatpak/*.flatpak
+            artifacts/appimage/*.AppImage

@@ -1,0 +1,171 @@
+name: Packaging
+
+# Flatpak, AppImage and Nix builds. Called by the release workflow on a tag, and
+# run on its own for pushes that touch packaging, so a broken manifest shows up
+# before a release is tagged rather than during one.
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: [develop]
+    paths:
+      - packaging/**
+      - scripts/build_appimage.sh
+      - scripts/appimage_pins.py
+      - scripts/flatpak_gen_deps.py
+      - flake.nix
+      - flake.lock
+      - pyproject.toml
+      - .github/workflows/packaging.yml
+
+env:
+  APP_ID: io.github.exceptionptr.tsm-app-linux
+  FLATPAK_RUNTIME: '6.11'
+
+jobs:
+  # ── Flatpak: single-file bundle, and the manifest Flathub would build ─────
+  flatpak:
+    name: Build Flatpak bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0   # hatch-vcs needs full tag history
+
+      - name: Install flatpak tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub \
+            https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive \
+            "flathub" "org.kde.Platform//${FLATPAK_RUNTIME}" \
+            "org.kde.Sdk//${FLATPAK_RUNTIME}"
+
+      - name: Point the manifest at this revision
+        run: |
+          mkdir -p build
+          cp -r packaging/flatpak/* build/
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import subprocess
+
+          app_id = os.environ["APP_ID"]
+          manifest = pathlib.Path("build") / f"{app_id}.yml"
+          text = manifest.read_text()
+
+          ref = os.environ.get("GITHUB_REF", "")
+          commit = subprocess.run(
+              ["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True
+          ).stdout.strip()
+
+          if ref.startswith("refs/tags/"):
+              # A release: build the tag itself, pinned to its commit, which is
+              # the form Flathub wants.
+              tag = ref.removeprefix("refs/tags/")
+              version = tag.removeprefix("v")
+              text = text.replace("tag: v1.1.16", f"tag: {tag}\n        commit: {commit}")
+          else:
+              # A branch build: there is no tag to clone, so build the checkout.
+              version = "0.0.0"
+              source = (
+                  "      - type: dir\n"
+                  f"        path: {pathlib.Path.cwd()}\n"
+              )
+              head = text.split("    sources:")[0]
+              text = head + "    sources:\n" + source
+
+          text = text.replace(
+              "SETUPTOOLS_SCM_PRETEND_VERSION=1.1.16",
+              f"SETUPTOOLS_SCM_PRETEND_VERSION={version}",
+          )
+          manifest.write_text(text)
+          print(text[-700:])
+          PY
+
+      - name: Build
+        run: |
+          flatpak-builder --user --disable-rofiles-fuse --force-clean \
+            --repo=repo builddir "build/${APP_ID}.yml"
+
+      - name: Bundle
+        run: |
+          flatpak build-bundle repo "${APP_ID}.flatpak" "${APP_ID}" \
+            --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
+          ls -lh "${APP_ID}.flatpak"
+
+      - name: Smoke test
+        run: |
+          flatpak install --user -y --noninteractive "${APP_ID}.flatpak"
+          flatpak run "${APP_ID}" --version
+
+      - name: Check against Flathub's linter
+        continue-on-error: true   # host filesystem access needs a granted exception
+        run: |
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
+            manifest "build/${APP_ID}.yml"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: flatpak
+          path: '*.flatpak'
+
+  # ── AppImage: bundles its own CPython and Qt, so it runs anywhere ─────────
+  appimage:
+    name: Build AppImage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install build python-appimage
+          # appimagetool needs FUSE to run unless told to extract itself.
+          sudo apt-get update -qq
+          sudo apt-get install -y libfuse2 || true
+
+      - name: Build
+        run: bash scripts/build_appimage.sh
+
+      - name: Smoke test
+        run: |
+          APPIMAGE=$(find dist -name '*.AppImage' | head -1)
+          chmod +x "$APPIMAGE"
+          APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --version
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: appimage
+          path: dist/*.AppImage
+
+  # ── Nix flake: what NixOS users install, and the nixpkgs expression ───────
+  nix:
+    name: Build Nix flake
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Check the flake
+        run: nix flake check --all-systems --print-build-logs
+
+      - name: Build
+        run: nix build .#tsm-app --print-build-logs
+
+      - name: Smoke test
+        run: ./result/bin/tsm-app --version
