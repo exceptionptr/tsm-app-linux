@@ -165,6 +165,22 @@ Two things to know before editing the script:
 
 Users without FUSE need `APPIMAGE_EXTRACT_AND_RUN=1`.
 
+### Host libraries
+
+The bundle carries Python and Qt but links against system libraries it does not
+ship. Read off `ldd` against the bundled Qt libraries in a bare Ubuntu container:
+
+| Needed for | Libraries |
+|---|---|
+| any use, including offscreen | `libglib-2.0`, `libgthread-2.0`, `libgssapi_krb5`, `libGL`, `libEGL`, `libfontconfig`, `libdbus-1`, `libxkbcommon` |
+| an X11 desktop | `libxcb-cursor`, `libxcb-icccm`, `libxcb-image`, `libxcb-keysyms`, `libxcb-render`, `libxcb-render-util`, `libxcb-shape`, `libxcb-util`, `libxcb-xkb`, `libxkbcommon-x11` |
+
+Without glib, PySide6 does not import at all. Any desktop installation has the
+lot; a container does not, which is why the CI smoke test installs them.
+
+Only the AppImage has this exposure. The Flatpak runs inside the KDE runtime,
+which provides them, and the Nix package gets them through its closure.
+
 ## Nix
 
 ```bash

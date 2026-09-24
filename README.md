@@ -108,6 +108,11 @@ If it will not start, your system is probably missing FUSE. Either install
 APPIMAGE_EXTRACT_AND_RUN=1 ./TSM_Desktop_App-*.AppImage
 ```
 
+It bundles Python and Qt, but still uses a few libraries from the host: glib,
+fontconfig, libGL, dbus, and the usual xcb set on X11. Every desktop
+installation has these; a minimal container may not. `tsm-app --self-test` says
+which one is missing if it fails.
+
 ### NixOS
 
 Run it straight from the flake:

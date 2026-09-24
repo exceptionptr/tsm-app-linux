@@ -142,10 +142,14 @@ jobs:
 
       - name: Smoke test
         run: |
-          # Qt needs these from the host even though the AppImage carries Qt
-          # itself. The runner image does not guarantee them.
-          sudo apt-get install -y \
-            libgl1 libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+          # The AppImage carries Qt but not the system libraries Qt links
+          # against. This set was read off ldd against the bundled Qt libraries
+          # in a bare container: without glib, PySide6 does not import at all.
+          sudo apt-get install -y --no-install-recommends \
+            libgl1 libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libgssapi-krb5-2
+          # Renamed for the 64-bit time_t transition on newer Ubuntu.
+          sudo apt-get install -y --no-install-recommends libglib2.0-0t64 \
+            || sudo apt-get install -y --no-install-recommends libglib2.0-0
           APPIMAGE=$(find dist -name '*.AppImage' | head -1)
           chmod +x "$APPIMAGE"
           APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGE" --version
