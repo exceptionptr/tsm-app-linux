@@ -105,11 +105,36 @@ jobs:
           flatpak run --env=QT_QPA_PLATFORM=offscreen "${APP_ID}" --self-test
 
       - name: Check against Flathub's linter
-        continue-on-error: true   # host filesystem access needs a granted exception
         run: |
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+          # The linter exits non-zero for the filesystem permission this app
+          # cannot do without, which Flathub grants as an exception at
+          # submission time (see docs/packaging.md). That one is allowed through
+          # by name. Anything else is a real finding and fails the job, which a
+          # blanket continue-on-error would have hidden.
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
-            manifest "build/${APP_ID}.yml"
+            manifest "build/${APP_ID}.yml" > lint.json || true
+          cat lint.json
+          python3 - <<'PY'
+          import json
+          import sys
+
+          report = json.load(open("lint.json"))
+          expected = {"finish-args-host-filesystem-access"}
+
+          unexpected = sorted(set(report.get("errors", [])) - expected)
+          if unexpected:
+              print(f"Unexpected linter errors: {unexpected}", file=sys.stderr)
+              sys.exit(1)
+
+          missing = sorted(expected - set(report.get("errors", [])))
+          if missing:
+              print(f"No longer reported, so stop allowing it: {missing}")
+
+          for warning in report.get("warnings", []):
+              print(f"warning: {warning}")
+          print("Linter clean apart from the permission Flathub grants by exception.")
+          PY
 
       - uses: actions/upload-artifact@v7
         with:
