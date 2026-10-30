@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
 )
@@ -116,6 +117,16 @@ class LoginView(QDialog):
         bridge.run(self._auth_service.login(username, password, remember_me=remember_me))
 
     def _on_login_success(self, session) -> None:
+        if session.remember_failed:
+            QMessageBox.warning(
+                self,
+                "TSM - Remember me",
+                "You are signed in, but your login could not be saved because the "
+                "system keyring is not available.\n\n"
+                "Make sure a Secret Service provider such as GNOME Keyring or KWallet "
+                "is running and unlocked. Until then you will be asked to sign in "
+                "each time the app starts.",
+            )
         self._app_vm.on_login_success(session)
         self.login_successful.emit()
         self.accept()

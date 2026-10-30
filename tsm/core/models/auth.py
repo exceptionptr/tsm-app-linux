@@ -16,3 +16,5 @@ from pydantic import BaseModel
 class UserSession(BaseModel):
     username: str
     user_id: int = 0
+    # True when "Remember me" was asked for but the keyring refused the login.
+    remember_failed: bool = False

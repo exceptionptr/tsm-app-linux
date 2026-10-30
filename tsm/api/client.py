@@ -61,6 +61,18 @@ class TSMApiError(RuntimeError):
     """
 
 
+def is_transient_error(exc: BaseException) -> bool:
+    """True when a failure says nothing about the credentials or the request.
+
+    No network yet, a timeout, a dropped connection, a 5xx or a 429 can all pass
+    on their own, so waiting and trying again is right. A 4xx is the server
+    answering no, and asking again gives the same answer.
+    """
+    if isinstance(exc, aiohttp.ClientResponseError):
+        return exc.status >= 500 or exc.status == 429
+    return isinstance(exc, aiohttp.ClientError | TimeoutError)
+
+
 APP_VERSION = 41402  # From _version.pyc: VERSION = 41402
 HMAC_SECRET = "3FB1CC5EDC5B43F21CB8ACC23B42B703"  # From AppAPI.pyc
 OIDC_URL = "https://id.tradeskillmaster.com/realms/app/protocol/openid-connect/token"
