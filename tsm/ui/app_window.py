@@ -29,7 +29,6 @@ from tsm.ui.components.status_bar import TSMStatusBar
 from tsm.ui.viewmodels.app_vm import AppViewModel
 from tsm.ui.viewmodels.realm_vm import RealmViewModel
 from tsm.ui.viewmodels.settings_vm import SettingsViewModel
-from tsm.ui.views._utils import build_realm_tree
 from tsm.ui.views.accounting_export import AccountingExportView
 from tsm.ui.views.addon_versions import AddonVersionsView
 from tsm.ui.views.backups import BackupsView
@@ -59,6 +58,7 @@ class AppWindow(QMainWindow):
         api_client=None,
         backup_service=None,
         updater_service=None,
+        auction_service=None,
         parent=None,
     ):
         super().__init__(parent)
@@ -70,7 +70,8 @@ class AppWindow(QMainWindow):
         self._api_client = api_client
         self._backup_service = backup_service
         self._updater_service = updater_service
-        self._realm_tree_cache: dict | None = None
+        self._auction_service = auction_service
+        self._connected = False
         self._quitting = False
         self._session_ending = False
         self._backup_stats: str = ""
@@ -109,6 +110,7 @@ class AppWindow(QMainWindow):
 
         self._stack = QStackedWidget()
         self._realm_view = RealmDataView(self._realm_vm)
+        self._realm_vm.realm_tree_ready.connect(self._realm_view.set_realm_tree)
         self._addon_view = AddonVersionsView(self._addon_service, self._updater_service)
         self._backup_view = BackupsView(self._backup_service, backup_now_fn=self._run_backup_now)
         self._acct_view = AccountingExportView(self._addon_service)
@@ -166,6 +168,8 @@ class AppWindow(QMainWindow):
         self._backup_view.refresh()
         self._app_vm.addon_notification.connect(self._notify_addon)
         self._app_vm.realm_data_received.connect(self._realm_vm.on_data_received)
+        self._app_vm.connection_changed.connect(self._on_connection_changed)
+        self._app_vm.session_lost.connect(self._on_session_lost)
         self._settings_vm.saved.connect(self._on_settings_saved)
         self._update_status()
 
@@ -265,6 +269,9 @@ class AppWindow(QMainWindow):
             names = ", ".join(apphelper_addon_name(gv) for gv in missing_gv)
             self._app_vm.set_status(f"⚠ No {names} installed")
             return
+        if self._app_vm.authenticated and not self._connected:
+            self._app_vm.set_status("Connecting to the TSM server…")
+            return
         last = self._realm_vm.last_sync
         if last:
             self._app_vm.set_status(f"Up to date as of {fmt_ts(last)}")
@@ -278,6 +285,10 @@ class AppWindow(QMainWindow):
                 self._tab_buttons[i].setEnabled(enabled)
         if not enabled and self._current_tab_key() in wow_tabs:
             self._switch_tab("realm")
+
+    def _on_connection_changed(self, connected: bool) -> None:
+        self._connected = connected
+        self._update_status()
 
     def _on_loading_changed(self, loading: bool) -> None:
         if loading:
@@ -409,6 +420,15 @@ class AppWindow(QMainWindow):
 
     def _on_logged_out(self) -> None:
         """Called when the user clicks Logout in Settings - hide and re-show login."""
+        self._app_vm.on_logout()
+        self.hide()
+        self.show_login()
+
+    def _on_session_lost(self) -> None:
+        """The stored login stopped working (revoked, expired): sign in again."""
+        if not self._app_vm.authenticated:
+            return
+        self._app_vm.on_logout()
         self.hide()
         self.show_login()
 
@@ -418,33 +438,7 @@ class AppWindow(QMainWindow):
         self.activateWindow()
         self._app_vm.set_status("Connected, syncing data…")
         self._realm_vm.load_snapshot()
-        self._realm_vm.refresh_all()
-        self._prefetch_realm_list()
-
-    def _prefetch_realm_list(self) -> None:
-        if self._api_client is None:
-            return
-        from tsm.workers.bridge import AsyncBridge
-
-        async def _fetch_both():
-            realm_list = await self._api_client.realms.list()
-            status = await self._api_client.status.get()
-            return realm_list, status
-
-        bridge = AsyncBridge(self)
-        bridge.result_ready.connect(self._on_realm_list_fetched)
-        bridge.run(_fetch_both())
-
-    def _on_realm_list_fetched(self, data) -> None:
-        if not isinstance(data, tuple) or len(data) != 2:
-            return
-        realm_list, status = data
-        if not isinstance(realm_list, dict):
-            realm_list = {}
-        if not isinstance(status, dict):
-            status = {}
-        self._realm_tree_cache = build_realm_tree(realm_list, status)
-        self._realm_view.set_realm_tree(self._realm_tree_cache)
+        self._realm_vm.load_realm_tree()
 
     def on_authenticated(self, session) -> None:
         """Called after successful authentication (login or session restore)."""
@@ -453,8 +447,7 @@ class AppWindow(QMainWindow):
         if not self._settings_vm.config.start_minimized:
             self.show()
         self._realm_vm.load_snapshot()
-        self._realm_vm.refresh_all()
-        self._prefetch_realm_list()
+        self._realm_vm.load_realm_tree()
 
 
 def _make_window_icon() -> QIcon:

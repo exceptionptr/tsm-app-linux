@@ -1,9 +1,13 @@
 """Keyring wrapper for storing auth credentials securely.
 
 Uses the system keychain (KWallet on KDE, GNOME Keyring on GNOME,
-or keyrings.alt file-based fallback) to store the TSM username and
-password so the app can re-authenticate on next startup without
-showing the login dialog.
+or keyrings.alt file-based fallback) to store the TSM username and the
+offline refresh token of the browser login, so the app can sign in again on
+next startup without showing the login dialog. The password itself is never
+seen by the app since the move to the browser login.
+
+Versions before the browser login stored the password under "password:<username>". It is
+deleted on the next save or logout.
 
 An app started with the desktop session can run before the Secret Service is
 up. keyring chooses its backend once per process, so if that moment is too
@@ -23,7 +27,8 @@ logger = logging.getLogger(__name__)
 
 SERVICE_NAME = "tsm-app"
 USERNAME_KEY = "username"
-PASSWORD_PREFIX = "password:"
+PASSWORD_PREFIX = "password:"  # legacy, only ever deleted
+REFRESH_PREFIX = "refresh:"
 
 _T = TypeVar("_T")
 
@@ -60,16 +65,23 @@ def _call(operation: Callable[[], _T]) -> _T:
         raise KeyringUnavailable(str(e)) from e
 
 
-def store_credentials(username: str, password: str) -> bool:
+def store_credentials(username: str, refresh_token: str) -> bool:
     """Save the login. Returns False when it could not be saved."""
     import keyring
 
     try:
+        old = _call(lambda: keyring.get_password(SERVICE_NAME, USERNAME_KEY))
         _call(lambda: keyring.set_password(SERVICE_NAME, USERNAME_KEY, username))
-        _call(lambda: keyring.set_password(SERVICE_NAME, PASSWORD_PREFIX + username, password))
+        _call(
+            lambda: keyring.set_password(SERVICE_NAME, REFRESH_PREFIX + username, refresh_token)
+        )
     except Exception:
         logger.exception("Failed to store credentials in keyring")
         return False
+    for name in {username, old} - {None}:
+        _delete(PASSWORD_PREFIX + str(name))
+    if old and old != username:
+        _delete(REFRESH_PREFIX + old)
     return True
 
 
@@ -89,20 +101,37 @@ def get_username() -> str | None:
         return None
 
 
-def get_password(username: str) -> str | None:
-    """The saved password, or None when nothing is saved.
+def get_refresh_token(username: str) -> str | None:
+    """The saved refresh token, or None when nothing is saved.
 
     Raises KeyringUnavailable when the keyring cannot be reached.
     """
     import keyring
 
     try:
-        return _call(lambda: keyring.get_password(SERVICE_NAME, PASSWORD_PREFIX + username))
+        return _call(lambda: keyring.get_password(SERVICE_NAME, REFRESH_PREFIX + username))
     except KeyringUnavailable:
         raise
     except Exception:
-        logger.exception("Failed to get password from keyring")
+        logger.exception("Failed to get the refresh token from keyring")
         return None
+
+
+def has_legacy_password(username: str) -> bool:
+    """True when an old version left a password behind (used to explain the re-login)."""
+    import keyring
+
+    try:
+        return bool(keyring.get_password(SERVICE_NAME, PASSWORD_PREFIX + username))
+    except Exception:
+        return False
+
+
+def _delete(key: str) -> None:
+    import keyring
+
+    with contextlib.suppress(Exception):
+        keyring.delete_password(SERVICE_NAME, key)
 
 
 def delete_credentials() -> None:
@@ -111,8 +140,8 @@ def delete_credentials() -> None:
 
         username = keyring.get_password(SERVICE_NAME, USERNAME_KEY)
         if username:
-            with contextlib.suppress(Exception):
-                keyring.delete_password(SERVICE_NAME, PASSWORD_PREFIX + username)
+            _delete(PASSWORD_PREFIX + username)
+            _delete(REFRESH_PREFIX + username)
         keyring.delete_password(SERVICE_NAME, USERNAME_KEY)
     except Exception:
         logger.debug("No credentials to delete from keyring")

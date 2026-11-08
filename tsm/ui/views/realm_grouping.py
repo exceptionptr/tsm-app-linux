@@ -13,20 +13,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-# Same order the Addon Versions tab lists its game versions in.
-GV_ORDER: tuple[str, ...] = ("retail", "classic", "bcc", "anniversary")
+from tsm.wow.game_versions import GAME_VERSIONS
 
-# API game version -> (display label, API game version). Keyed by the realms2/list
-# key, which is also the api_gv value. build_realm_tree() in _utils.py imports it
-# from here so the Add Realm dropdown and these group headers cannot drift apart.
-GV_LABEL_MAP: dict[str, tuple[str, str]] = {
-    "retail": ("Retail", "retail"),
-    "bcc": ("Progression", "bcc"),
-    "classic": ("Classic Era", "classic"),
-    "anniversary": ("Anniversary", "anniversary"),
-}
+# Same order as the Addon Versions tab: the order of tsm/wow/game_versions.py.
+GV_ORDER: tuple[str, ...] = tuple(gv.key for gv in GAME_VERSIONS)
 
-GV_LABELS: dict[str, str] = {api_gv: label for label, api_gv in GV_LABEL_MAP.values()}
+# Fallback group labels. The live labels come from the game-versions API and are
+# passed to group_summaries() by the view.
+GV_LABELS: dict[str, str] = {gv.key: gv.label for gv in GAME_VERSIONS}
 
 
 @dataclass(frozen=True)
@@ -56,8 +50,11 @@ def _placeholder_region(region: str, template: Any) -> Any:
     )
 
 
-def group_summaries(summaries: list[Any]) -> list[tuple[str, str, list[RealmRow]]]:
+def group_summaries(
+    summaries: list[Any], labels: dict[str, str] | None = None
+) -> list[tuple[str, str, list[RealmRow]]]:
     """Return [(game_version, label, rows)] in GV_ORDER, dropping empty groups."""
+    labels = {**GV_LABELS, **(labels or {})}
     by_gv: dict[str, list[Any]] = {}
     for summary in summaries:
         by_gv.setdefault(summary.game_version, []).append(summary)
@@ -100,7 +97,7 @@ def group_summaries(summaries: list[Any]) -> list[tuple[str, str, list[RealmRow]
                 )
 
         if rows:
-            groups.append((game_version, GV_LABELS.get(game_version, game_version), rows))
+            groups.append((game_version, labels.get(game_version, game_version), rows))
 
     return groups
 

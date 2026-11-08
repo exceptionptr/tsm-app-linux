@@ -5,20 +5,16 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 
-_GAME_VERSIONS = ("_retail_", "_classic_era_", "_classic_", "_anniversary_")
+from tsm.wow.game_versions import FOLDERS, SUFFIX_BY_FOLDER
 
-# Addon folder suffix per game version, matching the Windows TSM app convention.
-# The AppHelper addon is named differently in each game client:
-#   _retail_:      TradeSkillMaster_AppHelper
-#   _classic_era_: TradeSkillMaster_AppHelper-Classic
-#   _classic_:     TradeSkillMaster_AppHelper-Progression
-#   _anniversary_: TradeSkillMaster_AppHelper-Anniversary
-_APPHELPER_SUFFIX: dict[str, str] = {
-    "_retail_": "",
-    "_classic_era_": "-Classic",
-    "_classic_": "-Progression",
-    "_anniversary_": "-Anniversary",
-}
+# Kept as a name for the modules that import it; the list itself lives in
+# tsm/wow/game_versions.py.
+_GAME_VERSIONS = FOLDERS
+
+# Addon folder suffix per game version, matching the old Windows TSM app. Only
+# used to recognise legacy per-client package names; TSM 4.15 ships one
+# multi-toc package named TradeSkillMaster_AppHelper for every client.
+_APPHELPER_SUFFIX: dict[str, str] = SUFFIX_BY_FOLDER
 
 
 def normalize_wow_base(path: Path) -> Path:
@@ -35,13 +31,9 @@ def addon_dir(base: Path, gv: str) -> Path:
     return base / gv / "Interface" / "AddOns"
 
 
-def apphelper_addon_name(gv: str) -> str:
-    """Return the full addon folder name for a given game-version directory.
-
-    e.g. '_retail_' -> 'TradeSkillMaster_AppHelper'
-         '_classic_era_' -> 'TradeSkillMaster_AppHelper-Classic'
-    """
-    return f"TradeSkillMaster_AppHelper{_APPHELPER_SUFFIX.get(gv, '')}"
+def apphelper_addon_name(gv: str) -> str:  # noqa: ARG001
+    """The AppHelper folder name. TSM 4.15 uses one name for every game version."""
+    return "TradeSkillMaster_AppHelper"
 
 
 def apphelper_dir(base: Path, gv: str) -> Path:
@@ -77,14 +69,21 @@ def installed_versions(base: Path) -> list[str]:
 def is_valid_wow_version_dir(path: Path) -> bool:
     """Return True if path is a valid WoW game-version directory.
 
-    Checks for a WoW executable (case-insensitive) rather than requiring
-    Interface/AddOns to exist, so fresh installs with no addons yet
-    are still detected correctly.
+    Accepts either a WoW executable (Wow.exe, WowClassic.exe, or whatever a new
+    client calls its own, matched case-insensitively) or WTF/Config.wtf, which
+    is what the official 1.0.9 client checks. Interface/AddOns is not required,
+    so a fresh install with no addons yet is still detected.
     """
     if not path.is_dir():
         return False
-    lower = {f.name.lower() for f in path.iterdir() if f.suffix.lower() == ".exe"}
-    return "wow.exe" in lower or "wowclassic.exe" in lower
+    try:
+        for f in path.iterdir():
+            n = f.name.lower()
+            if n.endswith(".exe") and n.startswith("wow") and "launcher" not in n:
+                return True
+    except OSError:
+        return False
+    return (path / "WTF" / "Config.wtf").is_file()
 
 
 def iter_wow_gv_roots(installs) -> Generator[tuple[Path, str], None, None]:

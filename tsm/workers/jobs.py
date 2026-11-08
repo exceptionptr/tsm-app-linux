@@ -12,37 +12,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def job_auction_refresh(*, services: ServiceContainer) -> None:
-    """Poll TSM API every 5 min for new auction data.
-
-    refresh_all_realms() is differential: it calls the status endpoint,
-    compares lastModified timestamps per realm/tag, and only downloads
-    blobs that have changed since the last fetch.
-    """
-    try:
-        logger.info("job_auction_refresh: checking TSM API for new data")
-        data = await services.auction.refresh_all_realms()
-        addon_versions = getattr(data, "addon_versions", [])
-        if addon_versions:
-            updated = await services.updater.check_and_update(addon_versions)
-            if updated and services.addon_notify_fn is not None:
-                names = ", ".join(updated)
-                services.addon_notify_fn(f"TSM addon(s) updated: {names}")
-        if services.auction_data_fn is not None:
-            services.auction_data_fn(data)
-    except Exception:
-        logger.exception("job_auction_refresh: failed")
-
-
-async def job_auth_refresh(*, services: ServiceContainer) -> None:
-    """Refresh auth token before expiry."""
-    logger.info("job_auth_refresh: starting")
-    try:
-        await services.auth.refresh_token()
-    except Exception:
-        logger.exception("job_auth_refresh: failed")
-
-
 async def job_check_update(*, services: ServiceContainer) -> None:
     """One-shot at startup: check GitHub for a newer release tag."""
     try:

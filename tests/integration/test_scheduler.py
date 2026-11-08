@@ -22,7 +22,6 @@ async def test_scheduler_lifecycle():
     services = ServiceContainer(
         auth=MagicMock(refresh_token=AsyncMock()),
         auction=MagicMock(
-            refresh_all_realms=AsyncMock(return_value=MagicMock(addon_versions=[])),
             get_snapshot=AsyncMock(return_value=([], 0)),
         ),
         wow_detector=MagicMock(
@@ -31,6 +30,7 @@ async def test_scheduler_lifecycle():
             installs=[],
         ),
         updater=MagicMock(check_and_update=AsyncMock(return_value=[])),
+        sync=MagicMock(start=AsyncMock(), stop=AsyncMock()),
         config_store=config_store,
     )
 
@@ -43,8 +43,11 @@ async def test_scheduler_lifecycle():
     # Allow the background task to enter the scheduler context
     await asyncio.sleep(0.2)
 
+    services.sync.start.assert_awaited_once()
+
     await scheduler.stop()
     assert scheduler._started is False
+    services.sync.stop.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -61,7 +64,6 @@ async def test_scheduler_start_idempotent():
     services = ServiceContainer(
         auth=MagicMock(refresh_token=AsyncMock()),
         auction=MagicMock(
-            refresh_all_realms=AsyncMock(return_value=MagicMock(addon_versions=[])),
             get_snapshot=AsyncMock(return_value=([], 0)),
         ),
         wow_detector=MagicMock(

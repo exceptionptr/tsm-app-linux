@@ -50,6 +50,7 @@ from tsm.ui.views._utils import populate_combo
 from tsm.ui.views.accounting_dashboard import ITEM_COL as _ITEM_COL
 from tsm.ui.views.accounting_dashboard import AccountingDashboard
 from tsm.wow.accounts import scan_tsm_accounts
+from tsm.wow.game_versions import SUFFIX_BY_FOLDER
 
 logger = logging.getLogger(__name__)
 
@@ -66,12 +67,7 @@ _DB_KEYS = {
 # but net to nothing, so they are excluded from the money figures.
 _FINANCIAL_KEYS = ("Sales", "Purchases", "Income", "Expenses")
 
-_SUFFIXES = {
-    "_retail_": "",
-    "_classic_era_": "-Classic",
-    "_classic_": "-Progression",
-    "_anniversary_": "-Anniversary",
-}
+_SUFFIXES = SUFFIX_BY_FOLDER
 
 _LAST_DIR_FILE = CONFIG_DIR / "last_export_dir"
 _TOOLTIP_DELAY_MS = 500

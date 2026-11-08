@@ -28,9 +28,11 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.api.types import AddonVersionInfo
+from tsm.core.services.updater import find_addons_dir, toc_version
 from tsm.ui.components.collapsible_group import CollapsibleGroup
 from tsm.ui.components.hover_button import HoverIconButton
 from tsm.ui.views._utils import set_table_cell, table_content_height
+from tsm.wow.game_versions import GAME_VERSIONS
 
 logger = logging.getLogger(__name__)
 
@@ -40,18 +42,16 @@ _GREEN = "#4caf50"
 _AMBER = "#ffc107"
 _GRAY = "#666666"
 
-# Game-version suffixes the original TSM app uses (from WoWHelper.SUFFIX_BY_GAME_VERSION)
-_SUFFIXES = ["", "-Classic", "-Progression", "-Anniversary"]
+# One group per game version, in the order of tsm/wow/game_versions.py. A row is
+# named addon + game version suffix ("TradeSkillMaster-Forever"), which is what
+# UpdateService.install_or_update_addon expects.
+_SUFFIXES = [gv.account_suffix for gv in GAME_VERSIONS]
 _SUFFIX_ORDER = {s: i for i, s in enumerate(_SUFFIXES)}
-_SUFFIX_LABEL = {
-    "": "Retail",
-    "-Classic": "Classic",
-    "-Progression": "Progression",
-    "-Anniversary": "Anniversary",
-}
+_SUFFIX_LABEL = {gv.account_suffix: gv.label for gv in GAME_VERSIONS}
+_FOLDER_BY_SUFFIX = {gv.account_suffix: gv.folder for gv in GAME_VERSIONS}
 
-# Fallback list if the API has not returned addon info yet
-_DEFAULT_ADDONS = ["TradeSkillMaster", "TSM_AppHelper"]
+# Shown before the socket has announced the current releases.
+_DEFAULT_ADDONS = ["TradeSkillMaster", "TradeSkillMaster_AppHelper"]
 
 # Module-level icon constants - avoid per-row file I/O
 _DL_ICON = QIcon(str(_ASSETS / "download.svg"))
@@ -368,13 +368,7 @@ class AddonVersionsView(QWidget):
         if self._detector is None:
             return paths
         suffix = _get_suffix(name)
-        game_ver_map = {
-            "": "_retail_",
-            "-Classic": "_classic_era_",
-            "-Progression": "_classic_",
-            "-Anniversary": "_anniversary_",
-        }
-        game_ver = game_ver_map.get(suffix, "")
+        game_ver = _FOLDER_BY_SUFFIX.get(suffix, "")
         if not game_ver:
             return paths
         folder_name = name[: -len(suffix)] if suffix else name
@@ -383,10 +377,9 @@ class AddonVersionsView(QWidget):
 
             for install in self._detector.installs:
                 base = normalize_wow_base(Path(install.path))
-                for sub in ("AddOns", "Addons"):
-                    candidate = base / game_ver / "Interface" / sub / folder_name
-                    if candidate.is_dir():
-                        paths.append(candidate)
+                addons_dir = find_addons_dir(base / game_ver)
+                if addons_dir is not None and (addons_dir / folder_name).is_dir():
+                    paths.append(addons_dir / folder_name)
         except Exception:
             logger.debug("Could not locate addon folder for %s", name, exc_info=True)
         return paths
@@ -420,12 +413,7 @@ class AddonVersionsView(QWidget):
         """
         if self._detector is None:
             return None
-        _game_ver_by_suffix = {
-            "": "_retail_",
-            "-Classic": "_classic_era_",
-            "-Progression": "_classic_",
-            "-Anniversary": "_anniversary_",
-        }
+        _game_ver_by_suffix = _FOLDER_BY_SUFFIX
         result: set[str] = set()
         try:
             from tsm.wow.utils import installed_versions, normalize_wow_base
@@ -454,16 +442,9 @@ class AddonVersionsView(QWidget):
             installs = self._detector.installs if self._detector is not None else []
             for install in installs:
                 base = normalize_wow_base(Path(install.path))
-                for suffix, game_ver in {
-                    "": "_retail_",
-                    "-Classic": "_classic_era_",
-                    "-Progression": "_classic_",
-                    "-Anniversary": "_anniversary_",
-                }.items():
-                    addons_dir = base / game_ver / "Interface" / "AddOns"
-                    if not addons_dir.exists():
-                        addons_dir = base / game_ver / "Interface" / "Addons"
-                    if not addons_dir.exists():
+                for suffix, game_ver in _FOLDER_BY_SUFFIX.items():
+                    addons_dir = find_addons_dir(base / game_ver)
+                    if addons_dir is None:
                         continue
                     for addon_info in self._api_addons or []:
                         name = addon_info["name"]
@@ -472,23 +453,10 @@ class AddonVersionsView(QWidget):
                         if not suffix and any(name.endswith(s) for s in _SUFFIXES[1:]):
                             continue
                         folder = name[: -len(suffix)] if suffix else name
-                        toc = addons_dir / folder / f"{folder}.toc"
-                        if toc.exists():
-                            result[name] = _parse_toc(toc)
+                        vt = toc_version(addons_dir / folder)
+                        if vt[0]:
+                            result[name] = vt
         except Exception:
             logger.debug("Could not detect addon versions", exc_info=True)
         return result
 
-
-def _parse_toc(toc: Path) -> tuple[int, str]:
-    """Return (version_type, version_str). version_type: 1=release, 2=dev."""
-    try:
-        for line in toc.read_text(encoding="utf-8", errors="ignore").splitlines():
-            if line.startswith("## Version:"):
-                ver = line.split(":", 1)[1].strip()
-                if ver in ("@project-version@", "@tsm-project-version@"):
-                    return (2, "Dev")
-                return (1, ver)
-    except OSError:
-        pass
-    return (0, "")

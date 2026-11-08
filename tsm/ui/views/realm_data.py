@@ -102,6 +102,7 @@ class RealmDataView(QWidget):
         self._vm.data_updated.connect(self._refresh)
         self._vm.loading_changed.connect(self._on_loading)
         self._vm.remove_failed.connect(self._on_remove_failed)
+        self._vm.add_failed.connect(self._on_add_failed)
         self._setup_ui()
         if realm_tree is not None:
             self._populate_gv_combo()
@@ -222,12 +223,15 @@ class RealmDataView(QWidget):
             game_version: rows
             for game_version, _label, rows in group_summaries(self._vm.summaries)
         }
+        labels = self._vm.gv_labels
 
         for game_version, group in self._groups.items():
             rows = grouped.get(game_version)
             group.setVisible(bool(rows))
             if not rows:
                 continue
+            if game_version in labels:
+                group.set_title(labels[game_version])
             self._fill_table(self._tables[game_version], rows)
             count = realm_count(rows)
             group.set_summary(f"{count} realm" if count == 1 else f"{count} realms")
@@ -277,12 +281,15 @@ class RealmDataView(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self._vm.remove_local(summary)
             self._refresh()
-            self._vm.remove_realm(summary.game_version, summary.region, summary.name)
+            self._vm.remove_realm(summary)
 
     def _on_remove_failed(self, error_msg: str) -> None:
         """The server refused the removal. Same wording as the original app."""
         logger.warning("Realm removal refused: %s", error_msg)
         QMessageBox.warning(self, "TSM", "Failed to remove realm. Please try again later.")
+
+    def _on_add_failed(self, error_msg: str) -> None:
+        QMessageBox.warning(self, "TSM", f"Failed to add realm: {error_msg}")
 
     # ── Refresh ──────────────────────────────────────────────────────
 
@@ -311,7 +318,11 @@ class RealmDataView(QWidget):
     # ── Add Realm ────────────────────────────────────────────────────
 
     def _populate_gv_combo(self) -> None:
-        populate_combo(self._gv_combo, sorted(self._realm_tree or {}))
+        tree = self._realm_tree or {}
+        order = [self._vm.gv_labels.get(k, GV_LABELS.get(k, k)) for k in GV_ORDER]
+        labels = [label for label in order if label in tree]
+        labels += sorted(label for label in tree if label not in labels)
+        populate_combo(self._gv_combo, labels)
         retail_idx = self._gv_combo.findText("Retail")
         self._gv_combo.setCurrentIndex(retail_idx if retail_idx >= 0 else 0)
         self._on_gv_changed(self._gv_combo.currentIndex())
@@ -346,7 +357,7 @@ class RealmDataView(QWidget):
         if idx >= len(realm_list):
             return
         realm = realm_list[idx]
-        self._vm.add_realm(realm["gameVersion"], realm["id"], region, realm["name"])
+        self._vm.add_realm(realm["realm_id"], realm["ah_type"])
 
 
 def fmt_ts(ts: int) -> str:

@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Coroutine
+from concurrent.futures import Future
+from typing import Any
 
 from PySide6.QtCore import QObject, Signal
 
@@ -28,13 +31,17 @@ class AsyncBridge(QObject):
     def __init__(self, parent: QObject | None = None):
         super().__init__(parent)
 
-    def run(self, coro) -> None:
-        """Submit coroutine to async runner; emit result_ready or error_occurred when done."""
+    def run(self, coro: Coroutine[Any, Any, Any]) -> Future[Any]:
+        """Submit coroutine to async runner; emit result_ready or error_occurred when done.
+
+        Returns the concurrent future, so a caller can cancel() a long wait.
+        """
         # Keep a self-reference so Python doesn't GC this bridge before the callback fires.
         self._self_ref: AsyncBridge | None = self
         runner = get_runner()
         future = runner.submit(coro)
         future.add_done_callback(self._on_done)
+        return future
 
     def _on_done(self, future) -> None:
         """Called from the async thread; emit Qt signals (safe via Qt's queued connections)."""

@@ -62,7 +62,7 @@ def redetect(monkeypatch):
 def test_missing_entry_is_none_not_unavailable(redetect):
     calls = redetect(_Memory(), _Memory())
     assert secrets.get_username() is None
-    assert secrets.get_password("someone") is None
+    assert secrets.get_refresh_token("someone") is None
     assert calls == []
 
 
@@ -80,7 +80,7 @@ def test_unavailable_when_the_backend_stays_down(redetect):
     with pytest.raises(KeyringUnavailable):
         secrets.get_username()
     with pytest.raises(KeyringUnavailable):
-        secrets.get_password("someone")
+        secrets.get_refresh_token("someone")
 
 
 def test_locked_keyring_is_not_retried(redetect):
@@ -93,9 +93,23 @@ def test_store_credentials_round_trip(redetect):
     memory = _Memory()
     redetect(memory, memory)
 
-    assert secrets.store_credentials("user@example.com", "pw") is True
+    assert secrets.store_credentials("user@example.com", "rt") is True
     assert secrets.get_username() == "user@example.com"
-    assert secrets.get_password("user@example.com") == "pw"
+    assert secrets.get_refresh_token("user@example.com") == "rt"
+
+
+def test_store_credentials_removes_a_legacy_password(redetect):
+    memory = _Memory()
+    memory.data[(secrets.SERVICE_NAME, secrets.USERNAME_KEY)] = "user@example.com"
+    memory.data[(secrets.SERVICE_NAME, secrets.PASSWORD_PREFIX + "user@example.com")] = "pw"
+    deleted: list[str] = []
+    memory.delete_password = lambda _s, key: (deleted.append(key), memory.data.pop((_s, key)))  # type: ignore[attr-defined]
+    redetect(memory, memory)
+
+    assert secrets.has_legacy_password("user@example.com")
+    assert secrets.store_credentials("user@example.com", "rt") is True
+    assert deleted == [secrets.PASSWORD_PREFIX + "user@example.com"]
+    assert not secrets.has_legacy_password("user@example.com")
 
 
 def test_store_credentials_survives_a_late_secret_service(redetect):
@@ -103,7 +117,7 @@ def test_store_credentials_survives_a_late_secret_service(redetect):
     redetect(_Broken(), working)
 
     assert secrets.store_credentials("user@example.com", "pw") is True
-    saved = working.data[(secrets.SERVICE_NAME, secrets.PASSWORD_PREFIX + "user@example.com")]
+    saved = working.data[(secrets.SERVICE_NAME, secrets.REFRESH_PREFIX + "user@example.com")]
     assert saved == "pw"
 
 

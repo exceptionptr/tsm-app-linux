@@ -27,7 +27,7 @@ SettingsDialog (QDialog)      opened from status bar settings button
 | AddonVersionsView    | views/addon_versions.py (494 ln)    | `RealmViewModel.addons_updated`                  | download/install/delete via `AsyncBridge`                       |
 | BackupsView          | views/backups.py (276 ln)           | `AppViewModel.backup_notification`               | `stats_updated(str)`                                            |
 | AccountingExportView | views/accounting_export.py (516 ln) | (none, reads SavedVariables directly)            | CSV export                                                      |
-| LoginView            | views/login.py (114 ln)             | (none)                                           | `login_successful`                                              |
+| LoginView            | views/login.py                      | (none)                                           | `login_successful`                                              |
 | SettingsDialog       | views/settings.py (357 ln)          | (none)                                           | `SettingsViewModel.saved`                                       |
 
 ## Realm grouping (`views/realm_grouping.py`, 110 lines)
@@ -35,22 +35,22 @@ SettingsDialog (QDialog)      opened from status bar settings button
 Qt free so the ordering is unit testable without a `QApplication`.
 
 ```python
-GV_ORDER      = ("retail", "classic", "bcc", "anniversary")
-GV_LABEL_MAP  = {"retail": ("Retail", "retail"), "bcc": ("Progression", "bcc"), ...}
-GV_LABELS     = {api_gv: label}
-group_summaries(summaries) → [(game_version, label, [RealmRow])]
+GV_ORDER      = keys of wow/game_versions.GAME_VERSIONS (retail, bcc, anniversary, classic, forever)
+GV_LABELS     = {key: fallback label}
+group_summaries(summaries, labels=None) → [(game_version, label, [RealmRow])]
+                labels: the game-versions API labels, when loaded
 realm_count(rows) → int    # realms only, ignoring region headers
 ```
 
 `RealmRow(summary, is_region, label, indent)` is one rendered line. Each region
 comes first at indent 0 labelled with its raw region string (`BCC-EU`), then its
 realms at indent 1 labelled with the bare realm name. A realm whose region is
-missing from the status response gets a synthesised region header rather than
+missing from the catalogue gets a synthesised region header rather than
 disappearing.
 
-`GV_LABEL_MAP` lives here rather than in `_utils.py` so the Add Realm dropdown
-and the Realm Data group headers cannot drift apart; `build_realm_tree()`
-imports it.
+Both the Add Realm dropdown (fed by `AuctionDataService.realm_tree()`) and the
+Realm Data group headers take their order and labels from `GAME_VERSIONS`, so
+they cannot drift apart.
 
 ## Accounting dashboard
 
@@ -95,15 +95,18 @@ idle for months would still show a busy day.
 ```
 Signals: status_changed(str), authenticated_changed(bool),
          backup_notification(str), addon_notification(str),
-         realm_data_received(AuctionData)
+         realm_data_received(AuctionData), connection_changed(bool),
+         session_lost()
 Methods: set_status(msg), on_login_success(session)
 ```
 
 ### RealmViewModel (`viewmodels/realm_vm.py`, 180 lines)
 
 ```
-Signals: data_updated, loading_changed(bool), error_occurred(str), addons_updated(list)
-Methods: load_snapshot(), refresh_all(), add_realm(), remove_realm()
+Signals: data_updated, loading_changed(bool), error_occurred(str), addons_updated(list),
+         add_failed(str), realm_tree_ready(dict)
+Methods: load_snapshot(), refresh_all(), load_realm_tree(),
+         add_realm(realm_id, ah_type), remove_realm(summary)
          on_data_received(data)   ← public slot (connected from AppViewModel.realm_data_received)
 Properties: summaries, last_sync, had_new_data, apphelper_missing
 ```

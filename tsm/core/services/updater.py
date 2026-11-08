@@ -1,65 +1,94 @@
-"""UpdateService: check for and install TSM addon updates.
+"""UpdateService: keep the TSM addons current, as the official 1.0.9 client does.
 
-Original behaviour (from MainThread.pyc + WoWHelper.pyc):
-- Called on every status poll (60 min) with the `addons` list from the status API
-- Each entry: {name: str, version_str: str}  (base name, no suffix)
-- Empty version_str → delete that addon from all game version dirs
-- Dev versions (@project-version@) are never auto-updated
-- Download: GET /v2/addon/{name}?channel=...  → zip bytes
-- `name` keeps the game-version suffix ("", "-Classic", "-Progression",
-  "-Anniversary"); the server resolves it to that client's package.
-  No tsm_version parameter: the original sends that only on /v2/status.
-- Zip contains base_name/ as top-level folder
-- Install: rmtree existing folder, extractall into AddOns dir
-- One download per game version, installed only into that game version's dir
+The socket's ``addon`` event lists the current release of each addon:
+
+    {"data": [{"addon": "TradeSkillMaster", "channel": "release",
+               "version": "v4.15.4", "url": "<zip>"}, ...], "isComplete": true}
+
+Since TSM 4.15 every addon is one multi-toc package that serves all game
+versions, so one zip is downloaded per addon and installed into each game
+version folder. Rules taken from the official installer:
+
+- an addon folder holding .git is a developer checkout and never touched
+- the installed version is read from <AddOns>/<name>/<name>.toc (names matched
+  case-insensitively), and a leading "v" is ignored when comparing
+- an @project-version@ toc is a dev build and is left alone
+- install = delete the old folder, extract the zip into AddOns
+
+Automatic updates only touch game versions where the addon is already
+installed; the Addon Versions tab installs into a new one on request.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 from io import BytesIO
 from pathlib import Path
+from typing import Any
 from zipfile import BadZipFile, ZipFile
 
-from tsm.api.types import AddonVersionInfo
+from tsm.api.types import AddonRelease
 from tsm.core.services._zip_utils import safe_extractall
-from tsm.wow.utils import is_valid_wow_version_dir, iter_wow_gv_roots
+from tsm.wow.game_versions import BY_FOLDER, SUFFIX_BY_FOLDER
+from tsm.wow.utils import is_valid_wow_version_dir, iter_wow_gv_roots, normalize_wow_base
 
 logger = logging.getLogger(__name__)
 
-_SUFFIX_TO_GV: dict[str, str] = {
-    "": "_retail_",
-    "-Classic": "_classic_era_",
-    "-Progression": "_classic_",
-    "-Anniversary": "_anniversary_",
-}
-_SUFFIXES_BY_LENGTH = sorted(_SUFFIX_TO_GV, key=len, reverse=True)
-_GV_TO_SUFFIX: dict[str, str] = {gv: suffix for suffix, gv in _SUFFIX_TO_GV.items()}
+_DEV_VERSIONS = ("@project-version@", "@tsm-project-version@")
+_FOLDER_BY_SUFFIX = {s: f for f, s in SUFFIX_BY_FOLDER.items()}
+_SUFFIXES_BY_LENGTH = sorted(_FOLDER_BY_SUFFIX, key=len, reverse=True)
 
 
-def _addon_suffix(name: str) -> str:
+def split_suffix(name: str) -> tuple[str, str]:
+    """("TradeSkillMaster-Forever") -> ("TradeSkillMaster", "_forever_").
+
+    The Addon Versions tab names a row by addon plus game version suffix.
+    """
     for s in _SUFFIXES_BY_LENGTH:
         if s and name.endswith(s):
-            return s
-    return ""
+            return name[: -len(s)], _FOLDER_BY_SUFFIX[s]
+    return name, "_retail_"
 
 
-def _find_addons_dir(gv_path: Path) -> Path | None:
-    for name in ("AddOns", "Addons"):
-        d = gv_path / "Interface" / name
-        if d.is_dir():
-            return d
+def _norm(version: str) -> str:
+    v = version.strip()
+    return v[1:] if v[:1] in ("v", "V") else v
+
+
+def _ci(parent: Path, name: str) -> Path | None:
+    p = parent / name
+    if p.exists():
+        return p
+    try:
+        low = name.lower()
+        for c in parent.iterdir():
+            if c.name.lower() == low:
+                return c
+    except OSError:
+        pass
     return None
 
 
-def _toc_version(toc_path: Path) -> tuple[int, str]:
-    """Returns (version_type, version_str).  0=missing, 1=release, 2=dev."""
+def find_addons_dir(gv_path: Path) -> Path | None:
+    iface = _ci(gv_path, "Interface")
+    if iface is None:
+        return None
+    d = _ci(iface, "AddOns")
+    return d if d is not None and d.is_dir() else None
+
+
+def toc_version(addon_dir: Path) -> tuple[int, str]:
+    """(version_type, version) for an addon folder. 0=missing, 1=release, 2=dev."""
+    toc = _ci(addon_dir, addon_dir.name + ".toc")
+    if toc is None:
+        return (0, "")
     try:
-        for line in toc_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        for line in toc.read_text(encoding="utf-8", errors="ignore").splitlines():
             if line.startswith("## Version:"):
                 ver = line.split(":", 1)[1].strip()
-                if ver in ("@project-version@", "@tsm-project-version@"):
+                if ver in _DEV_VERSIONS:
                     return (2, "Dev")
                 return (1, ver)
     except OSError:
@@ -67,189 +96,134 @@ def _toc_version(toc_path: Path) -> tuple[int, str]:
     return (0, "")
 
 
+def _zip_version(zf: ZipFile, addon: str) -> str:
+    for n in zf.namelist():
+        parts = n.split("/")
+        if len(parts) == 2 and parts[1].lower() == f"{addon}.toc".lower():
+            for line in zf.read(n).decode("utf-8", "ignore").splitlines():
+                if line.startswith("## Version:"):
+                    return line.split(":", 1)[1].strip()
+    return ""
+
+
 class UpdateService:
-    def __init__(self, api_client=None, wow_detector=None):
+    def __init__(self, api_client: Any = None, wow_detector: Any = None):
         self._client = api_client
         self._detector = wow_detector
+        self._releases: dict[str, AddonRelease] = {}
+        self._lock: asyncio.Lock | None = None
 
-    async def check_and_update(self, addon_versions: list[AddonVersionInfo]) -> list[str]:
-        """Compare installed TOC versions against the status API list.
-        Downloads and installs outdated addons.
-        Returns list of base addon names that were actually updated."""
-        if not addon_versions or self._client is None or self._detector is None:
+    @property
+    def releases(self) -> dict[str, AddonRelease]:
+        return dict(self._releases)
+
+    def set_releases(self, releases: list[AddonRelease]) -> None:
+        self._releases = {r["addon"]: r for r in releases if r.get("addon") and r.get("url")}
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
+
+    async def check_and_update(self, releases: list[AddonRelease] | None = None) -> list[str]:
+        """Update every installed copy that is behind. Returns the addons updated."""
+        if releases is not None:
+            self.set_releases(releases)
+        if self._client is None or self._detector is None or not self._releases:
             return []
-
-        installs = self._detector.installs if self._detector is not None else []
+        installs = self._detector.installs
         if not installs:
             return []
-
         updated: list[str] = []
-        for addon in addon_versions:
-            base_name = addon.get("name", "")
-            latest_version = addon.get("version_str", "")
-            if not base_name:
-                continue
-
-            if latest_version == "":
-                await self._delete_addon(base_name, installs)
-                continue
-
-            if self._needs_update(base_name, latest_version, installs):
-                ok = await self._download_and_install(base_name, latest_version, installs)
-                if ok:
-                    updated.append(base_name)
-
+        async with self._get_lock():
+            for name, rel in self._releases.items():
+                targets = []
+                for base, gv in iter_wow_gv_roots(installs):
+                    addons_dir = find_addons_dir(base / gv)
+                    if addons_dir is None:
+                        continue
+                    addon_dir = _ci(addons_dir, name)
+                    if addon_dir is None or not addon_dir.is_dir():
+                        continue
+                    if self._needs_install(addon_dir, rel["version"]):
+                        targets.append(addons_dir)
+                if targets and await self._install(rel, targets):
+                    updated.append(name)
         return updated
 
-    # ── Internals ──────────────────────────────────────────────────────
+    @staticmethod
+    def _needs_install(addon_dir: Path, version: str) -> bool:
+        if (addon_dir / ".git").exists():
+            logger.info("%s is a git checkout, not updating", addon_dir)
+            return False
+        vtype, installed = toc_version(addon_dir)
+        if vtype == 2:
+            return False
+        return _norm(installed) != _norm(version)
 
-    def _needs_update(self, base_name: str, latest: str, installs) -> bool:
-        """True if any installed copy of this addon is outdated (release version ≠ latest)."""
-        for wow_root, gv_dir in iter_wow_gv_roots(installs):
-            addons_dir = _find_addons_dir(wow_root / gv_dir)
-            if addons_dir is None:
-                continue
-            toc = addons_dir / base_name / f"{base_name}.toc"
-            vtype, installed_ver = _toc_version(toc)
-            if vtype == 1 and installed_ver != latest:
-                return True
-        return False
-
-    async def _fetch_addon_zip(
-        self, api_name: str, cache: dict[str, ZipFile | None]
-    ) -> ZipFile | None:
-        """Download and open api_name once per call, memoized in cache.
-
-        Failures are cached as None so a package the server does not serve is
-        requested once, not once per WoW install.
-        """
-        if api_name in cache:
-            return cache[api_name]
-
+    async def _install(self, rel: AddonRelease, addons_dirs: list[Path]) -> bool:
         assert self._client is not None
-        logger.info("Downloading addon %s", api_name)
+        name = rel["addon"]
+        logger.info("Downloading %s %s", name, rel["version"])
         try:
-            zip_bytes = await self._client.addon.download(api_name)
+            raw = await self._client.download(rel["url"])
         except Exception:
-            logger.exception("Failed to download addon %s", api_name)
-            cache[api_name] = None
-            return None
-
+            logger.exception("Failed to download %s", name)
+            return False
+        if not raw:
+            logger.error("%s: download URL answered 404", name)
+            return False
         try:
-            zf = ZipFile(BytesIO(zip_bytes))
+            zf = ZipFile(BytesIO(raw))
         except BadZipFile:
-            logger.error("Downloaded file for %s is not a valid zip", api_name)
-            cache[api_name] = None
-            return None
-
-        cache[api_name] = zf
-        return zf
-
-    async def _download_and_install(self, base_name: str, latest: str, installs) -> bool:
-        """Install base_name into every game version dir where it already exists.
-
-        Each game version gets the package built for it: the API name carries the
-        suffix for that client, so _classic_ pulls "<base>-Progression" and not
-        the retail build.
-        """
-        assert self._client is not None
-        zips: dict[str, ZipFile | None] = {}
-        installed_any = False
-        try:
-            for wow_root, gv_dir in iter_wow_gv_roots(installs):
-                addons_dir = _find_addons_dir(wow_root / gv_dir)
-                if addons_dir is None:
-                    continue
-                addon_dir = addons_dir / base_name
-                if not addon_dir.exists():
-                    continue  # only update where already installed
-
-                zf = await self._fetch_addon_zip(base_name + _GV_TO_SUFFIX.get(gv_dir, ""), zips)
-                if zf is None:
-                    continue
+            logger.error("Downloaded file for %s is not a valid zip", name)
+            return False
+        ok = False
+        with zf:
+            if not any(n.split("/")[0] == name for n in zf.namelist()):
+                logger.error("Zip for %s has no %s/ folder", name, name)
+                return False
+            logger.debug("%s zip toc version: %s", name, _zip_version(zf, name))
+            for addons_dir in addons_dirs:
                 try:
-                    shutil.rmtree(addon_dir)
-                    safe_extractall(zf, addons_dir)
-                    logger.info("Installed %s %s -> %s", base_name, latest, addons_dir)
-                    installed_any = True
+                    existing = _ci(addons_dir, name)
+                    if existing is not None:
+                        await asyncio.to_thread(shutil.rmtree, existing)
+                    await asyncio.to_thread(safe_extractall, zf, addons_dir)
+                    logger.info("Installed %s %s -> %s", name, rel["version"], addons_dir)
+                    ok = True
                 except Exception:
-                    logger.exception("Failed to install %s to %s", base_name, addons_dir)
-        finally:
-            for zf in zips.values():
-                if zf is not None:
-                    zf.close()
+                    logger.exception("Failed to install %s to %s", name, addons_dir)
+        return ok
 
-        return installed_any
+    async def install_or_update_addon(self, name: str, version: str = "") -> bool:  # noqa: ARG002
+        """Install one addon into one game version, creating AddOns if needed.
 
-    async def install_or_update_addon(self, name: str, version: str) -> bool:
-        """Download and install the addon for the game version implied by its name suffix.
-        Installs even when the addon folder does not yet exist (fresh install).
-        Uses the specific game version directory only - does not touch other game versions.
+        ``name`` carries the game version suffix the Addon Versions tab uses,
+        e.g. "TradeSkillMaster_AppHelper-Forever".
         """
         if self._client is None or self._detector is None:
             return False
-        installs = self._detector.installs
-        if not installs:
+        base_name, folder = split_suffix(name)
+        rel = self._releases.get(base_name)
+        if rel is None or folder not in BY_FOLDER:
+            logger.warning("No release known for %s yet", base_name)
             return False
-
-        suffix = _addon_suffix(name)
-        base_name = name[: -len(suffix)] if suffix else name
-        game_ver = _SUFFIX_TO_GV.get(suffix, "")
-        if not game_ver:
-            return False
-
-        # `name` still carries the game-version suffix: that is what the API
-        # expects, and it is what selects the package for this client.
-        logger.info("Downloading %s %s for %s", name, version, game_ver)
-        try:
-            zip_bytes = await self._client.addon.download(name)
-        except Exception:
-            logger.exception("Failed to download addon %s", name)
-            return False
-
-        try:
-            zf = ZipFile(BytesIO(zip_bytes))
-        except BadZipFile:
-            logger.error("Downloaded file for %s is not a valid zip", base_name)
-            return False
-
-        from tsm.wow.utils import normalize_wow_base
-
-        installed_any = False
-        with zf:
-            for install in installs:
-                base = normalize_wow_base(Path(install.path))
-                gv_path = base / game_ver
-                addons_dir = _find_addons_dir(gv_path)
-                if addons_dir is None:
-                    # Create Interface/AddOns for a fresh WoW install that has
-                    # no addons yet but has a valid WoW executable.
-                    if not is_valid_wow_version_dir(gv_path):
-                        continue
-                    addons_dir = gv_path / "Interface" / "AddOns"
-                    addons_dir.mkdir(parents=True, exist_ok=True)
-                try:
-                    addon_dir = addons_dir / base_name
-                    if addon_dir.exists():
-                        shutil.rmtree(addon_dir)
-                    safe_extractall(zf, addons_dir)
-                    logger.info("Installed %s %s -> %s", base_name, version, addons_dir)
-                    installed_any = True
-                except Exception:
-                    logger.exception("Failed to install %s to %s", base_name, addons_dir)
-
-        return installed_any
-
-    async def _delete_addon(self, base_name: str, installs) -> None:
-        """Remove addon folder from all game version dirs (version_str == "" signal)."""
-        for wow_root, gv_dir in iter_wow_gv_roots(installs):
-            addons_dir = _find_addons_dir(wow_root / gv_dir)
+        targets = []
+        for install in self._detector.installs:
+            gv_path = normalize_wow_base(Path(install.path)) / folder
+            addons_dir = find_addons_dir(gv_path)
             if addons_dir is None:
+                if not is_valid_wow_version_dir(gv_path):
+                    continue
+                addons_dir = gv_path / "Interface" / "AddOns"
+                addons_dir.mkdir(parents=True, exist_ok=True)
+            existing = _ci(addons_dir, base_name)
+            if existing is not None and (existing / ".git").exists():
+                logger.info("%s is a git checkout, not replacing", existing)
                 continue
-            addon_dir = addons_dir / base_name
-            if addon_dir.exists():
-                try:
-                    shutil.rmtree(addon_dir)
-                    logger.info("Deleted addon %s from %s", base_name, addons_dir)
-                except Exception:
-                    logger.exception("Failed to delete %s", addon_dir)
+            targets.append(addons_dir)
+        if not targets:
+            return False
+        async with self._get_lock():
+            return await self._install(rel, targets)

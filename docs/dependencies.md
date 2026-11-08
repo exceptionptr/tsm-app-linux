@@ -2,13 +2,17 @@
 
 ## External Services
 
-| Service                           | Usage                                                            |
-| --------------------------------- | ---------------------------------------------------------------- |
-| `id.tradeskillmaster.com`         | OIDC token (Keycloak, `grant_type=password`)                     |
-| `app-server.tradeskillmaster.com` | TSM session auth, status, realms2, addon downloads               |
-| `*.tradeskillmaster.com`          | CDN blob downloads (per `endpointSubdomains` from auth response) |
+| Service                                    | Usage                                                |
+| ------------------------------------------ | ---------------------------------------------------- |
+| `id.tradeskillmaster.com`                  | Keycloak OIDC: browser login (PKCE), token refresh   |
+| `realm-api.tradeskillmaster.com`           | Realm and region catalogue                           |
+| `desktop-backend.tradeskillmaster.com`     | Game versions, followed realms (user-realms)         |
+| `addon-version.tradeskillmaster.com`       | Release channels                                     |
+| `app-backend-sockets.tradeskillmaster.com` | Socket.IO push: auction data, addon releases, news   |
+| presigned blob URLs                        | Auction data and addon zip downloads                 |
 
-Auth: HMAC token = `SHA256("{APP_VERSION}:{time}:{SECRET}")` on every request.
+Auth: `Authorization: Bearer <access token>` on REST, the raw token on the
+socket handshake. See [api.md](api.md).
 
 ## Python Dependencies
 

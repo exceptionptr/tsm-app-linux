@@ -28,6 +28,7 @@ WOW_VERSIONS = [
     "_classic_",
     "_classic_era_",
     "_anniversary_",
+    "_forever_",
     "_classic_ptr_",
     "_retail_ptr_",
 ]
@@ -37,6 +38,16 @@ WOW_VERSIONS = [
 _STEAM_ROOTS = [
     Path.home() / ".local/share/Steam",
     Path.home() / ".steam/steam",
+    Path.home() / ".var/app/com.valvesoftware.Steam/.local/share/Steam",
+]
+
+# Directories whose every subdir may be a Wine prefix (directly, or under pfx/).
+# The same list the official 1.0.9 client searches: ~/Games (Lutris, Heroic),
+# Bottles native and Flatpak.
+_PREFIX_PARENTS = [
+    Path.home() / "Games",
+    Path.home() / ".local/share/bottles/bottles",
+    Path.home() / ".var/app/com.usebottles.bottles/data/bottles/bottles",
 ]
 
 LUTRIS_GAMES_DIR = Path.home() / ".local/share/lutris/games"
@@ -146,6 +157,24 @@ def _faugus_base_paths() -> list[Path]:
     return paths
 
 
+def _prefix_parent_paths() -> list[Path]:
+    """WoW in any Wine prefix directly under one of _PREFIX_PARENTS."""
+    paths: list[Path] = []
+    for parent in _PREFIX_PARENTS:
+        try:
+            entries = [d for d in parent.iterdir() if d.is_dir()]
+        except OSError:
+            continue
+        for d in entries:
+            for prefix in (d, d / "pfx"):
+                for pf in ("Program Files (x86)", "Program Files"):
+                    candidate = prefix / "drive_c" / pf / "World of Warcraft"
+                    if candidate.is_dir() and candidate not in paths:
+                        paths.append(candidate)
+                        logger.debug("Wine prefix %s -> WoW base: %s", prefix, candidate)
+    return paths
+
+
 def find_wow_base(extra_paths: list[Path] | None = None) -> str | None:
     """Scan common Linux paths and launcher configs for a WoW installation.
 
@@ -156,6 +185,7 @@ def find_wow_base(extra_paths: list[Path] | None = None) -> str | None:
     base_paths.extend(_lutris_base_paths())
     base_paths.extend(_proton_base_paths())
     base_paths.extend(_faugus_base_paths())
+    base_paths.extend(_prefix_parent_paths())
     if extra_paths:
         base_paths.extend(extra_paths)
 

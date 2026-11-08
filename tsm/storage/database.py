@@ -9,7 +9,7 @@ import aiosqlite
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 CREATE_AUCTION_CACHE = """
 CREATE TABLE IF NOT EXISTS auction_cache (
@@ -41,6 +41,16 @@ CREATE TABLE IF NOT EXISTS user_added_realms (
     region TEXT NOT NULL,
     name TEXT NOT NULL,
     PRIMARY KEY (game_version, region, name)
+);
+"""
+
+# JSON copies of API catalogues (realms, regions, game versions), so the realm
+# list and the Add Realm dropdown work at startup before the network is up.
+CREATE_API_CACHE = """
+CREATE TABLE IF NOT EXISTS api_cache (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    saved_at INTEGER NOT NULL
 );
 """
 
@@ -95,6 +105,12 @@ class Database:
             # the bcc rows; classic and anniversary entries are correct and
             # re-adding them by hand is a nuisance. See issue #19.
             await self._db.execute("DELETE FROM user_added_realms WHERE game_version='bcc'")
+
+        if current_version < 5:
+            # The new backend registers realms of every game version server side.
+            # user_added_realms is kept only until AuctionDataService has moved its
+            # rows to the account (see migrate_local_realms).
+            await self._db.execute(CREATE_API_CACHE)
 
         await self._db.execute("DELETE FROM schema_version")
         await self._db.execute(

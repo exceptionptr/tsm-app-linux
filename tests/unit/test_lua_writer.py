@@ -1,79 +1,107 @@
-"""Tests for LuaWriter: verifies the real AppData.lua LoadData() format."""
+"""AppData.lua reader/writer, in the official 1.0.9 format."""
 
 from __future__ import annotations
 
-from tsm.core.models.auction import AppInfo, AuctionData
-from tsm.wow.lua_writer import LuaWriter
+from tsm.wow.lua_writer import AppDataFile, lua_string, render_app_info
+
+BLOB = "{downloadTime=1,fields={},data={}}"
 
 
-def test_write_creates_appdata_lua(tmp_path):
-    writer = LuaWriter()
-    data = AuctionData(app_info=AppInfo(version=41402, last_sync=1710000000))
-    result = writer.write_app_data(data, tmp_path)
-    assert result.name == "AppData.lua"
-    assert result.exists()
-
-
-def test_output_contains_loaddata_calls(tmp_path):
-    writer = LuaWriter()
-    data = AuctionData(app_info=AppInfo(version=41402, last_sync=1710000000))
-    data.add_entry(
-        "AUCTIONDB_NON_COMMODITY_DATA",
-        "Blackhand",
-        "return {downloadTime=1710000000,fields={},data={}}",
-        1710000000,
+def test_round_trip_single_entry(tmp_path):
+    path = tmp_path / "AppData.lua"
+    f = AppDataFile(path)
+    assert f.update("AUCTIONDB_NON_COMMODITY_DATA", "Tarren Mill", BLOB, 100, 97)
+    assert f.save()
+    text = path.read_text()
+    assert text == (
+        'select(2, ...).LoadData("AUCTIONDB_NON_COMMODITY_DATA","Tarren Mill",[[return '
+        + BLOB
+        + "]]) --<AUCTIONDB_NON_COMMODITY_DATA,Tarren Mill,100,97>\n"
     )
-    writer.write_app_data(data, tmp_path)
-    content = (tmp_path / "AppData.lua").read_text()
-
-    assert 'select(2, ...).LoadData("APP_INFO","Global"' in content
-    assert 'select(2, ...).LoadData("AUCTIONDB_NON_COMMODITY_DATA","Blackhand"' in content
+    again = AppDataFile(path)
+    assert again.last_update("AUCTIONDB_NON_COMMODITY_DATA", "Tarren Mill") == 100
+    assert again.entries[0].auction_house_id == 97
 
 
-def test_app_info_line_format(tmp_path):
-    writer = LuaWriter()
-    data = AuctionData(app_info=AppInfo(version=41402, last_sync=1710000000))
-    writer.write_app_data(data, tmp_path)
-    content = (tmp_path / "AppData.lua").read_text()
-    # Must use long-bracket syntax [[...]]
-    assert "[[" in content
-    assert "]]" in content
-    assert "version=41402" in content
-    assert "lastSync=1710000000" in content
+def test_connected_realms_share_one_line(tmp_path):
+    path = tmp_path / "AppData.lua"
+    f = AppDataFile(path)
+    f.update("T", "A", BLOB, 5, 7)
+    f.update("T", "B", BLOB, 5, 7)
+    f.save()
+    lines = path.read_text().splitlines()
+    assert len(lines) == 1
+    assert lines[0].startswith('for _,r in ipairs({"B","A"}) do select(2, ...).LoadData("T",r,')
+    assert lines[0].endswith("]]) end --<T,B|A,5,7>")
+    again = AppDataFile(path)
+    assert {e.key for e in again.entries} == {"A", "B"}
+    assert again.last_update("T", "A") == 5
 
 
-def test_data_blob_written_verbatim(tmp_path):
-    writer = LuaWriter()
-    data = AuctionData(app_info=AppInfo(version=41402, last_sync=1710000000))
-    blob = "return {downloadTime=1710000000,fields={},data={{25,1CMGBEK}}}"
-    data.add_entry("AUCTIONDB_NON_COMMODITY_DATA", "Blackhand", blob, 1710000000)
-    writer.write_app_data(data, tmp_path)
-    content = (tmp_path / "AppData.lua").read_text()
-    assert blob in content
+def test_legacy_three_field_lines_are_read(tmp_path):
+    path = tmp_path / "AppData.lua"
+    path.write_text(
+        'select(2, ...).LoadData("AUCTIONDB_REGION_STAT","EU",[[return {x=1}]]) '
+        "--<AUCTIONDB_REGION_STAT,EU,1700000000>\n"
+    )
+    f = AppDataFile(path)
+    assert f.last_update("AUCTIONDB_REGION_STAT", "EU") == 1700000000
+    assert f.entries[0].data == "{x=1}"
 
 
-def test_atomic_write_replaces_existing(tmp_path):
-    writer = LuaWriter()
-    data1 = AuctionData(app_info=AppInfo(version=41402, last_sync=1000))
-    data2 = AuctionData(app_info=AppInfo(version=41402, last_sync=2000))
-    writer.write_app_data(data1, tmp_path)
-    writer.write_app_data(data2, tmp_path)
-    content = (tmp_path / "AppData.lua").read_text()
-    assert "lastSync=2000" in content
-    assert "lastSync=1000" not in content
+def test_older_data_is_ignored(tmp_path):
+    f = AppDataFile(tmp_path / "AppData.lua")
+    f.update("T", "K", "{new=1}", 200)
+    assert not f.update("T", "K", "{old=1}", 100)
+    assert f.entries[0].data == "{new=1}"
 
 
-def test_multiple_realms(tmp_path):
-    writer = LuaWriter()
-    data = AuctionData(app_info=AppInfo(version=41402, last_sync=1710000000))
-    for realm in ["Blackhand", "Blackmoore", "Magtheridon", "Tarren Mill"]:
-        data.add_entry(
-            "AUCTIONDB_NON_COMMODITY_DATA",
-            realm,
-            "return {downloadTime=1710000000}",
-            1710000000,
-        )
-    writer.write_app_data(data, tmp_path)
-    content = (tmp_path / "AppData.lua").read_text()
-    for realm in ["Blackhand", "Blackmoore", "Magtheridon", "Tarren Mill"]:
-        assert f'"{realm}"' in content
+def test_unparseable_code_is_kept_verbatim(tmp_path):
+    path = tmp_path / "AppData.lua"
+    raw = "print('something else') --<X,Y,3>"
+    path.write_text(raw + "\n")
+    f = AppDataFile(path)
+    f.update("T", "K", BLOB, 1)
+    f.save()
+    assert raw in path.read_text()
+
+
+def test_line_without_meta_is_dropped(tmp_path):
+    path = tmp_path / "AppData.lua"
+    path.write_text("garbage\n")
+    assert AppDataFile(path).entries == []
+
+
+def test_remove_reports_what_was_there(tmp_path):
+    f = AppDataFile(tmp_path / "AppData.lua")
+    f.update("T", "A", BLOB, 1)
+    f.update("U", "A", BLOB, 1)
+    f.update("T", "B", BLOB, 1)
+    assert f.remove(["A", "Z"]) == ["A"]
+    assert [e.key for e in f.entries] == ["B"]
+
+
+def test_save_skips_unchanged_file(tmp_path):
+    path = tmp_path / "AppData.lua"
+    f = AppDataFile(path)
+    assert not f.save()
+    assert not path.exists()
+
+
+def test_lua_string_escapes_like_the_official_client():
+    assert lua_string('a"b\\c]]d\n') == '"a\\034b\\092c\\093\\093d\\010"'
+    assert lua_string(None) == '""'
+
+
+def test_render_app_info():
+    blob = render_app_info(
+        "1.0.9",
+        42,
+        {"id": 3, "msg": "hi"},
+        [{"title": "T", "content": "C", "timestamp": 9, "link": "L"}],
+    )
+    assert blob == (
+        '{version="1.0.9",lastSync=42,message={id=3,msg="hi"},'
+        'news={{title="T",content="C",timestamp=9,link="L"}}}'
+    )
+    assert "]]" not in render_app_info("1", 1, {"msg": "]]"}, [])

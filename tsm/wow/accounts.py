@@ -7,15 +7,11 @@ import re
 from pathlib import Path
 
 from tsm.core.models.config import WoWInstall
+from tsm.wow.game_versions import SUFFIX_BY_FOLDER
 from tsm.wow.utils import _GAME_VERSIONS, normalize_wow_base
 
 logger = logging.getLogger(__name__)
-_SUFFIXES = {
-    "_retail_": "",
-    "_classic_era_": "-Classic",
-    "_classic_": "-Progression",
-    "_anniversary_": "-Anniversary",
-}
+_SUFFIXES = SUFFIX_BY_FOLDER
 _TSM_ADDON_PREFIX = "TradeSkillMaster"
 
 

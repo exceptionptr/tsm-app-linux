@@ -1,160 +1,107 @@
-"""Unit tests for UpdateService addon naming and per-game-version installs."""
+"""UpdateService: one multi-toc zip per addon, installed into each game version."""
 
 from __future__ import annotations
 
 import io
 import zipfile
-from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from tsm.core.services.updater import UpdateService
-
-ADDON = "TradeSkillMaster_AppHelper"
-GAME_VERSIONS = ("_retail_", "_classic_era_", "_classic_", "_anniversary_")
+from tsm.core.services.updater import UpdateService, split_suffix
 
 
-@dataclass
-class _Install:
-    path: str
+def _zip(name: str, version: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr(f"{name}/{name}.toc", f"## Title: {name}\n## Version: {version}\n")
+        zf.writestr(f"{name}/{name}_Mainline.toc", "## Interface: 110000\n")
+        zf.writestr(f"{name}/Core.lua", "-- new\n")
+    return buf.getvalue()
 
 
-class _FakeDetector:
-    def __init__(self, base: Path):
-        self.installs = [_Install(path=str(base))]
+def _install(base: Path, folder: str, name: str, version: str | None) -> Path:
+    gv = base / folder
+    gv.mkdir(parents=True, exist_ok=True)
+    (gv / "Wow.exe").write_bytes(b"")
+    addons = gv / "Interface" / "AddOns"
+    addons.mkdir(parents=True, exist_ok=True)
+    if version is not None:
+        d = addons / name
+        d.mkdir()
+        (d / f"{name}.toc").write_text(f"## Version: {version}\n")
+        (d / "Old.lua").write_text("-- old\n")
+    return addons
 
 
-class _FakeAddonAPI:
-    """Records every requested API name and answers with a marker zip."""
-
-    def __init__(self) -> None:
-        self.requested: list[str] = []
-
-    async def download(self, name: str, channel: str = "release") -> bytes:
-        self.requested.append(name)
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w") as zf:
-            zf.writestr(f"{ADDON}/served.txt", name)
-            zf.writestr(f"{ADDON}/{ADDON}.toc", "## Version: v4.14.10\n")
-        return buf.getvalue()
+def _svc(base: Path, data: bytes) -> tuple[UpdateService, MagicMock]:
+    client = MagicMock()
+    client.download = AsyncMock(return_value=data)
+    detector = SimpleNamespace(installs=[SimpleNamespace(path=str(base))])
+    return UpdateService(client, detector), client
 
 
-class _FakeClient:
-    def __init__(self) -> None:
-        self.addon = _FakeAddonAPI()
+REL = {"addon": "TradeSkillMaster", "channel": "release", "version": "v4.15.4", "url": "u"}
 
 
-def _make_wow_tree(base: Path, game_versions=GAME_VERSIONS, with_addon=()) -> None:
-    """Create a WoW tree. with_addon lists the game versions that already have
-    an outdated copy of the addon installed."""
-    for gv in game_versions:
-        gv_dir = base / gv
-        (gv_dir / "Interface" / "AddOns").mkdir(parents=True)
-        (gv_dir / "Wow.exe").write_bytes(b"MZ")
-    for gv in with_addon:
-        addon_dir = base / gv / "Interface" / "AddOns" / ADDON
-        addon_dir.mkdir(parents=True, exist_ok=True)
-        (addon_dir / f"{ADDON}.toc").write_text("## Version: v4.14.09\n")
-
-
-def _served(base: Path, gv: str) -> str | None:
-    marker = base / gv / "Interface" / "AddOns" / ADDON / "served.txt"
-    return marker.read_text() if marker.is_file() else None
+def test_split_suffix():
+    assert split_suffix("TradeSkillMaster") == ("TradeSkillMaster", "_retail_")
+    assert split_suffix("TradeSkillMaster_AppHelper-Forever") == (
+        "TradeSkillMaster_AppHelper",
+        "_forever_",
+    )
+    assert split_suffix("TradeSkillMaster-Progression") == ("TradeSkillMaster", "_classic_")
 
 
 @pytest.mark.asyncio
-async def test_check_and_update_requests_package_per_game_version(tmp_path):
-    """Each client gets the package built for it, never the retail build."""
-    base = tmp_path / "wow"
-    _make_wow_tree(base, with_addon=("_retail_", "_classic_era_", "_anniversary_"))
-    client = _FakeClient()
-    svc = UpdateService(api_client=client, wow_detector=_FakeDetector(base))
-
-    updated = await svc.check_and_update([{"name": ADDON, "version_str": "v4.14.10"}])
-
-    assert updated == [ADDON]
-    assert sorted(client.addon.requested) == [
-        ADDON,
-        f"{ADDON}-Anniversary",
-        f"{ADDON}-Classic",
-    ]
-    assert _served(base, "_retail_") == ADDON
-    assert _served(base, "_classic_era_") == f"{ADDON}-Classic"
-    assert _served(base, "_anniversary_") == f"{ADDON}-Anniversary"
-    # _classic_ had no copy installed, so it is left alone.
-    assert _served(base, "_classic_") is None
+async def test_one_download_updates_every_game_version(tmp_path):
+    retail = _install(tmp_path, "_retail_", "TradeSkillMaster", "4.14.0")
+    forever = _install(tmp_path, "_forever_", "TradeSkillMaster", "v4.15.0")
+    svc, client = _svc(tmp_path, _zip("TradeSkillMaster", "v4.15.4"))
+    assert await svc.check_and_update([REL]) == ["TradeSkillMaster"]
+    client.download.assert_awaited_once_with("u")
+    for addons in (retail, forever):
+        d = addons / "TradeSkillMaster"
+        assert (d / "Core.lua").exists()
+        assert not (d / "Old.lua").exists()
 
 
 @pytest.mark.asyncio
-async def test_check_and_update_downloads_each_package_once(tmp_path):
-    """Two installs of the same game version share one download."""
-    base_a = tmp_path / "wow-a"
-    base_b = tmp_path / "wow-b"
-    for base in (base_a, base_b):
-        _make_wow_tree(base, game_versions=("_retail_",), with_addon=("_retail_",))
-    client = _FakeClient()
-    detector = _FakeDetector(base_a)
-    detector.installs.append(_Install(path=str(base_b)))
-    svc = UpdateService(api_client=client, wow_detector=detector)
-
-    await svc.check_and_update([{"name": ADDON, "version_str": "v4.14.10"}])
-
-    assert client.addon.requested == [ADDON]
-    assert _served(base_a, "_retail_") == ADDON
-    assert _served(base_b, "_retail_") == ADDON
+async def test_matching_version_ignores_leading_v(tmp_path):
+    _install(tmp_path, "_retail_", "TradeSkillMaster", "4.15.4")
+    svc, client = _svc(tmp_path, b"")
+    assert await svc.check_and_update([REL]) == []
+    client.download.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_install_or_update_addon_keeps_the_suffix(tmp_path):
-    """The suffixed UI name is what goes to the API; only its own client is touched."""
-    base = tmp_path / "wow"
-    _make_wow_tree(base)
-    client = _FakeClient()
-    svc = UpdateService(api_client=client, wow_detector=_FakeDetector(base))
-
-    ok = await svc.install_or_update_addon(f"{ADDON}-Progression", "v4.14.10")
-
-    assert ok is True
-    assert client.addon.requested == [f"{ADDON}-Progression"]
-    assert _served(base, "_classic_") == f"{ADDON}-Progression"
-    for gv in ("_retail_", "_classic_era_", "_anniversary_"):
-        assert _served(base, gv) is None
+async def test_not_installed_dev_and_git_copies_are_left_alone(tmp_path):
+    _install(tmp_path, "_retail_", "TradeSkillMaster", None)
+    _install(tmp_path, "_classic_", "TradeSkillMaster", "@project-version@")
+    era = _install(tmp_path, "_classic_era_", "TradeSkillMaster", "4.0")
+    (era / "TradeSkillMaster" / ".git").mkdir()
+    svc, client = _svc(tmp_path, _zip("TradeSkillMaster", "v4.15.4"))
+    assert await svc.check_and_update([REL]) == []
+    client.download.assert_not_awaited()
+    assert (era / "TradeSkillMaster" / "Old.lua").exists()
 
 
 @pytest.mark.asyncio
-async def test_install_or_update_addon_retail_has_no_suffix(tmp_path):
-    base = tmp_path / "wow"
-    _make_wow_tree(base)
-    client = _FakeClient()
-    svc = UpdateService(api_client=client, wow_detector=_FakeDetector(base))
-
-    ok = await svc.install_or_update_addon(ADDON, "v4.14.10")
-
-    assert ok is True
-    assert client.addon.requested == [ADDON]
-    assert _served(base, "_retail_") == ADDON
+async def test_manual_install_into_a_new_game_version(tmp_path):
+    gv = tmp_path / "_forever_"
+    gv.mkdir()
+    (gv / "WowClassic.exe").write_bytes(b"")
+    svc, _ = _svc(tmp_path, _zip("TradeSkillMaster", "v4.15.4"))
+    svc.set_releases([REL])
+    assert await svc.install_or_update_addon("TradeSkillMaster-Forever")
+    assert (gv / "Interface" / "AddOns" / "TradeSkillMaster" / "Core.lua").exists()
 
 
 @pytest.mark.asyncio
-async def test_download_failure_is_requested_once_per_package(tmp_path):
-    """A package the server refuses is not re-requested for every install."""
-    base_a = tmp_path / "wow-a"
-    base_b = tmp_path / "wow-b"
-    for base in (base_a, base_b):
-        _make_wow_tree(base, game_versions=("_retail_",), with_addon=("_retail_",))
-    client = _FakeClient()
-
-    async def boom(name: str, channel: str = "release") -> bytes:
-        client.addon.requested.append(name)
-        raise RuntimeError("Invalid request.")
-
-    client.addon.download = boom
-    detector = _FakeDetector(base_a)
-    detector.installs.append(_Install(path=str(base_b)))
-    svc = UpdateService(api_client=client, wow_detector=detector)
-
-    updated = await svc.check_and_update([{"name": ADDON, "version_str": "v4.14.10"}])
-
-    assert updated == []
-    assert client.addon.requested == [ADDON]
+async def test_bad_zip_installs_nothing(tmp_path):
+    addons = _install(tmp_path, "_retail_", "TradeSkillMaster", "4.0")
+    svc, _ = _svc(tmp_path, b"not a zip")
+    assert await svc.check_and_update([REL]) == []
+    assert (addons / "TradeSkillMaster" / "Old.lua").exists()

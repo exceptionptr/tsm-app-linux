@@ -126,3 +126,31 @@ class AuctionCache:
         cursor = await db.execute("DELETE FROM auction_cache WHERE last_updated < ?", (cutoff,))
         await db.commit()
         return cursor.rowcount or 0
+
+    async def get_all_user_realms(self) -> list[tuple[str, str, str]]:
+        """Every (game_version, region, name) row of the legacy local realm list."""
+        db = self._db.connection
+        async with db.execute("SELECT game_version, region, name FROM user_added_realms") as cur:
+            rows = await cur.fetchall()
+        return [(r["game_version"], r["region"], r["name"]) for r in rows]
+
+    async def put_json(self, key: str, value: object) -> None:
+        db = self._db.connection
+        await db.execute(
+            """INSERT INTO api_cache (key, value, saved_at) VALUES (?, ?, ?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value, saved_at=excluded.saved_at""",
+            (key, json.dumps(value), int(time.time())),
+        )
+        await db.commit()
+
+    async def get_json(self, key: str) -> object | None:
+        db = self._db.connection
+        async with db.execute("SELECT value FROM api_cache WHERE key=?", (key,)) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        try:
+            value: object = json.loads(row["value"])
+            return value
+        except ValueError:
+            return None
