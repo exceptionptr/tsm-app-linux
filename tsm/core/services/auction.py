@@ -46,6 +46,9 @@ APPHELPER = "TradeSkillMaster_AppHelper"
 DOWNLOAD_CONCURRENCY = 4
 WRITE_DEBOUNCE_SECONDS = 1.5
 APP_INFO_INTERVAL_SECONDS = 15 * 60
+# The server does not push a newly followed realm on its own, and a reconnect
+# right after the follow is too early. One reconnect after this pause fetches it.
+NEW_REALM_RECONNECT_DELAY_SECONDS = 5.0
 
 _REALM_TAG = "AUCTIONDB_NON_COMMODITY_DATA"
 _REGION_TAG = "AUCTIONDB_REGION_STAT"
@@ -303,8 +306,18 @@ class AuctionDataService:
             )
         await self._client.add_user_realm(self._user_id, realm_id, ah_type)
         await self.load_user_realms()
-        # The server pushes the new realm's data over the open socket (the
-        # official client does not reconnect here either).
+        if self.reconnect is not None:
+            self._spawn(self._reconnect_for_realm(realm_id, ah_type))
+
+    async def _reconnect_for_realm(self, realm_id: int, ah_type: str) -> None:
+        """Reconnect once, shortly after a follow, unless the realm's data already came."""
+        await asyncio.sleep(NEW_REALM_RECONNECT_DELAY_SECONDS)
+        if self._server_lm.get(("realm", realm_id, ah_type)):
+            return
+        if self._followed(realm_id, ah_type) is None or self.reconnect is None:
+            return
+        logger.info("No data yet for realm %d/%s, reconnecting once", realm_id, ah_type)
+        await self.reconnect()
 
     async def remove_realm(self, user_realm_id: str) -> None:
         if self._client is None:

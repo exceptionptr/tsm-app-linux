@@ -286,6 +286,35 @@ async def test_add_realm_respects_the_tier_limit(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_add_realm_reconnects_once_when_no_data_arrives(tmp_path, monkeypatch):
+    monkeypatch.setattr(auction_mod, "NEW_REALM_RECONNECT_DELAY_SECONDS", 0)
+    client = _client()
+    svc, _ = await _service(tmp_path, client)
+    client.user_realms.return_value = [
+        {"id": "usr_rlm_9", "realmId": 301, "auctionHouseType": "ALL"}
+    ]
+    svc.reconnect = AsyncMock()
+    await svc.add_realm(301, "all", limit=None)
+    await svc.flush_all()
+    svc.reconnect.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_add_realm_skips_the_reconnect_when_data_already_came(tmp_path, monkeypatch):
+    monkeypatch.setattr(auction_mod, "NEW_REALM_RECONNECT_DELAY_SECONDS", 0)
+    client = _client()
+    svc, _ = await _service(tmp_path, client)
+    client.user_realms.return_value = [
+        {"id": "usr_rlm_9", "realmId": 301, "auctionHouseType": "ALL"}
+    ]
+    svc.reconnect = AsyncMock()
+    svc._server_lm[("realm", 301, "ALL")] = 5
+    await svc.add_realm(301, "all", limit=None)
+    await svc.flush_all()
+    svc.reconnect.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_remove_realm_uses_the_user_realm_id(tmp_path):
     client = _client()
     svc, _ = await _service(tmp_path, client)
