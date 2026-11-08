@@ -11,10 +11,10 @@ Usage:
 
 from __future__ import annotations
 
-import ssl
 import socket
-import urllib.request
+import ssl
 from dataclasses import dataclass
+from typing import Any
 
 # All known TSM API hostnames
 _HOSTS = [
@@ -37,49 +37,63 @@ class Result:
     error: str
 
 
+def _failure(host: str, error: str) -> Result:
+    return Result(host=host, https_ok=False, cert_subject="", cert_san=[], error=error)
+
+
+def _cert_fields(cert: dict[str, Any] | None) -> tuple[str, list[str]]:
+    """Return (common name, DNS SANs) from a getpeercert() dict."""
+    cert = cert or {}
+    cn = "?"
+    for rdn in cert.get("subject", ()):
+        for key, value in rdn:
+            if key == "commonName":
+                cn = str(value)
+    san = [str(v) for (t, v) in cert.get("subjectAltName", ()) if t == "DNS"]
+    return cn, san
+
+
 def probe(host: str) -> Result:
     try:
         ctx = ssl.create_default_context()
-        with socket.create_connection((host, 443), timeout=_TIMEOUT) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                cert = ssock.getpeercert()
-                subject = dict(x[0] for x in cert.get("subject", []))
-                san_raw = cert.get("subjectAltName", [])
-                san = [v for (t, v) in san_raw if t == "DNS"]
-                return Result(
-                    host=host,
-                    https_ok=True,
-                    cert_subject=subject.get("commonName", "?"),
-                    cert_san=san,
-                    error="",
-                )
+        with (
+            socket.create_connection((host, 443), timeout=_TIMEOUT) as sock,
+            ctx.wrap_socket(sock, server_hostname=host) as ssock,
+        ):
+            cn, san = _cert_fields(ssock.getpeercert())
+            return Result(
+                host=host,
+                https_ok=True,
+                cert_subject=cn,
+                cert_san=san,
+                error="",
+            )
     except ssl.SSLCertVerificationError as e:
         # Connect succeeded but cert verification failed - get cert anyway
         try:
             ctx_noverify = ssl.create_default_context()
             ctx_noverify.check_hostname = False
             ctx_noverify.verify_mode = ssl.CERT_NONE
-            with socket.create_connection((host, 443), timeout=_TIMEOUT) as sock:
-                with ctx_noverify.wrap_socket(sock, server_hostname=host) as ssock:
-                    cert = ssock.getpeercert(binary_form=False) or {}
-                    subject = dict(x[0] for x in cert.get("subject", []))
-                    san_raw = cert.get("subjectAltName", [])
-                    san = [v for (t, v) in san_raw if t == "DNS"]
-                    return Result(
-                        host=host,
-                        https_ok=False,
-                        cert_subject=subject.get("commonName", "?"),
-                        cert_san=san,
-                        error=str(e),
-                    )
+            with (
+                socket.create_connection((host, 443), timeout=_TIMEOUT) as sock,
+                ctx_noverify.wrap_socket(sock, server_hostname=host) as ssock,
+            ):
+                cn, san = _cert_fields(ssock.getpeercert(binary_form=False))
+                return Result(
+                    host=host,
+                    https_ok=False,
+                    cert_subject=cn,
+                    cert_san=san,
+                    error=str(e),
+                )
         except Exception as e2:
-            return Result(host=host, https_ok=False, cert_subject="", cert_san=[], error=str(e2))
+            return _failure(host, str(e2))
     except ConnectionRefusedError:
-        return Result(host=host, https_ok=False, cert_subject="", cert_san=[], error="Port 443 refused (HTTP only?)")
+        return _failure(host, "Port 443 refused (HTTP only?)")
     except TimeoutError:
-        return Result(host=host, https_ok=False, cert_subject="", cert_san=[], error="Connection timed out")
+        return _failure(host, "Connection timed out")
     except Exception as e:
-        return Result(host=host, https_ok=False, cert_subject="", cert_san=[], error=str(e))
+        return _failure(host, str(e))
 
 
 def main() -> None:
