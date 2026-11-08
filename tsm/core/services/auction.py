@@ -303,7 +303,8 @@ class AuctionDataService:
             )
         await self._client.add_user_realm(self._user_id, realm_id, ah_type)
         await self.load_user_realms()
-        # The server pushes the new realm's data over the socket.
+        # The server pushes the new realm's data over the open socket (the
+        # official client does not reconnect here either).
 
     async def remove_realm(self, user_realm_id: str) -> None:
         if self._client is None:
@@ -483,7 +484,7 @@ class AuctionDataService:
                 logger.warning("Data for unknown realm %d ignored", realm_id)
                 return
         if self._user_realms_loaded and self._followed(realm_id, ah_type) is None:
-            logger.debug("Data for realm %d/%s not followed, ignored", realm_id, ah_type)
+            logger.info("Data for realm %d/%s not followed, ignored", realm_id, ah_type)
             return
         region = realm["region"]
         folder = gvs.folder_for_region(region.get("gameVersion", ""))
