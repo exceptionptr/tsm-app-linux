@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import IO
 
 from PySide6.QtWidgets import QApplication
 
@@ -16,6 +17,7 @@ from tsm.core.services.backup import BackupService
 from tsm.core.services.sync import SyncController
 from tsm.core.services.updater import UpdateService
 from tsm.core.services.wow_detector import WoWDetectorService
+from tsm.core.single_instance import acquire_instance_lock
 from tsm.storage.auction_cache import AuctionCache
 from tsm.storage.config_store import ConfigStore
 from tsm.storage.database import Database
@@ -31,31 +33,21 @@ logger = logging.getLogger(__name__)
 # Version of the official TSM desktop app whose backend protocol we implement.
 OFFICIAL_APP_VERSION = "1.0.9"
 
-_INSTANCE_KEY = "tsm-app-single-instance"
-
 DATA_DIR = Path.home() / ".local" / "share" / "tsm-app"
 
 
-def _ensure_single_instance(qt_app: QApplication) -> None:
+# Held open for the lifetime of the process; closing it releases the lock.
+_instance_lock: IO[bytes] | None = None
+
+
+def _ensure_single_instance() -> None:
     """Exit with a message if another instance is already running."""
-    from PySide6.QtNetwork import QLocalServer, QLocalSocket
+    global _instance_lock
     from PySide6.QtWidgets import QMessageBox
 
-    server = QLocalServer(qt_app)  # parent = qt_app keeps it alive for process lifetime
-    if server.listen(_INSTANCE_KEY):
+    _instance_lock = acquire_instance_lock(DATA_DIR / "instance.lock")
+    if _instance_lock is not None:
         return  # We are the first instance
-
-    # listen() failed, check whether the socket is live or stale (crash remnant)
-    sock = QLocalSocket()
-    sock.connectToServer(_INSTANCE_KEY)
-    alive = sock.waitForConnected(500)
-    sock.disconnectFromServer()
-
-    if not alive:
-        # Stale socket from a previous crash, clean it up and claim the lock
-        QLocalServer.removeServer(_INSTANCE_KEY)
-        if server.listen(_INSTANCE_KEY):
-            return
 
     QMessageBox.information(
         None,
@@ -89,7 +81,7 @@ def create_app(
     load_theme(qt_app, "tsm_dark")
     qt_app.setWindowIcon(_make_window_icon())
 
-    _ensure_single_instance(qt_app)
+    _ensure_single_instance()
 
     # AsyncRunner must start before any async work
     async_runner = AsyncRunner()

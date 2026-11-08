@@ -18,6 +18,18 @@ tsm-app (2.0.0-1) stable; urgency=medium
     Discovery and Fresh realms, more install locations (every Wine prefix under
     ~/Games, Bottles, Proton prefixes of Flatpak Steam) and the socket state in
     the status bar.
+  * Fix: the Flatpak crashed on start for want of libgssapi_krb5 (#26). The
+    single instance check is now a file lock and nothing loads QtNetwork.
+  * Fix: AppImage sign-in failed with "No module named
+    'concurrent.futures.thread'" (#27). The bundled Python now runs isolated
+    from the host's Python environment.
+  * Fix: Accounting kept jumping back to the first account after a realm data
+    update (#25). The selection is remembered, across restarts too.
+  * Change: --self-test also imports the whole app, takes a file lock, resolves
+    a host name and loads the TLS certificates; CI runs it on every package.
+  * Change: Realm Data and Addon Versions have one column header above all game
+    version groups instead of a repeated header per group; it stays in place
+    while the groups scroll, and the columns line up across groups.
   * Remove: the username and password fields and the periodic auction and auth
     refresh jobs.
 

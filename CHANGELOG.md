@@ -51,6 +51,28 @@ Everyone has to sign in once more, now through the browser.
   (native and Flatpak) and Proton prefixes of Flatpak Steam. A WoW folder is
   recognised by any `Wow*.exe` or a `WTF/Config.wtf`.
 - **Connection state in the status bar** while the socket is connecting.
+- **One column header for Realm Data and Addon Versions.** Each game version
+  group used to repeat the same header row. There is now a single header above
+  the groups that stays in place while they scroll, and the columns line up
+  across all groups. The Status column fits its text, so "Update available" is
+  no longer cut off.
+
+### Fixed
+
+- **The Flatpak crashed on start** with `libgssapi_krb5.so.2: cannot open shared
+  object file` (#26). The single instance check used QtNetwork, which links
+  against Kerberos, and the Flatpak runtime has no Kerberos. It is now a file
+  lock, and nothing loads QtNetwork any more.
+- **AppImage sign-in failed** with `No module named 'concurrent.futures.thread'`
+  (#27). The bundled Python now runs isolated from the host: no `PYTHONPATH`,
+  no user site-packages and no current directory on its module path.
+- **Accounting no longer jumps back to the first account** after a realm data
+  update (#25). The account, realm and character picked there are remembered,
+  across restarts too.
+- `--self-test`, which CI runs against every package, now also imports the
+  whole app, takes a file lock, resolves a host name through the asyncio
+  executor and loads the TLS certificates, so the failures above stop a
+  release instead of reaching users.
 
 ### Removed
 

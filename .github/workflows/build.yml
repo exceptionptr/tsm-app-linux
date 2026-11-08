@@ -283,7 +283,7 @@ jobs:
           apt-get update -qq
           apt-get install -y \
             python3-pyside6.qtcore python3-pyside6.qtgui \
-            python3-pyside6.qtnetwork python3-pyside6.qtsvg \
+            python3-pyside6.qtsvg \
             python3-pyside6.qtwidgets \
             python3-aiohttp python3-pydantic python3-aiosqlite \
             python3-keyring python3-yaml

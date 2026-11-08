@@ -83,6 +83,13 @@ ep.write_text(''.join(lines))
   arrive with the server's release announcement
 - Add: World of Warcraft Forever, Hardcore/SoD/Fresh region data and more
   install locations (Wine prefixes under ~/Games, Bottles, Flatpak Steam Proton)
+- Fix: the Flatpak crashed on start for want of libgssapi_krb5 (#26); the
+  single instance check is a file lock now and QtNetwork is no longer loaded
+- Fix: AppImage sign-in failed on a missing concurrent.futures.thread (#27);
+  the bundled Python runs isolated from the host
+- Fix: Accounting remembers the account, realm and character (#25)
+- Change: Realm Data and Addon Versions have one column header for all game
+  version groups instead of one per group
 - Remove: username and password fields and the periodic refresh jobs
 * Wed Sep 24 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.16-1
 - Fix: the app cancelled reboot and shutdown on KDE Plasma. Closing to the tray

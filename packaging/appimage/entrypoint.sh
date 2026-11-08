@@ -8,4 +8,7 @@ if [ -z "${XDG_RUNTIME_DIR}" ]; then
     export XDG_RUNTIME_DIR
 fi
 
-exec {{ python-executable }} -m tsm "$@"
+# -I keeps the host out of the bundled interpreter: no PYTHONPATH or PYTHONHOME,
+# no ~/.local/lib/python3.x/site-packages and no current directory on sys.path.
+# Any of those can shadow or break bundled modules (issue #27).
+exec {{ python-executable }} -I -m tsm "$@"

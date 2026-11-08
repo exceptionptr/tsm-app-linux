@@ -198,7 +198,7 @@ jobs:
           # against. This set was read off ldd against the bundled Qt libraries
           # in a bare container: without glib, PySide6 does not import at all.
           sudo apt-get install -y --no-install-recommends \
-            libgl1 libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libgssapi-krb5-2
+            libgl1 libegl1 libxkbcommon0 libfontconfig1 libdbus-1-3
           # Renamed for the 64-bit time_t transition on newer Ubuntu.
           sudo apt-get install -y --no-install-recommends libglib2.0-0t64 \
             || sudo apt-get install -y --no-install-recommends libglib2.0-0

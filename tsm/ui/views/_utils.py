@@ -35,9 +35,13 @@ def table_content_height(table: QTableWidget, row_count: int) -> int:
     Used to size tables nested inside a CollapsibleGroup, which animates the
     body between zero and this height.
     """
-    header_h = table.horizontalHeader().sizeHint().height()
-    if header_h < 1:
-        header_h = 28  # sizeHint is unreliable before the first show
+    header = table.horizontalHeader()
+    if header.isHidden():
+        header_h = 0  # the columns are titled by a SharedTableHeader instead
+    else:
+        header_h = header.sizeHint().height()
+        if header_h < 1:
+            header_h = 28  # sizeHint is unreliable before the first show
     return header_h + row_count * table.verticalHeader().defaultSectionSize()
 
 

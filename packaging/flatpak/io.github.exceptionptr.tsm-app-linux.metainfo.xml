@@ -89,6 +89,9 @@
           <li>Followed realms live on the TSM account and are shared with the official app</li>
           <li>Addon updates are installed as soon as TSM releases them</li>
           <li>World of Warcraft Forever support and more detected install locations</li>
+          <li>Fixes a crash on start caused by a missing Kerberos library</li>
+          <li>Accounting remembers the selected account, realm and character</li>
+          <li>Realm Data and Addon Versions share one column header across all game versions</li>
         </ul>
       </description>
     </release>

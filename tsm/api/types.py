@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import NotRequired, TypedDict
+# typing_extensions, not typing: pydantic models use some of these as field
+# types, and pydantic rejects typing.TypedDict on Python < 3.12.
+from typing_extensions import NotRequired, TypedDict  # noqa: UP035
 
 
 class AuctionHouse(TypedDict):

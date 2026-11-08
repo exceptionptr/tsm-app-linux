@@ -5,7 +5,7 @@
 #
 # Without an argument a wheel is built from the working tree. The dependency
 # list is derived from pyproject.toml so it cannot drift, with PySide6 narrowed
-# to PySide6-Essentials: the app imports only QtCore, QtGui, QtNetwork, QtSvg
+# to PySide6-Essentials: the app imports only QtCore, QtGui, QtSvg
 # and QtWidgets, so the Addons half would add hundreds of megabytes for nothing.
 #
 # python-appimage assembles the AppDir, then appimagetool is run separately.
