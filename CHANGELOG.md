@@ -54,7 +54,8 @@ Everyone has to sign in once more, now through the browser.
 - **One column header for Realm Data and Addon Versions.** Each game version
   group used to repeat the same header row. There is now a single header above
   the groups that stays in place while they scroll, and the columns line up
-  across all groups.
+  across all groups. The Status column fits its text, so "Update available" is
+  no longer cut off.
 
 ### Fixed
 

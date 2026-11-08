@@ -273,7 +273,8 @@ class AddonVersionsView(QWidget):
         # One header for all groups, outside the scroll area so it stays visible.
         self._header = SharedTableHeader(
             ["Name", "Latest", "Installed", "Status", ""],
-            [STRETCH, CONTENTS, CONTENTS, 140, 28],
+            # Status sizes to its widest label, so "Update available" fits in any font.
+            [STRETCH, CONTENTS, CONTENTS, CONTENTS, 28],
             width_source=content,
         )
         vbox.addWidget(self._header)

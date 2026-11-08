@@ -18,6 +18,10 @@ from tsm.ui.components._column_widths import CONTENTS, STRETCH, column_widths
 __all__ = ["CONTENTS", "STRETCH", "SharedTableHeader"]
 
 _MIN_SECTION = 16
+# Horizontal padding of a table cell, `QTableWidget::item { padding: 4px 8px }`
+# in tsm_dark.qss. Qt shrinks a cell widget by it, so a widget needs this much
+# more column than its own size hint.
+_CELL_PADDING = 2 * 8
 
 
 class SharedTableHeader(QHeaderView):
@@ -89,6 +93,12 @@ class SharedTableHeader(QHeaderView):
         for table in self._tables:
             if table.rowCount():
                 width = max(width, table.sizeHintForColumn(col))
+            # sizeHintForColumn only sees item text, not widgets placed with
+            # setCellWidget, such as the status dot and label.
+            for row in range(table.rowCount()):
+                widget = table.cellWidget(row, col)
+                if widget is not None:
+                    width = max(width, widget.sizeHint().width() + _CELL_PADDING)
         return width
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
