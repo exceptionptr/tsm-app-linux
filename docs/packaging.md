@@ -19,8 +19,10 @@ broken manifest surfaces before a release is tagged rather than during one.
 
 ## What is automated, and what is not
 
-Tagging a release builds everything and attaches it to the GitHub release. That
-is the whole of the automation for formats that have no store.
+Tagging a release builds everything and attaches it to the GitHub release,
+whose notes are that version's section of `CHANGELOG.md`
+(`scripts/release_notes.py`). A tag without a changelog section fails before
+anything is built. Once the release exists, the AUR package is updated too.
 
 | Target | On a tag | Publishing | Needs |
 |---|---|---|---|
@@ -28,7 +30,7 @@ is the whole of the automation for formats that have no store.
 | AppImage | built and attached | GitHub release only | nothing |
 | Flatpak bundle | built and attached | GitHub release only | nothing |
 | Nix flake | built and checked | nothing to publish | nothing |
-| AUR | not built | `aur.yml`, run by hand | `AUR_SSH_KEY`, `AUR_EMAIL` |
+| AUR | pushed after the GitHub release | `aur.yml`, also runnable by hand | `AUR_SSH_KEY`, `AUR_EMAIL` |
 | Flathub | not pushed | `flathub.yml`, run by hand | `FLATHUB_TOKEN` |
 | nixpkgs | not pushed | pull request, by hand | a nixpkgs pull request |
 
@@ -62,8 +64,8 @@ request. Afterwards the nixpkgs update bot proposes version bumps on its own.
 ## Versions
 
 The app reads its own version from the git tag, through hatch-vcs. Tagging
-`v1.1.16` and building gives a wheel of exactly `1.1.16`; building an untagged
-commit gives something like `1.1.16.dev7+gc16b8879`. Nothing needs to be edited
+`v2.0.0` and building gives a wheel of exactly `2.0.0`; building an untagged
+commit gives something like `2.0.0.dev7+gc16b8879`. Nothing needs to be edited
 for the wheel, deb, rpm or AppImage to be right.
 
 Three things cannot read the tag and carry the version themselves:
@@ -80,7 +82,7 @@ Three things cannot read the tag and carry the version themselves:
 `scripts/check_version.py` checks all nine places against a version:
 
 ```bash
-python scripts/check_version.py v1.1.16
+python scripts/check_version.py v2.0.0
 ```
 
 The release workflow runs it before anything else, so a forgotten bump fails the
@@ -235,7 +237,7 @@ the working tree and takes its dependencies as arguments. Before opening the
 pull request:
 
 1. Replace `lib.fakeHash` with the real hash:
-   `nix-prefetch-url --unpack https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v1.1.16.tar.gz`
+   `nix-prefetch-url --unpack https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v2.0.0.tar.gz`
 2. Add yourself to `meta.maintainers`.
 3. Consider submitting `apscheduler_4` as its own package first. Reviewers
    generally prefer a shared dependency over one vendored into an application.

@@ -6,7 +6,7 @@
 #
 # Before opening the pull request, fill in the hashes:
 #   nix-prefetch-url --unpack \
-#     https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v1.1.16.tar.gz
+#     https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v2.0.0.tar.gz
 #
 # APScheduler 4 is still a pre-release, so nixpkgs has 3.x. The app uses the 4.x
 # AsyncScheduler API, so either apscheduler_4 lands in nixpkgs first or this
@@ -47,14 +47,14 @@ let
 in
 python3Packages.buildPythonApplication rec {
   pname = "tsm-app";
-  version = "1.1.16";
+  version = "2.0.0";
   pyproject = true;
 
   src = fetchFromGitHub {
     owner = "exceptionptr";
     repo = "tsm-app-linux";
     tag = "v${version}";
-    hash = "sha256-/CPGY9s1gJpe+eWKioqM0Qp2IigPSp19fTjtxpIcm9I=";
+    hash = lib.fakeHash;
   };
 
   # hatch-vcs takes the version from git tags, which a tarball does not carry.

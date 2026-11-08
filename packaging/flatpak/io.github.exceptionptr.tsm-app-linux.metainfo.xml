@@ -77,6 +77,21 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.0.0" date="2026-11-08">
+      <description>
+        <p>
+          Moves to the new TSM backend used by the official TSM Desktop App 1.0.9.
+          Everyone has to sign in once more.
+        </p>
+        <ul>
+          <li>Sign in through the browser, with two-factor login; passwords are no longer stored</li>
+          <li>Auction data is pushed by the server the moment it is ready instead of polled</li>
+          <li>Followed realms live on the TSM account and are shared with the official app</li>
+          <li>Addon updates are installed as soon as TSM releases them</li>
+          <li>World of Warcraft Forever support and more detected install locations</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.16" date="2026-09-24">
       <description>
         <p>

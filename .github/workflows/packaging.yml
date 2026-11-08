@@ -49,6 +49,7 @@ jobs:
           python3 - <<'PY'
           import os
           import pathlib
+          import re
           import subprocess
 
           app_id = os.environ["APP_ID"]
@@ -65,7 +66,11 @@ jobs:
               # the form Flathub wants.
               tag = ref.removeprefix("refs/tags/")
               version = tag.removeprefix("v")
-              text = text.replace("tag: v1.1.16", f"tag: {tag}\n        commit: {commit}")
+              text, count = re.subn(
+                  r"^(\s*)tag: .*$", rf"\g<1>tag: {tag}\n\g<1>commit: {commit}",
+                  text, count=1, flags=re.M,
+              )
+              assert count == 1, "no tag: line in the Flatpak manifest"
           else:
               # A branch build: there is no tag to clone, so build the checkout.
               version = "0.0.0"
@@ -76,10 +81,14 @@ jobs:
               head = text.split("    sources:")[0]
               text = head + "    sources:\n" + source
 
-          text = text.replace(
-              "SETUPTOOLS_SCM_PRETEND_VERSION=1.1.16",
+          # Matched by pattern, not by the current version, so a version bump
+          # in the manifest cannot silently turn these rewrites into no-ops.
+          text, count = re.subn(
+              r"SETUPTOOLS_SCM_PRETEND_VERSION=[0-9]\S*",
               f"SETUPTOOLS_SCM_PRETEND_VERSION={version}",
+              text,
           )
+          assert count == 1, "no SETUPTOOLS_SCM_PRETEND_VERSION in the Flatpak manifest"
           manifest.write_text(text)
           print(text[-700:])
           PY
