@@ -63,6 +63,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 python_version = "3.11"
 strict = true
 ignore_missing_imports = true
+exclude = ["^packaging/src/"]
 
 # UI files and Qt-heavy modules: relax annotation requirements.
 # Adding full PySide6 type signatures would dwarf the actual logic.

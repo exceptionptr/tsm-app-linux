@@ -17,7 +17,9 @@ class AppViewModel(QObject):
     error_occurred = Signal(str)
     backup_notification = Signal(str)  # emitted from any thread via invokeMethod
     addon_notification = Signal(str)  # emitted when addon files are actually installed
-    realm_data_received = Signal(object)  # emitted by scheduler job with AuctionData result
+    realm_data_received = Signal(object)  # AuctionData from AuctionDataService, any thread
+    connection_changed = Signal(bool)  # socket connected / disconnected, any thread
+    session_lost = Signal()  # the refresh token was rejected: sign in again
     update_available = Signal(str)  # emitted when a newer GitHub release tag is found
 
     def __init__(self, auth_service=None, parent: QObject | None = None):

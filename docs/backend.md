@@ -1,35 +1,73 @@
 # Backend (Services + Workers)
 
+The protocol itself is described in [api.md](api.md).
+
 ## Services
 
-### AuthService (`core/services/auth.py`, 110 lines)
+### AuthService (`core/services/auth.py`)
 
-- `login(user, pass)` → OIDC token → TSM session → save keyring
-- `refresh_token()` → re-auth with stored credentials
-- `logout()` → clear keyring, reset session
+- `login(remember_me, open_url, on_url)` → browser sign-in (`api/oidc.py`, PKCE on
+  a localhost port) → stores the offline refresh token in the keyring
+- `restore_session()` → refreshes with the stored token on start. Waits through a
+  missing network or keyring (`RESTORE_RETRY_DELAYS`, about two minutes); a
+  rejected token returns False at once. Sets `migrated_from_password` when only a
+  password from the old username/password login is found, so the login view can explain why.
+- `access_token()` → the current access token, refreshed first when it expires
+  within 90 s. Registered as the API client's token provider.
+- `refresh_token(force)`, `seconds_until_refresh()`
+- `add_token_listener(fn)` (new token), `add_session_lost_listener(fn)` (refresh
+  token rejected: session cleared, credentials deleted)
+- `logout()` → forget and revoke
 
 ### AuctionDataService (`core/services/auction.py`)
 
-- `refresh_all_realms()` → `StatusAPI.get()` → diff → download blobs → write Lua → returns `AuctionData`
-  - Classic Era / Anniversary realms are narrowed to the ones the user added via the
-    Add Realm dropdown (`user_added_realms`), because `/v2/status` returns the full
-    catalogue for those two keys. Retail and Progression (bcc) are already scoped to
-    the account by the API and must not be filtered: doing so skipped every
-    Progression realm (issue #19)
-  - Returns `AuctionData(addon_versions=...)` with `last_sync=0` when no WoW dirs found yet
-    (prevents false "AppHelper not found" warning during startup detection)
-- `get_snapshot()` → `AuctionCache.load_statuses()` → `(list[RealmStatus], int)`
-- `add_realm(game_version, realm_id)` → `RealmsAPI.add()`
-- `remove_realm(game_version, region, name)` → `RealmsAPI.remove()`
-- `_get_existing_app_data_files()` - reads cached `WoWDetectorService.installs` (no scan triggered),
-  returns `{gv_dir: [AppDataFile, ...]}` for each game-version directory that exists
+Event driven: the socket pushes data, this service decides what to download and
+writes it.
 
-### UpdateService (`core/services/updater.py`, 216 lines)
+- `load_catalog(refresh)` → realms, regions and game version labels. Served from
+  the `api_cache` table first, then the network.
+- `start(user_id)` / `stop()`; `start` also runs the 15 minute APP_INFO loop
+- `load_user_realms()` → the account's followed realms; prunes AppData entries
+  for realms no longer followed
+- `add_realm(realm_id, ah_type, limit)` (raises `RealmLimitReached`),
+  `remove_realm(user_realm_id)`
+- `migrate_local_realms()` → moves realms added locally by the old client
+  (SQLite table `user_added_realms`) to the account once
+- `handle_event(name, payload)` → for realm and region strings: skip if not
+  followed or not newer, download (4 at a time), queue a write. Writes are
+  debounced by `WRITE_DEBOUNCE_SECONDS` and applied per file in a thread.
+- `write_app_info()`, `flush_all()`
+- `snapshot()` → `AuctionData` for the UI, also saved to SQLite;
+  `get_snapshot()` loads the saved one at start
+- `realm_tree()` → `{label: {region_key: [{realm_id, ah_type, name, game_version}]}}`
+  for the Add Realm dropdown
+- `add_listener(fn)`, `add_addon_listener(fn)`
 
-- `check_and_update(addon_versions: list[AddonVersionInfo])` → compares with installed TOC → downloads & installs ZIPs, one package per game version (`<base><suffix>`)
-- `install_or_update_addon(name, version)` → single addon download; `name` keeps its game-version suffix
+AppData.lua is only written for game versions where TradeSkillMaster or the
+AppHelper is installed; `AuctionData.apphelper_missing_gv` lists the rest.
 
-### BackupService (`core/services/backup.py`, 287 lines)
+### SyncController (`core/services/sync.py`)
+
+Owns the socket and ties the services together for one signed-in session.
+
+- `start()` → starts the token refresh loop, `auction.start()` (which also runs
+  the legacy realm migration), opens the `TSMSocket`. The refresh loop (sleeps until `seconds_until_refresh()`, retries
+  every 30 s on failure)
+- On connect: reloads the followed realms. On a new token while disconnected:
+  reconnects at once.
+- On `addon` events: `updater.check_and_update(releases)` and a notification
+- `stop()`
+
+### UpdateService (`core/services/updater.py`)
+
+- `check_and_update(releases)` → for each release, updates the addon in every
+  game version where it is already installed and older. One multi-toc zip covers
+  all game versions.
+- `install_or_update_addon(name_with_suffix, version)` → manual install from the
+  Addon Versions tab
+- git checkouts and `@project-version@` tocs are never touched
+
+### BackupService (`core/services/backup.py`)
 
 - `run(period_minutes, retain_days, extra_installs, keep, name)` → per-account ZIP creation
   - `_purge_old_backups(acct_backups, retain_td)` → returns survivors
@@ -38,70 +76,58 @@
 - `restore(backup_path)` → extract ZIP → SavedVariables
 - `delete(zip_path)` → unlink
 
-### WoWDetectorService (`core/services/wow_detector.py`, 41 lines)
+### WoWDetectorService (`core/services/wow_detector.py`)
 
 - `scan()` → `detector.find_wow_installs()` → `list[WoWInstall]`
 - `get_installs()` / `set_installs(installs)`
 
-### AddonWriterService (`core/services/addon_writer.py`, 49 lines)
-
-- `write_app_data(data: AuctionData)` → writes AppData.lua per WoW install
-
-## Scheduler (`core/scheduler.py`, ~200 lines)
+## Scheduler (`core/scheduler.py`)
 
 ```
 ServiceContainer (dataclass)
-  auth: AuthServiceProtocol
-  auction: AuctionServiceProtocol
-  wow_detector: WoWDetectorProtocol
-  updater: UpdateServiceProtocol
-  backup: BackupServiceProtocol | None
-  config_store: ConfigStoreProtocol | None
-  backup_notify_fn: Callable[[str], None] | None
-  addon_notify_fn: Callable[[str], None] | None
-  auction_data_fn: Callable[[AuctionData], None] | None
-  wow_warn_fn: Callable[[str], None] | None
+  auth, auction, wow_detector, updater
+  sync: SyncControllerProtocol | None
+  backup, config_store
+  backup_notify_fn, addon_notify_fn, wow_warn_fn
 
 JobScheduler.start() → asyncio.create_task(_scheduler_task())
+  resolves WoW installs, then sync.start() (unless --skip-auto-sync)
   Schedules:
-    job_auction_refresh  every 5 min  (after 5 min delay)
-    job_backup           every N min  (user-configured)
-    job_auth_refresh     every 5 min (session lifetime is ~10 min)
+    job_check_update   once at start (GitHub release check)
+    job_backup         every N min (user-configured)
+JobScheduler.stop() → sync.stop(), scheduler shutdown
 ```
 
-## API Client (`api/client.py`, 326 lines)
+Auction data and token refresh are no longer polled jobs: data arrives over the
+socket and `SyncController` refreshes the token on its own timer.
+
+## API (`api/`)
 
 ```
-TSMApiClient
-  .auth    AuthAPI    → get_oidc_token(), authenticate(), login()
-  .status  StatusAPI  → get(channel, tsm_version) → StatusResponse
-  .addon   AddonAPI   → download(name, channel) → bytes   # no tsm_version
-  .realms  RealmsAPI  → list(), add(gv, realm_id), remove(gv, region, realm)
+TSMApiClient (client.py)
+  request(method, url, params, json_body)   Bearer token, retries 5xx/408/429
+  realms(), regions(), game_versions(), release_channel_labels()
+  user_realms(user_id), add_user_realm(...), delete_user_realm(id)
+  download(url)   presigned, gunzips, None on 404
 
-api_request(*parts, data, channel, tsm_version)
-  → HMAC token (SHA256 of version:time:SECRET)
-  → retry: MAX_RETRIES=3, RETRY_DELAY=2s, exponential
-  → 429: respects Retry-After header
-  → 4xx (non-429): raise immediately
-
-raw_download(url) → tries HTTPS first, falls back to HTTP
+TSMSocket (socket.py)    minimal Socket.IO v4 client on aiohttp
+oidc.py                  browser_login, refresh, revoke, Tokens
 ```
 
 ## Storage
 
 ```
-Database (aiosqlite, ~/.local/share/tsm-app/data.db)
-  AuctionCache   save_statuses/load_statuses (realm sync state)
+Database (aiosqlite, ~/.local/share/tsm-app/data.db, schema 5)
+  AuctionCache   realm status snapshot, followed realms, api_cache (JSON)
 
 ConfigStore     ~/.config/tsm-app/config.toml  (AppConfig, tomli-w)
-SecretsStore    keyring service "tsm-app" (username + TSM session token)
+secrets.py      keyring service "tsm-app": username + refresh token
 ```
 
 ## Workers
 
 ```
 AsyncRunner        daemon thread, asyncio event loop, submit(coro) → Future
-AsyncBridge        QObject, run(coro) → emits result_ready / error_occurred
-jobs.py            job_auction_refresh, job_auth_refresh, job_backup
-                   all typed: services: ServiceContainer
+AsyncBridge        QObject, run(coro) → emits result_ready / error_occurred, returns the Future
+jobs.py            job_check_update, job_backup
 ```

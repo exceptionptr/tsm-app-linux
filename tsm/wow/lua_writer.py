@@ -1,13 +1,22 @@
-"""Generate and atomically write TSM AppData.lua files.
+"""Read and atomically write TradeSkillMaster_AppHelper/AppData.lua.
 
-Real format from AppData.pyc (decompiled):
+Format written by the official 1.0.9 client (exportAddonDataWorker), one line
+per entry, each ending in a meta comment the next run parses back:
 
-    select(2, ...).LoadData("TYPE","Realm",[[return data]]) --<TYPE,Realm,timestamp>
+    select(2, ...).LoadData("TYPE","Key",[[return DATA]]) --<TYPE,Key,time>
+    select(2, ...).LoadData("TYPE","Key",[[return DATA]]) --<TYPE,Key,time,ahId>
+    for _,r in ipairs({"A","B"}) do select(2, ...).LoadData("TYPE",r,[[return DATA]]) end
+        --<TYPE,A|B,time,ahId>    (same line in the file, wrapped here)
 
-- One line per entry.
-- The trailing --<...> comment is parsed back by AppData.__init__ to read timestamps.
-- All tags (including APP_INFO) use [[return data]] wrapping; RAW_TAGS is reserved
-  for future API entries that require verbatim unwrapped Lua blobs.
+- Key is a realm ("Tarren Mill", "Everlook-Horde"), a region ("EU", "BCC-EU")
+  or "Global" for APP_INFO.
+- ahId is the auction house id. Connected realms share one auction house, so
+  entries with the same type, ahId and time are written once for all of them
+  with the ipairs form instead of duplicating a multi-megabyte blob.
+- Lines this module cannot take apart are kept verbatim ("raw"), so an older or
+  newer writer's entries survive a rewrite untouched.
+
+The legacy Python client wrote only the 3-field form, which is read here too.
 """
 
 from __future__ import annotations
@@ -15,188 +24,234 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
-import time
+from collections.abc import Iterable
+from dataclasses import dataclass
 from pathlib import Path
-
-from tsm.core.models.auction import AppInfo, AuctionData
 
 logger = logging.getLogger(__name__)
 
-APP_VERSION = 41402
-
-# Tags that use store_raw=True (pass blob verbatim, no [[return ...]] wrapper).
-# All observed tags use the [[return ...]] wrapping, so this set is empty.
-# Kept as a hook: add tag names here if a future API change introduces raw-format entries.
-RAW_TAGS: set[str] = set()
+APPDATA_FILE = "AppData.lua"
 
 
+def _wrap(tag: str, keys: list[str]) -> tuple[str, str]:
+    if len(keys) == 1:
+        return f'select(2, ...).LoadData("{tag}","{keys[0]}",[[return ', "]])"
+    names = ",".join(f'"{k}"' for k in keys)
+    return (
+        f'for _,r in ipairs({{{names}}}) do select(2, ...).LoadData("{tag}",r,[[return ',
+        "]]) end",
+    )
+
+
+def _unwrap(code: str, tag: str, keys: list[str]) -> str | None:
+    prefix, suffix = _wrap(tag, keys)
+    if code.startswith(prefix) and code.endswith(suffix):
+        return code[len(prefix) : len(code) - len(suffix)]
+    return None
+
+
+@dataclass
 class AppDataEntry:
-    """Represents one line in AppData.lua."""
-
-    __slots__ = ("tag", "realm_or_region", "data_blob", "timestamp", "store_raw")
-
-    def __init__(
-        self,
-        tag: str,
-        realm_or_region: str,
-        data_blob: str,
-        timestamp: int,
-        store_raw: bool = False,
-    ) -> None:
-        self.tag = tag
-        self.realm_or_region = realm_or_region
-        self.data_blob = data_blob
-        self.timestamp = timestamp
-        self.store_raw = store_raw
-
-    def render(self) -> str:
-        tag, realm = self.tag, self.realm_or_region
-        if self.store_raw:
-            data_part = f'select(2, ...).LoadData("{tag}","{realm}",{self.data_blob})'
-        else:
-            data_part = f'select(2, ...).LoadData("{tag}","{realm}",[[return {self.data_blob}]])'
-        return f"{data_part} --<{tag},{realm},{self.timestamp}>"
+    tag: str
+    key: str
+    data: str  # inner blob, or the whole code line when raw
+    time: int
+    auction_house_id: int | None = None
+    raw: bool = False
 
 
 class AppDataFile:
-    """Read and write AppData.lua, preserving entries not touched by this session."""
-
-    KNOWN_TYPES = {
-        "AUCTIONDB_NON_COMMODITY_DATA",
-        "AUCTIONDB_NON_COMMODITY_SCAN_STAT",
-        "AUCTIONDB_NON_COMMODITY_HISTORICAL",
-        "AUCTIONDB_COMMODITY_DATA",
-        "AUCTIONDB_COMMODITY_SCAN_STAT",
-        "AUCTIONDB_COMMODITY_HISTORICAL",
-        "AUCTIONDB_REGION_STAT",
-        "AUCTIONDB_REGION_HISTORICAL",
-        "AUCTIONDB_REGION_SALE",
-        "SHOPPING_SEARCHES",
-        "APP_INFO",
-    }
+    """In-memory AppData.lua. Load, update or remove entries, then save()."""
 
     def __init__(self, path: Path) -> None:
-        self._path = path
-        self._entries: list[AppDataEntry] = []
-        self._load()
+        self.path = path
+        self.entries: list[AppDataEntry] = []
+        self._modified = False
+        if path.exists():
+            self._load()
 
     def _load(self) -> None:
-        if not self._path.exists():
+        try:
+            text = self.path.read_text(encoding="utf-8")
+        except OSError:
+            logger.exception("Failed to read %s", self.path)
             return
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            idx = line.rfind("--<")
+            if idx == -1 or not line.endswith(">"):
+                logger.warning("Dropping AppData.lua line without meta: %.80s", line)
+                continue
+            code = line[:idx].rstrip()
+            fields = [f.strip() for f in line[idx + 3 : -1].split(",")]
+            if len(fields) < 3 or not fields[0] or not fields[1]:
+                logger.warning("Dropping AppData.lua line with bad meta: %.80s", line[idx:])
+                continue
+            tag, key_field, time_s = fields[0], fields[1], fields[2]
+            try:
+                ts = int(time_s)
+            except ValueError:
+                ts = 0
+            ah_id: int | None = None
+            if len(fields) > 3:
+                try:
+                    ah_id = int(fields[3])
+                except ValueError:
+                    ah_id = None
+            keys = key_field.split("|")
+            inner = _unwrap(code, tag, keys)
+            if inner is None:
+                self.entries.append(AppDataEntry(tag, key_field, code, ts, ah_id, raw=True))
+                continue
+            for k in keys:
+                self.entries.append(AppDataEntry(tag, k, inner, ts, ah_id))
+
+    def _find(self, tag: str, key: str) -> AppDataEntry | None:
+        for e in reversed(self.entries):
+            if e.tag == tag and e.key == key:
+                return e
+        return None
+
+    def last_update(self, tag: str, key: str) -> int | None:
+        """Stored timestamp for (tag, key), or None if absent."""
+        e = self._find(tag, key)
+        return e.time if e else None
+
+    def update(
+        self, tag: str, key: str, data: str, time: int, auction_house_id: int | None = None
+    ) -> bool:
+        """Insert or replace an entry. An older timestamp than the stored one is ignored."""
+        e = self._find(tag, key)
+        if e is not None and time < e.time:
+            return False
+        self._modified = True
+        if e is None:
+            self.entries.append(AppDataEntry(tag, key, data, time, auction_house_id))
+        else:
+            e.data, e.time, e.auction_house_id, e.raw = data, time, auction_house_id, False
+        return True
+
+    def remove(self, keys: Iterable[str]) -> list[str]:
+        """Drop every entry for these keys. Returns the keys actually removed."""
+        wanted = set(keys)
+        removed: set[str] = set()
+        kept = []
+        for e in self.entries:
+            if e.key in wanted:
+                removed.add(e.key)
+            else:
+                kept.append(e)
+        if removed:
+            self.entries = kept
+            self._modified = True
+        return sorted(removed)
+
+    def render(self) -> str:
+        # Newest entries first, mirroring the official writer, and fold entries that
+        # share an auction house and timestamp into one ipairs line.
+        groups: list[tuple[AppDataEntry, list[str]]] = []
+        by_ah: dict[tuple[str, int, int], list[str]] = {}
+        for e in reversed(self.entries):
+            if e.auction_house_id is not None and not e.raw:
+                gk = (e.tag, e.auction_house_id, e.time)
+                if gk in by_ah:
+                    by_ah[gk].append(e.key)
+                    continue
+                keys = [e.key]
+                by_ah[gk] = keys
+            else:
+                keys = [e.key]
+            groups.append((e, keys))
+
+        lines = []
+        for e, keys in groups:
+            meta = [e.tag, "|".join(keys), str(e.time)]
+            if e.auction_house_id is not None:
+                meta.append(str(e.auction_house_id))
+            if e.raw:
+                code = e.data
+            else:
+                prefix, suffix = _wrap(e.tag, keys)
+                code = prefix + e.data + suffix
+            lines.append(f"{code} --<{','.join(meta)}>")
+        return "\n".join(lines) + "\n" if lines else ""
+
+    def save(self, force: bool = False) -> bool:
+        """Atomically write the file if anything changed. Returns True if written."""
+        if not self._modified and not force:
+            return False
+        content = self.render()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=self.path.parent, suffix=".tmp")
         try:
-            with open(self._path, encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Trailing comment: --<TYPE,Realm,timestamp>
-                    comment_idx = line.rfind("--")
-                    if comment_idx == -1:
-                        continue
-                    data_part = line[: comment_idx - 1]
-                    meta = line[comment_idx + 3 : -1]  # strip --< and >
-                    try:
-                        tag, realm, ts_str = meta.split(",", 2)
-                        ts = int(ts_str)
-                    except ValueError:
-                        continue
-                    if tag not in self.KNOWN_TYPES:
-                        continue
-                    store_raw = tag in RAW_TAGS
-                    self._entries.append(AppDataEntry(tag, realm, "", ts, store_raw))
-                    # Store the full data line for re-writing unchanged entries
-                    self._entries[-1].data_blob = _extract_blob(data_part, tag, realm, store_raw)
-        except Exception:
-            logger.exception("Failed to read existing AppData.lua: %s", self._path)
-
-    def last_update(self, tag: str, realm_or_region: str) -> int:
-        """Return the stored timestamp for (tag, realm), or 0 if not present."""
-        for e in self._entries:
-            if e.tag == tag and e.realm_or_region == realm_or_region:
-                return e.timestamp
-        return 0
-
-    def update(self, tag: str, realm_or_region: str, data_blob: str, timestamp: int) -> None:
-        """Insert or replace an entry."""
-        store_raw = tag in RAW_TAGS
-        for e in self._entries:
-            if e.tag == tag and e.realm_or_region == realm_or_region:
-                e.data_blob = data_blob
-                e.timestamp = timestamp
-                e.store_raw = store_raw
-                return
-        self._entries.append(AppDataEntry(tag, realm_or_region, data_blob, timestamp, store_raw))
-
-    def save(self) -> None:
-        """Atomically write AppData.lua."""
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-        content = "\n".join(e.render() for e in self._entries) + "\n"
-        tmp = None
-        try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                dir=self._path.parent,
-                delete=False,
-                suffix=".tmp",
-                encoding="utf-8",
-            ) as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(content)
-                tmp = f.name
-            os.replace(tmp, self._path)
-            logger.info(
-                "Written AppData.lua (%d entries, %d bytes)", len(self._entries), len(content)
-            )
-        except Exception:
-            if tmp and os.path.exists(tmp):
+            os.replace(tmp, self.path)
+        except BaseException:
+            if os.path.exists(tmp):
                 os.unlink(tmp)
             raise
+        self._modified = False
+        logger.info("Wrote %s (%d entries, %d bytes)", self.path, len(self.entries), len(content))
+        return True
 
 
-def _extract_blob(data_part: str, tag: str, realm: str, store_raw: bool) -> str:
-    """Extract the inner data blob from a LoadData() line."""
-    # data_part ends with ) - the closing paren of LoadData(tag, realm, data)
-    prefix = f'select(2, ...).LoadData("{tag}","{realm}",'
-    if not data_part.startswith(prefix):
-        return data_part  # can't parse, store as-is
-    inner = data_part[len(prefix) :]
-    # Strip the one closing ) that belongs to LoadData(...)
-    if inner.endswith(")"):
-        inner = inner[:-1]
-    if store_raw:
-        return inner
-    if inner.startswith("[[return ") and inner.endswith("]]"):
-        return inner[9:-2]
-    return inner
+def lua_string(value: object) -> str:
+    """Quote a value as a Lua string the way the official client does.
+
+    Backslash, double quote, ] and control characters become decimal escapes, so
+    the result is safe both as a Lua string and inside the [[...]] long bracket
+    that wraps the whole APP_INFO table (a raw "]]" would close it early).
+    """
+    s = "" if value is None else str(value)
+    out = []
+    for ch in s:
+        o = ord(ch)
+        if ch in '\\"]' or o < 0x20 or o == 0x7F:
+            out.append(f"\\{o:03d}")
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
 
 
-class LuaWriter:
-    """Convenience wrapper: update AppData.lua from AuctionData model."""
+def _lua_number(value: object) -> str:
+    try:
+        n = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return "0"
+    if n != n or n in (float("inf"), float("-inf")):
+        return "0"
+    return str(int(n)) if n.is_integer() else repr(n)
 
-    def write_app_data(self, data: AuctionData, addon_dir: Path, gv_dir: str = "") -> Path:
-        """Merge new entries into AppData.lua and save atomically.
 
-        If gv_dir is given, only entries tagged with that game-version directory
-        are written (plus APP_INFO, which is always written). This ensures that
-        classic realm data is not written to the retail AppHelper and vice versa.
-        """
-        target = addon_dir / "AppData.lua"
-        app_data = AppDataFile(target)
-
-        # Write APP_INFO - applies to all game versions
-        now = int(time.time())
-        app_info = data.app_info or AppInfo(version=APP_VERSION, last_sync=now)
-        app_info_blob = (
-            f"{{version={app_info.version},lastSync={app_info.last_sync},"
-            f'message={{id={app_info.message_id},msg="{app_info.message_text}"}},news={{}}}}'
-        )
-        app_data.update("APP_INFO", "Global", app_info_blob, app_info.last_sync)
-
-        # Write only entries for this game version (or all if gv_dir not specified).
-        # Entries with an empty gv_dir are always included (e.g. future global entries).
-        for entry in data.entries.values():
-            if gv_dir and entry.gv_dir and entry.gv_dir != gv_dir:
-                continue
-            app_data.update(entry.tag, entry.realm_or_region, entry.data_blob, entry.download_time)
-
-        app_data.save()
-        return target
+def render_app_info(
+    version: str, last_sync: int, message: dict | None = None, news: list[dict] | None = None
+) -> str:
+    """APP_INFO blob in the official client's format."""
+    message = message or {}
+    items = [
+        "{title="
+        + lua_string(n.get("title"))
+        + ",content="
+        + lua_string(n.get("content"))
+        + ",timestamp="
+        + _lua_number(n.get("timestamp"))
+        + ",link="
+        + lua_string(n.get("link"))
+        + "}"
+        for n in (news or [])
+    ]
+    return (
+        "{version="
+        + lua_string(version)
+        + f",lastSync={int(last_sync)}"
+        + ",message={id="
+        + _lua_number(message.get("id"))
+        + ",msg="
+        + lua_string(message.get("msg"))
+        + "},news={"
+        + ",".join(items)
+        + "}}"
+    )

@@ -11,9 +11,9 @@ Single-process Linux desktop app (PySide6 GUI + asyncio background loop).
 │        ↕ AsyncBridge (signal/slot bridge)           │
 │  AsyncRunner (daemon thread + asyncio event loop)   │
 │        ↕                                            │
-│  Services: Auth, Auction, Backup, Updater           │
+│  Services: Auth, Auction, Sync, Backup, Updater     │
 │        ↕                                            │
-│  TSM API (HTTP) │ SQLite (aiosqlite) │ Filesystem   │
+│  TSM REST + socket │ SQLite (aiosqlite) │ Files     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -30,31 +30,34 @@ tsm/
   app.py              DI wiring (create_app)
 
   api/
-    client.py         TSMApiClient + sub-APIs (Auth, Status, Addon, Realms)
-    types.py          TypedDicts: OIDCTokenResponse, StatusResponse, AddonVersionInfo
+    client.py         TSMApiClient: Bearer REST (realms, regions, user-realms), downloads
+    oidc.py           Keycloak browser login (PKCE), refresh, revoke
+    socket.py         TSMSocket: minimal Socket.IO v4 push client
+    types.py          TypedDicts for REST and socket payloads
 
   core/
     scheduler.py      JobScheduler (APScheduler 4.x), ServiceContainer, Protocols
     models/           Pydantic models: AuctionData, RealmStatus, AppConfig, WoWInstall
-    services/         Domain services (async): Auth, Auction, Updater, Backup, WoWDetector, AddonWriter
+    services/         Domain services (async): Auth, Auction, Sync, Updater, Backup, WoWDetector
 
   storage/
     database.py       aiosqlite wrapper
     auction_cache.py  RealmStatus persistence (SQLite)
     config_store.py   AppConfig → ~/.config/tsm-app/config.toml
-    secrets.py        keyring-backed credential store
+    secrets.py        keyring-backed refresh token store
 
   workers/
     async_runner.py   Daemon thread running asyncio loop
     bridge.py         AsyncBridge: runs coroutines, emits result_ready/error_occurred signals
-    jobs.py           APScheduler job functions (auction_refresh, auth_refresh, backup)
+    jobs.py           APScheduler job functions (check_update, backup)
 
   wow/
-    detector.py       WoW install detection (filesystem + Faugus Launcher)
+    game_versions.py  GAME_VERSIONS: the one table of client folders, keys, labels, suffixes
+    detector.py       WoW install detection (Wine, Lutris, Steam, Bottles, Faugus, ~/Games)
     accounts.py       WTF account/realm scanning
-    lua_writer.py     AppData.lua serialiser (LoadData format)
+    lua_writer.py     AppDataFile: AppData.lua parser and atomic writer
     saved_variables.py  SV file reader
-    utils.py          _GAME_VERSIONS, is_valid_wow_version_dir, iter_wow_gv_roots
+    utils.py          is_valid_wow_version_dir, iter_wow_gv_roots
 
   ui/
     app_window.py     AppWindow (QMainWindow): tab bar, stack, tray, login flow
@@ -68,25 +71,27 @@ tsm/
 ## Data Flow: Auction Sync
 
 ```
-JobScheduler (every 5 min)
-  → job_auction_refresh(services)
-  → AuctionDataService.refresh_all_realms()
-  → TSMApiClient.status.get() → diff lastModified per realm
-  → TSMApiClient.raw_download(url) for changed blobs
-  → AuctionCache.save_statuses() (SQLite)
-  → AddonWriterService.write_app_data() → AppData.lua
-  → ServiceContainer.auction_data_fn(AuctionData)
-  → AppViewModel.realm_data_received signal
-  → RealmViewModel.on_data_received() → data_updated signal
-  → RealmDataView._refresh()
+JobScheduler start → SyncController.start()
+  → AuctionDataService.start(user_id): catalogue, followed realms, migration
+  → TSMSocket connects (Authorization: access token)
+server pushes realm_auctiondb / realm_shopping / region_auctiondb
+  → AuctionDataService.handle_event()
+  → followed and newer? → TSMApiClient.download(url)
+  → queued, debounced 1.5 s → AppDataFile per game version → AppData.lua
+  → snapshot() saved to SQLite → listeners
+  → AppViewModel.realm_data_received → RealmViewModel → RealmDataView
+server pushes addon → UpdateService.check_and_update()
+server pushes app_info → APP_INFO rewritten
 ```
 
 ## Auth Flow
 
 ```
-LoginView → AuthService.login(user, pass)
-  → TSMApiClient.auth.get_oidc_token() (Keycloak)
-  → TSMApiClient.auth.authenticate(access_token)
-  → secrets.save_credentials() (keyring)
+LoginView "Sign in with browser" → AuthService.login()
+  → oidc.browser_login(): system browser, localhost callback, code + PKCE
+  → secrets.store_credentials(username, refresh token) (keyring)
   → AppViewModel.authenticated_changed → JobScheduler.start()
+SyncController refresh loop → AuthService.refresh_token() 90 s before expiry
+  → token listeners → socket reconnects if it was down
+Refresh rejected → session_lost → back to LoginView
 ```

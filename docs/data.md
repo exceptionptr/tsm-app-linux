@@ -12,24 +12,28 @@ AppConfig (config.py)
   backup_retain_days: int = 30
 
 WoWInstall (config.py)
-  path: str, version: str  ("_retail_" | "_classic_" | "_classic_era_" | "_anniversary_")
+  path: str, version: str  ("_retail_" | "_classic_" | "_classic_era_" | "_anniversary_" | "_forever_")
 
 AuctionData (auction.py)
   app_info: AppInfo | None
-  entries: dict[tuple[str,str], AppHelperEntry]   keyed (tag, realm_or_region)
   realm_statuses: list[RealmStatus]
   addon_versions: list[AddonVersionInfo]
-  last_sync: int  (property, derived from app_info or max entry download_time)
+  written: int                         entries written in the last flush
+  apphelper_missing_gv: list[str] | None
+  last_sync: int  (property)
 
 RealmStatus (auction.py)
   display_name, is_region, auctiondb_status, last_updated: int
-  game_version, region, name
-
-AppHelperEntry (auction.py)
-  tag, realm_or_region, data_blob: str, download_time: int
+  game_version (GameVersion.key), region (AppData region key), name (AppData realm key)
+  user_realm_id, realm_id, auction_house_type ("ALL" | "HORDE" | "ALLIANCE")
+  server_last_modified: int
 
 AppInfo (auction.py)
-  version, last_sync, message_id, message_text
+  version, last_sync, message_id, message_text, news
+
+UserSession (auth.py)
+  username, user_id (OIDC sub), premium_tier, release_channels, remember_failed
+  realm_limit (property): None for platinum, 25 gold, 10 free
 ```
 
 ## SQLite (`~/.local/share/tsm-app/data.db`)
@@ -40,7 +44,9 @@ Managed by `storage/database.py` (aiosqlite).
 AuctionCache (storage/auction_cache.py)
   save_statuses(statuses: list[RealmStatus], saved_at: int)
   load_statuses() → (list[RealmStatus], int)
-  Table: realm_statuses (JSON blob per row)
+  put_json(key, value) / get_json(key)    api_cache: catalogue responses
+  get_all_user_realms()                   legacy local realms, read once for migration
+Schema version 5
 ```
 
 ## Config File
@@ -56,17 +62,18 @@ AuctionCache (storage/auction_cache.py)
 
 ```
 keyring service: "tsm-app"
-  username key: stored username
-  session key:  TSM session token
-  Managed by SecretsStore (storage/secrets.py)
+  username key:          stored username
+  refresh:<username>:    OIDC offline refresh token
+  A password saved by the old login is deleted on the next sign-in.
+  Managed by storage/secrets.py
 ```
 
 ## WoW Filesystem Outputs
 
 ```
-<wow_root>/<gv>/Interface/AddOns/TSM_AppHelper/AppData.lua
-  Format: LoadData("TAG", "Realm", [[return {...}]])
-  Written by AddonWriterService via lua_writer.py
+<wow_root>/<gv>/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua
+  Format: see api.md (LoadData lines with a meta comment, ipairs for connected realms)
+  Written by AuctionDataService via lua_writer.AppDataFile
 
 <wow_root>/<gv>/WTF/Account/<ACCOUNT>/SavedVariables/TradeSkillMaster*.lua
   Read by BackupService, AccountingExportView

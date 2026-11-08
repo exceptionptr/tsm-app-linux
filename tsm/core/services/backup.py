@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from tsm.core.services._zip_utils import safe_extractall
+from tsm.wow.game_versions import SUFFIX_BY_FOLDER
 from tsm.wow.utils import iter_wow_gv_roots
 
 logger = logging.getLogger(__name__)
@@ -36,12 +37,7 @@ _KEEP_DIR = _BACKUP_DIR / "keep"
 _TIME_FORMAT = "%Y%m%d%H%M%S"
 _SEPARATOR = "_"
 _TSM_ADDON_PREFIX = "TradeSkillMaster"
-_SUFFIX_BY_GV = {
-    "_retail_": "",
-    "_classic_era_": "-Classic",
-    "_classic_": "-Progression",
-    "_anniversary_": "-Anniversary",
-}
+_SUFFIX_BY_GV = SUFFIX_BY_FOLDER
 
 
 def _system_id() -> str:

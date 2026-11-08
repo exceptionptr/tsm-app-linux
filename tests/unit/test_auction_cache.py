@@ -124,7 +124,7 @@ async def test_migration_drops_bcc_rows_and_keeps_the_rest(tmp_path):
         }
         async with db.connection.execute("SELECT version FROM schema_version") as cur:
             row = await cur.fetchone()
-        assert row["version"] == 4
+        assert row["version"] == 5
     finally:
         await db.close()
 
@@ -163,7 +163,7 @@ async def test_migration_collapses_a_multi_row_version_table(tmp_path):
     try:
         async with db.connection.execute("SELECT version FROM schema_version") as cur:
             rows = await cur.fetchall()
-        assert [r["version"] for r in rows] == [4]
+        assert [r["version"] for r in rows] == [5]
         # read as v3, so the v3 wipe must not have re-run over a working row
         cache = AuctionCache(db)
         assert await cache.get_user_realms("classic") == {("HC-EU", "Soulseeker-Alliance")}

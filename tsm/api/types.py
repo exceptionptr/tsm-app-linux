@@ -1,72 +1,99 @@
-"""TypedDicts for TSM API request/response shapes."""
+"""TypedDicts for the TSM backend payloads (shapes verified live 2026-11-08)."""
 
 from __future__ import annotations
 
-from typing_extensions import TypedDict
+from typing import NotRequired, TypedDict
 
 
-class OIDCTokenResponse(TypedDict):
-    """Keycloak OpenID Connect token response."""
-
-    access_token: str
-    token_type: str
-    expires_in: int
-    scope: str
-
-
-class UserInfo(TypedDict):
-    """TSM session + user data returned by the /v2/auth endpoint."""
-
-    session: str
-    userId: int
-    endpointSubdomains: dict[str, str]
-
-
-class AppDataString(TypedDict):
-    """Single downloadable data blob entry inside an appDataStrings map."""
-
-    url: str
+class AuctionHouse(TypedDict):
+    auctionHouseId: int
+    type: str  # "All" | "Alliance" | "Horde"
     lastModified: int
 
 
-class AddonVersionInfo(TypedDict):
-    """Addon name + version from the status API ``addons`` list."""
+class Region(TypedDict):
+    regionId: int
+    name: str  # "Europe"
+    regionPrefix: str  # "eu"
+    gameVersion: str  # "Retail", "Wrath", "Classic Era", ..., "Forever"
+    gmtOffset: NotRequired[int]
+    lastModified: NotRequired[int]
+    gameType: NotRequired[str]
+    gameVersionType: NotRequired[str]
 
+
+class Realm(TypedDict):
+    realmId: int
+    regionId: int
     name: str
-    version_str: str
+    localizedName: str
+    slug: NotRequired[str]
+    locale: NotRequired[str]
+    connectedRealmId: NotRequired[int]
+    auctionHouses: NotRequired[list[AuctionHouse] | None]
+    region: Region
 
 
-class AddonMessage(TypedDict, total=False):
-    """Optional broadcast message embedded in the status response."""
+class UserRealm(TypedDict):
+    id: str  # "usr_rlm_..."
+    userId: str
+    realmId: int
+    auctionHouseType: str  # "ALL" | "ALLIANCE" | "HORDE"
 
+
+class GameVersionInfo(TypedDict):
+    gameType: str
+    label: str
+    folder: str  # "_retail_"
+
+
+class RealmAuctionDb(TypedDict):
+    """Payload of the realm_auctiondb / realm_shopping socket events."""
+
+    realmId: int
+    auctionHouseType: str
+    stringType: str
+    lastModified: int | str  # the server sends both
+    url: str
+
+
+class RegionAuctionDb(TypedDict):
+    """Payload of the region_auctiondb socket event."""
+
+    regionId: int
+    stringType: str
+    lastModified: int | str
+    url: str
+
+
+class AddonRelease(TypedDict):
+    """One entry of the addon socket event's data list."""
+
+    addon: str  # "TradeSkillMaster" | "TradeSkillMaster_AppHelper"
+    channel: str
+    version: str  # "v4.15.4"
+    url: str
+
+
+class AppInfoMessage(TypedDict, total=False):
     id: int
     msg: str
 
 
-class RealmEntry(TypedDict, total=False):
-    """Realm or region entry within a status response realm list."""
+class NewsItem(TypedDict, total=False):
+    title: str
+    content: str
+    timestamp: int
+    link: str
 
-    id: int
+
+class AppInfoPayload(TypedDict, total=False):
+    message: AppInfoMessage
+    news: list[NewsItem]
+
+
+class AddonVersionInfo(TypedDict):
+    """Addon name and latest version, as the Addon Versions tab shows them."""
+
     name: str
-    region: str
-    appDataStrings: dict[str, AppDataString]
-
-
-# Functional-form TypedDict required because some keys contain hyphens.
-StatusResponse = TypedDict(
-    "StatusResponse",
-    {
-        "addons": list[AddonVersionInfo],
-        "addonMessage": AddonMessage,
-        "appVersion": int,
-        "realms": list[RealmEntry],
-        "regions": list[RealmEntry],
-        "realms-Progression": list[RealmEntry],
-        "regions-Progression": list[RealmEntry],
-        "extraClassicRealms": list[RealmEntry],
-        "extraClassicRegions": list[RealmEntry],
-        "extraAnniversaryRealms": list[RealmEntry],
-        "extraAnniversaryRegions": list[RealmEntry],
-    },
-    total=False,
-)
+    version_str: str

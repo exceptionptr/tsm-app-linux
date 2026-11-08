@@ -45,9 +45,9 @@ class GroupHeader(QWidget):
         self._arrow.setFixedWidth(12)
         layout.addWidget(self._arrow)
 
-        name_lbl = QLabel(label)
-        name_lbl.setObjectName("addon-group-name")
-        layout.addWidget(name_lbl)
+        self._name = QLabel(label)
+        self._name.setObjectName("addon-group-name")
+        layout.addWidget(self._name)
 
         self._side = QLabel("")
         self._side.setObjectName("addon-group-wow")
@@ -64,6 +64,9 @@ class GroupHeader(QWidget):
 
     def set_summary(self, text: str) -> None:
         self._summary.setText(text)
+
+    def set_title(self, text: str) -> None:
+        self._name.setText(text)
 
     def set_side_label(self, text: str) -> None:
         """Secondary label next to the group name. Empty string hides it."""
@@ -110,6 +113,9 @@ class CollapsibleGroup(QWidget):
 
     def set_summary(self, text: str) -> None:
         self._header.set_summary(text)
+
+    def set_title(self, text: str) -> None:
+        self._header.set_title(text)
 
     def set_side_label(self, text: str) -> None:
         self._header.set_side_label(text)

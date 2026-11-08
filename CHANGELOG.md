@@ -4,6 +4,56 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **Moved to the backend of the official TSM Desktop App 1.0.9.** TSM replaced
+  the old HMAC-signed `app-server` API with Keycloak sign-in, a few Bearer token
+  REST services and a push socket. The app now talks to exactly those, the same
+  way the official client does. See `docs/api.md`.
+- **Sign in through the browser.** The login dialog opens the TSM login page in
+  the system browser (OIDC with PKCE on a local callback port), so two-factor
+  login and every other Keycloak feature work. Passwords are no longer handled
+  or stored: the keyring keeps only an offline refresh token, and a password
+  saved by an earlier version is deleted on the next sign-in. Anyone signed in
+  with an earlier version has to sign in once more, and the dialog says why.
+- **Auction data is pushed, not polled.** The five minute status poll is gone.
+  The app keeps a socket open to `app-backend-sockets.tradeskillmaster.com` and
+  downloads a realm's data the moment the server announces it, so AppData.lua
+  is as fresh as with the official app. It reconnects on its own after a dropped
+  connection or a sleep.
+- **Followed realms live on the TSM account.** Adding or removing a realm
+  changes the account's realm list, which the official app shares. Realms added
+  locally by earlier versions are moved to the account once. The tier limit is
+  enforced: 10 realms free, 25 gold, unlimited platinum.
+- **AppData.lua is written in the official client's current format**: an
+  auction house id in each meta comment, one line for all connected realms that
+  share an auction house instead of a copy of the data per realm, and faction
+  auction houses keyed `Realm-Horde` / `Realm-Alliance`. Lines it does not know
+  are kept. Data for realms no longer followed is removed, and nothing is written
+  into a game version that has neither TradeSkillMaster nor the AppHelper.
+- **Addon updates arrive with the release.** The server announces new addon
+  releases over the socket; the app installs the single multi-client zip into
+  every game version that already has the addon. Git checkouts and dev builds
+  are never touched.
+
+### Added
+
+- **World of Warcraft Forever** (`_forever_`): detected, synced, backed up,
+  shown in Realm Data, Addon Versions and Accounting like the other clients.
+- **Hardcore, Season of Discovery and Fresh realms** get their own region data
+  (`HC-`, `SoD-`, `Fresh-`) as in the official app.
+- **More install locations**: every Wine prefix under `~/Games`, Bottles
+  (native and Flatpak) and Proton prefixes of Flatpak Steam. A WoW folder is
+  recognised by any `Wow*.exe` or a `WTF/Config.wtf`.
+- **Connection state in the status bar** while the socket is connecting.
+
+### Removed
+
+- The username and password fields, the five minute auction and auth refresh
+  jobs, and `AddonWriterService` (writes now happen in `AuctionDataService`).
+
 ## [1.1.16] - 2026-09-24
 
 ### Added

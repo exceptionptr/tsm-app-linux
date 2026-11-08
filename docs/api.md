@@ -1,477 +1,630 @@
 # TradeSkillMaster API Reference
 
-Reverse-engineered from `AppAPI.pyc` and `MainThread.pyc` shipped with the original
-Windows TSM Desktop App. All information here was derived by reading the decompiled
-bytecode; nothing was obtained from official documentation.
+The backend as the official TSM Desktop App 1.0.9 (Electron AppImage) talks to
+it. Endpoints and URLs were read from the decompiled client; every response
+shape below was captured live on 2026-11-08 unless noted otherwise. User ids in
+the examples are replaced by placeholders and presigned URL signatures are
+shortened.
+
+This replaced the old HMAC-signed `app-server.tradeskillmaster.com/v2/*` API,
+which this app used up to 1.1.16. That API is documented in the git history
+(`git show b5cf222:docs/api.md`).
 
 ---
 
-## Base URLs
+## Hosts
 
-| Purpose                           | URL                                                                        |
-| --------------------------------- | -------------------------------------------------------------------------- |
-| Authentication (Keycloak OIDC)    | `https://id.tradeskillmaster.com/realms/app/protocol/openid-connect/token` |
-| App server (auth + all API calls) | `http://app-server.tradeskillmaster.com/v2/`                               |
-| Endpoint-specific subdomains      | `http://{subdomain}.tradeskillmaster.com/v2/`                              |
-| CDN data blobs                    | Variable URLs returned by the status endpoint                              |
+| Host | Purpose |
+|------|---------|
+| `id.tradeskillmaster.com` | Keycloak, realm `app`: login and tokens |
+| `realm-api.tradeskillmaster.com` | Realm and region catalogue |
+| `desktop-backend.tradeskillmaster.com` | Game versions, the account's followed realms |
+| `addon-version.tradeskillmaster.com` | Release channels the account may use |
+| `app-backend-sockets.tradeskillmaster.com` | Socket.IO push channel: auction data, addon releases, news |
+| `tradeskillmaster.nyc3.digitaloceanspaces.com` | AuctionDB blobs (presigned URLs from socket events) |
+| `tradeskillmaster.nyc3.cdn.digitaloceanspaces.com` | Addon zips (public URLs from the `addon` event) |
 
-After a successful login the server returns a map of `endpointSubdomains`; subsequent
-calls are routed to the subdomain assigned to each endpoint.
+The official client also has `.dev` variants of every host for its staging
+build, and uses desktop-backend for features this app does not implement
+(`/backups`, `/sv-snapshots`, `/local-machine-name`, app updates).
+
+Everything is HTTPS with a valid certificate.
 
 ---
 
-## Authentication
+## Authentication (`tsm/api/oidc.py`)
 
-Authentication is a two-step process.
+OIDC authorization code flow with PKCE in the system browser. The
+`desktop-app` client refuses the password grant ("Client not allowed for direct
+access grants"), so there is no way to log in without a browser.
 
-### Step 1 - Keycloak OIDC token
+| Setting | Value |
+|---------|-------|
+| Endpoint base | `https://id.tradeskillmaster.com/realms/app/protocol/openid-connect` |
+| Client id | `desktop-app` (public, no secret) |
+| Scope | `openid roles profile email tsm-profile offline_access` |
+| Redirect | `http://localhost:<ephemeral port>/auth/callback` |
+
+Keycloak accepts any port on `localhost` with exactly that path. `127.0.0.1`
+and other paths are rejected (probed 2026-11-08). The redirect is served by a
+one-shot local aiohttp server; the login gives up after 10 minutes.
+
+### Step 1: authorize (browser)
 
 ```
-POST https://id.tradeskillmaster.com/realms/app/protocol/openid-connect/token
+GET {base}/auth?client_id=desktop-app
+               &response_type=code
+               &response_mode=query
+               &scope=openid roles profile email tsm-profile offline_access
+               &redirect_uri=http://localhost:<port>/auth/callback
+               &state=<random>
+               &code_challenge=<base64url(sha256(verifier))>
+               &code_challenge_method=S256
+```
+
+Keycloak redirects the browser to
+`/auth/callback?state=<state>&code=<code>&session_state=...`, or with
+`error` / `error_description` when the user cancels.
+
+### Step 2: token exchange
+
+```
+POST {base}/token
 Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code
+client_id=desktop-app
+code=<code>
+redirect_uri=<same redirect_uri as step 1>
+code_verifier=<verifier>
 ```
 
-Form body:
-
-| Field          | Value                       |
-| -------------- | --------------------------- |
-| `username`     | User's TSM account e-mail   |
-| `password`     | User's TSM account password |
-| `client_id`    | `legacy-desktop-app`        |
-| `grant_type`   | `password`                  |
-| `code`         | _(empty string)_            |
-| `redirect_uri` | _(empty string)_            |
-| `scope`        | `openid`                    |
-
-**Important:** Must be sent as `application/x-www-form-urlencoded`. Keycloak rejects
-`multipart/form-data` with HTTP 401.
-
-Response (JSON):
+Response (standard Keycloak token response):
 
 ```json
 {
   "access_token": "<jwt>",
+  "expires_in": 604800,
+  "refresh_expires_in": 0,
+  "refresh_token": "<jwt>",
   "token_type": "Bearer",
-  "expires_in": 300,
-  "scope": "openid"
+  "id_token": "<jwt>",
+  "not-before-policy": 0,
+  "session_state": "<uuid>",
+  "scope": "openid offline_access profile email tsm-profile"
 }
 ```
 
-### Step 2 - TSM session exchange
+- `offline_access` makes `refresh_token` an **offline** token
+  (`refresh_expires_in: 0`, it does not expire with the browser session). It is
+  stored in the keyring under `refresh:<username>`; nothing else is persisted.
+- The access token lived 7 days in the capture (`exp - iat = 604800`). The app
+  uses `exp` from the token, falling back to `expires_in`, and refreshes
+  90 s before expiry, like the official client.
+- Errors come back as `{"error": "invalid_grant", "error_description": "..."}`
+  with HTTP 400/401.
 
-Exchange the OIDC access token for a TSM session token and user info.
+### Refresh
 
 ```
-POST http://app-server.tradeskillmaster.com/v2/auth
-Content-Type: application/json
+POST {base}/token
+grant_type=refresh_token&client_id=desktop-app&refresh_token=<token>
 ```
 
-Query parameters: see [Request Authentication](#request-authentication) below.
+Same response shape. A response without `refresh_token` keeps the previous
+one. `invalid_grant` means the token was revoked or the session ended; the user
+has to sign in again.
 
-Request body:
+### Logout
 
-```json
-{ "token": "<access_token from step 1>" }
+```
+POST {base}/revoke
+client_id=desktop-app&token=<refresh token>&token_type_hint=refresh_token
 ```
 
-Response:
+Best effort with a 5 s timeout; the answer is ignored.
+
+### Access token claims
+
+Decoded payload of a free account's access token (personal claims omitted):
 
 ```json
 {
-  "success": true,
-  "session": "<session_token>",
-  "userId": 123456,
-  "isPremium": true,
-  "endpointSubdomains": {
-    "status": "app-server",
-    "addon": "app-server5",
-    "auctiondb": "app-server5",
-    "app": "app-server",
-    "backup": "app-server",
-    "shopping": "app-server",
-    "sv": "legacy-app2"
-  }
+  "sub": "<user uuid>",
+  "preferred_username": "<name>",
+  "azp": "desktop-app",
+  "aud": ["app-app-backend-sockets", "app-realm", "app-pricing", "app-addon-version", "account"],
+  "scope": "openid offline_access profile email tsm-profile",
+  "realm_access": {
+    "roles": ["offline_access", "member", "uma_authorization", "default-roles-app"]
+  },
+  "resource_access": {
+    "app-app-backend-sockets": { "roles": ["socket/accessor"] },
+    "app-realm": { "roles": ["auction-houses/accessor", "realms/accessor", "regions/accessor"] },
+    "app-pricing": { "roles": ["great-deals/accessor", "auction-house-prices/accessor"] },
+    "app-addon-version": { "roles": ["channel/release"] },
+    "account": { "roles": ["manage-account", "manage-account-links", "delete-account", "view-profile"] }
+  },
+  "iat": 1794128540,
+  "exp": 1794733340
 }
 ```
 
-The `session` token must be included in all subsequent requests. The
-`endpointSubdomains` map tells the client which subdomain to call for each endpoint.
+Claims the app reads:
 
-**This map is assigned per session and is not stable.** Observed live: `status`
-is consistently `app-server`, while `addon` and `auctiondb` come back as
-`app-server4` or `app-server5` depending on the login, and the set of keys varies
-(`sv` is not always present). A subdomain only serves the endpoints it was
-assigned: asking `app-server` for `/v2/addon` is rejected even with a valid
-session. The map must therefore be read from the auth response for every session,
-never cached or hardcoded, and a rejected call is worth retrying after a fresh
-login.
+| Claim | Use |
+|-------|-----|
+| `sub` | User id; the `userId` of every user-realms call |
+| `preferred_username` (then `email`, `name`) | Display name, keyring key |
+| `realm_access.roles` | `premium-platinum` / `premium-gold` decide the tier |
+| `resource_access["app-addon-version"].roles` | `channel/<name>`: addon release channels the account may use; `channel/release` always |
 
----
-
-## Request Authentication
-
-Every API call (except the OIDC step) includes these query parameters:
-
-| Parameter     | Type   | Description                           |
-| ------------- | ------ | ------------------------------------- |
-| `session`     | string | Session token from the auth exchange  |
-| `version`     | int    | App version integer (`41402`)         |
-| `time`        | int    | Current Unix timestamp (seconds)      |
-| `token`       | string | HMAC token - see below                |
-| `channel`     | string | _(optional)_ `"release"` or `"beta"`  |
-| `tsm_version` | string | _(optional)_ TSM addon version string |
-
-`tsm_version` is the version of the installed **TradeSkillMaster addon**, read
-from its `.toc`, not the version of whatever is being requested. The original
-client sends it on `/v2/status` only (`AppAPI.py:171`); `/v2/addon` is called
-without it (`AppAPI.py:175`).
-
-### HMAC token computation
-
-```python
-import time
-from hashlib import sha256
-
-APP_VERSION = 41402
-HMAC_SECRET = "3FB1CC5EDC5B43F21CB8ACC23B42B703"
-
-t = int(time.time())
-raw = f"{APP_VERSION}:{t}:{HMAC_SECRET}"
-token = sha256(raw.encode("utf-8")).hexdigest()
-```
-
-The secret is the same for all clients. Token validity is verified server-side by
-checking that `time` is within a reasonable window of the server clock.
+Followed realm limit per tier: platinum unlimited, gold 25, free 10.
 
 ---
 
-## Request Format
+## REST requests (`tsm/api/client.py`)
 
-All API requests (except OIDC and raw CDN downloads) follow the same pattern:
+Every request carries `Authorization: Bearer <access token>` and a
+`User-Agent`. Bodies are plain JSON (no gzip). JSON responses are recognised by
+`Content-Type: application/json`; anything else is returned as text.
 
-- **GET** when there is no body.
-- **POST** when a body is present.
-- JSON bodies are compressed with gzip and sent with `Content-Encoding: gzip`.
-- `User-Agent` header: `TSMApplication/41402`
-- SSL verification is disabled in the original app (`verify=False`); the server
-  uses plain HTTP for all non-OIDC endpoints.
-
-The response `Content-Type` determines how the response is parsed:
-
-| Content-Type                                   | Parsing               |
-| ---------------------------------------------- | --------------------- |
-| `application/json`                             | Decoded as JSON       |
-| `application/zip` / `application/octet-stream` | Returned as raw bytes |
-| anything else                                  | Decoded as UTF-8 text |
-
-Failed requests with HTTP 5xx are retried up to 3 times with exponential back-off
-(2 s, 4 s). HTTP 4xx errors are raised immediately without retry.
+5xx, 408 and 429 are retried up to 3 times (2 s, 4 s, or `Retry-After` when
+longer). Other 4xx fail at once with `TSMApiError`.
 
 ### Error envelope
 
-Every JSON response carries a `success` field. A rejection is **HTTP 200** with:
+The services are NestJS; an error has the HTTP status and this body:
 
 ```json
-{ "success": false, "error": "Invalid request." }
+{ "message": "Forbidden resource", "error": "Forbidden", "statusCode": 403 }
 ```
 
-`"Invalid request."` is the server's generic rejection string and does not say
-what was wrong. It is returned for an expired or unknown session, for an empty
-session, and for asking a subdomain to serve an endpoint it was not assigned. A
-client that only looks at the HTTP status treats these as successful empty
-responses.
+`message` becomes `TSMApiError.message`. Unlike the old API, a failure is never
+an HTTP 200.
+
+### List envelope
+
+realm-api and user-realms wrap lists in `items` plus `metadata`. game-versions
+and channels return a bare array.
+
+```json
+{ "metadata": { "totalItems": 768 }, "items": [ ... ] }
+```
+
+`GET /user-realms` adds paging fields to `metadata`
+(`{"totalItems": 2, "page": 1, "pageSize": 2, "totalPages": 1}`). Every list
+came back complete in one page, so the app does not page.
 
 ---
 
-## Endpoints
+### `GET realm-api /v2/realms`
 
-### `GET /v2/status`
-
-Fetch the current status including realm lists, download URLs, addon versions, and
-an optional broadcast message.
-
-Query params: standard auth params + optional `channel` and `tsm_version`.
-
-Response structure:
+The full realm catalogue, not the account's realms: 768 realms across all
+game versions and regions (2026-11-08). The app caches it in SQLite so the
+realm tab works offline.
 
 ```json
 {
-  "success": true,
-  "channels": { "release": "Release" },
-  "appInfo": { "news": "Welcome to TSM!", "minTSMUpdateNotificationVersion": 3030600 },
-  "addons": [{ "name": "TradeSkillMaster", "version_str": "v4.14.76" }],
-  "addons-Classic": [{ "name": "TradeSkillMaster-Classic", "version_str": "v4.14.76" }],
-  "addons-BCC": [{ "name": "TradeSkillMaster-BCC", "version_str": "v4.14.76" }],
-  "addonMessage": { "id": 0, "msg": "" },
-  "realms": [ ... ],
-  "regions": [ ... ],
-  "realms-Progression": [ ... ],
-  "regions-Progression": [ ... ],
-  "extraClassicRealms": [ ... ],
-  "extraClassicRegions": [ ... ],
-  "extraAnniversaryRealms": [ ... ],
-  "extraAnniversaryRegions": [ ... ]
-}
-```
-
-All realm array values are `RealmEntry[]`. See the game version mapping table
-below for which key corresponds to which WoW version.
-
-`version_str` values carry a leading `v` (e.g. `v4.14.76`). `appVersion` is
-documented here for completeness but is **not** present in the live response, so
-clients fall back to their own build number. `realms-BCC` / `regions-BCC` are
-returned alongside `realms-Progression` / `regions-Progression` and carry the
-same payload.
-
-**Account-scoped keys vs catalogue keys.** This is the distinction that decides
-whether a client has to filter the list itself:
-
-| Key | Scope | Rows (measured 2026-08-27) |
-| --- | --- | --- |
-| `realms` / `regions` | the account's registered realms | 1 |
-| `realms-Progression` / `regions-Progression` | the account's registered realms | 3 |
-| `extraClassicRealms` / `extraClassicRegions` | full catalogue | 240 / 12 |
-| `extraAnniversaryRealms` / `extraAnniversaryRegions` | full catalogue | 10 / 4 |
-
-Retail and Progression already come back narrowed to the account, so a client
-must not filter them further. The `extra*` keys return every realm in every
-region and do need narrowing to whatever the user chose to add.
-
-Region strings within one catalogue key are not interchangeable prefixes of a
-common region: `extraClassicRealms` carries `Classic-EU`, `HC-EU` and `SoD-EU`
-side by side, and `extraAnniversaryRealms` uses `Fresh-EU` / `Fresh-US` rather
-than an `Anniversary-` prefix. Matching on the trailing two-letter code merges
-game modes that are genuinely separate.
-
-**RealmEntry** (realm or region object):
-
-```json
-{
-  "id": 1234,
-  "name": "Tarren Mill",
-  "region": "EU",
-  "appDataStrings": {
-    "AUCTIONDB_NON_COMMODITY_DATA": {
-      "url": "https://cdn.tradeskillmaster.com/...",
-      "lastModified": 1710000000
-    },
-    "AUCTIONDB_REGION_STAT": {
-      "url": "https://cdn.tradeskillmaster.com/...",
-      "lastModified": 1710000000
+  "metadata": { "totalItems": 768 },
+  "items": [
+    {
+      "realmId": 2,
+      "regionId": 1,
+      "connectedRealmId": 4,
+      "name": "Winterhoof",
+      "slug": "winterhoof",
+      "localizedName": "Winterhoof",
+      "locale": "en_US",
+      "auctionHouses": [
+        { "auctionHouseId": 1, "type": "All", "lastModified": 1794126156 }
+      ],
+      "region": {
+        "regionId": 1,
+        "name": "North America",
+        "regionPrefix": "us",
+        "gmtOffset": -8,
+        "gameVersion": "Retail",
+        "lastModified": 1794127918,
+        "gameType": "retail",
+        "gameVersionType": "retail"
+      }
     }
-    // ... more tags
-  }
+  ]
 }
 ```
 
-Region entries use the same structure but `name` contains the region identifier
-(e.g. `"EU"`, `"US"`) and `region` may be absent.
+| Field | Notes |
+|-------|-------|
+| `realmId` | Integer, the id user-realms and socket events use |
+| `regionId` | Same as `region.regionId` |
+| `connectedRealmId` | Realms sharing it share one auction house |
+| `name` | English name (`Aman'Thul`) |
+| `localizedName` | Name in the realm's locale (`Aman'thul`, `Der Abyssische Rat`). **This is the AppData.lua key**, as in the official writer |
+| `slug`, `locale` | Not used by the app |
+| `auctionHouses` | One entry per auction house; see below. Typed as nullable in the app |
+| `region` | The full region object, same shape as `/v2/regions` |
 
-**Game version mapping:**
+`auctionHouses[].type` is `All`, `Alliance` or `Horde` (capitalised; the
+user-realms and socket side use upper case). Retail realms have exactly one
+`All` house; every classic flavour has an `Alliance` and a `Horde` house:
 
-| Status key                                           | WoW directory   | API `game_version` |
-| ---------------------------------------------------- | --------------- | ------------------ |
-| `realms` / `regions`                                 | `_retail_`      | `retail`           |
-| `realms-Progression` / `regions-Progression`         | `_classic_`     | `bcc`              |
-| `extraClassicRealms` / `extraClassicRegions`         | `_classic_era_` | `classic`          |
-| `extraAnniversaryRealms` / `extraAnniversaryRegions` | `_anniversary_` | `anniversary`      |
+| gameVersion | Realms | Houses per realm |
+|-------------|--------|------------------|
+| Retail | 558 | 1 (`All`) |
+| Classic Era | 93 | 2 |
+| Wrath | 71 | 2 |
+| Season of Discovery | 20 | 2 |
+| Forever | 12 | 2 |
+| Classic Era - Hardcore | 9 | 2 |
+| Classic Era - Fresh | 5 | 2 |
 
-Display name transform for Progression realms: `BCC-EU` becomes `Progression-EU`.
-
----
-
-### `GET /v2/addon/{name}`
-
-Download an addon zip file.
-
-| Parameter | Description                                          |
-| --------- | ---------------------------------------------------- |
-| `name`    | Addon name including the game-version suffix         |
-| `channel` | _(optional)_ `"release"` or `"beta"`                 |
-
-`name` carries the same suffix the status response uses for that game version:
-`""` (retail), `-Classic`, `-Progression`, `-Anniversary`. The status response
-also exposes `addons-Classic` and `addons-BCC` lists whose names already include
-a suffix; both `-Progression` and `-BCC` are accepted for the `_classic_` client.
-
-**No `tsm_version` parameter.** The endpoint is called without it in the original
-client. As of 2026-08 the server tolerates one, but sending the version of the
-addon being requested was never correct.
-
-Response: `application/zip` - raw bytes of the zip archive. The endpoint has also
-answered with a JSON `{"url": "..."}` CDN redirect (seen 2026-05), so a client
-must handle both. The zip's top-level folder is the addon name **without** the
-suffix, so all four packages extract to e.g. `TradeSkillMaster_AppHelper/`.
+`auctionHouseId` is shared by connected realms (Thorium Brotherhood and
+Farstriders both carry house 5). It is the number in the blob URLs and the
+`ahId` in the AppData.lua meta comment. `lastModified` is usually a Unix
+timestamp, but some classic houses report small numbers (`918780`); the app
+does not rely on it and takes freshness from the socket events instead.
 
 ---
 
-### `GET /v2/realms2/list`
+### `GET realm-api /v2/regions`
 
-List the **full catalogue** of realms the API knows about, not the account's own
-realms. Measured 2026-08-27: 558 retail realms across EU/KR/TW/US and 226 bcc
-realms. This is the source for the Add Realm dropdown.
-
-Response:
+28 regions: 4 (`us`, `eu`, `tw`, `kr`) for each of 7 game versions.
 
 ```json
 {
-  "success": true,
-  "retail": [ ... ],
-  "bcc": [ ... ]
+  "metadata": { "totalItems": 28 },
+  "items": [
+    {
+      "regionId": 2,
+      "name": "Europe",
+      "regionPrefix": "eu",
+      "gmtOffset": 0,
+      "gameVersion": "Retail",
+      "lastModified": 1794099204,
+      "gameType": "retail",
+      "gameVersionType": "retail"
+    }
+  ]
 }
 ```
 
-Both arrays contain `RealmEntry[]`, but with a **bare** region and an integer id:
+`gameVersion` decides the client folder and the AppData region key prefix
+(`tsm/wow/game_versions.py:REGION_GAME_VERSIONS`):
+
+| regionId (us, eu, tw, kr) | gameVersion | gameType | gameVersionType | Folder | Region key |
+|---------------------------|-------------|----------|-----------------|--------|------------|
+| 1, 2, 3, 4 | Retail | `retail` | `retail` | `_retail_` | `EU` |
+| 5, 6, 7, 8 | Classic Era | `classic` | `classic` | `_classic_era_` | `Classic-EU` |
+| 13, 14, 15, 16 | Wrath | `classic-progression` | `classic-progression` | `_classic_` | `BCC-EU` |
+| 17, 18, 19, 20 | Classic Era - Hardcore | `classic` | `classic-hardcore` | `_classic_era_` | `HC-EU` |
+| 21, 22, 23, 24 | Season of Discovery | `classic` | `classic-season-of-discovery` | `_classic_era_` | `SoD-EU` |
+| 25, 26, 27, 28 | Classic Era - Fresh | `classic` | `classic-fresh` | `_anniversary_` | `Fresh-EU` |
+| 29, 30, 31, 32 | Forever | `forever` | `forever` | `_forever_` | `Forever-EU` |
+
+Notes:
+
+- `gameVersion` is a display string and lags behind the game: the
+  `_classic_` progression client is "Wrath" here while desktop-backend labels
+  it "Mists of Pandaria". The key stays `BCC-` for compatibility with the
+  addon.
+- Three region families share `_classic_era_`; the key prefix keeps them apart
+  in one AppData.lua. Matching on the two-letter code alone would merge them.
+- `name` is the long region name (`Europe`); the key is built from
+  `regionPrefix` upper-cased.
+
+---
+
+### `GET desktop-backend /game-versions`
+
+Display labels per client folder. Bare array:
 
 ```json
-{ "id": 1, "masterId": 1, "name": "Anathema-Alliance", "region": "US" }
+[
+  { "gameType": "classic", "label": "Classic Era", "folder": "_classic_era_" },
+  { "gameType": "anniversary", "label": "Anniversary", "folder": "_anniversary_" },
+  { "gameType": "forever", "label": "Forever", "folder": "_forever_" },
+  { "gameType": "classic-progression", "label": "Mists of Pandaria", "folder": "_classic_" },
+  { "gameType": "retail", "label": "Retail", "folder": "_retail_" }
+]
 ```
 
-Note the region differs from what `/v2/status` reports for the same realm. A bcc
-realm listed here as `region: "EU"` appears in `realms-Progression` as
-`region: "BCC-EU"` with a string id such as `"106-BCC"`. Do not use a region
-string from this endpoint as a key against status data.
+`gameType` here is per folder, not per region: `anniversary` exists only in
+this list, the regions call those realms `classic` / `classic-fresh`.
 
 ---
 
-### `GET /v2/realms2/add/{game_version}/{realm_id}`
+### `GET desktop-backend /user-realms?userIds=<sub>`
 
-Register a realm to the user's account.
+The realms the account follows. The list is stored server-side and shared with
+the official app; these are the realms the socket pushes data for.
 
-| Parameter      | Description                               |
-| -------------- | ----------------------------------------- |
-| `game_version` | `retail`, `bcc`, `classic`, `anniversary` |
-| `realm_id`     | Integer realm ID                          |
+```json
+{
+  "items": [
+    {
+      "id": "usr_rlm_01m6crcyy6qpc8h826y6wsptzt",
+      "userId": "<sub>",
+      "realmId": 300,
+      "auctionHouseType": "ALL"
+    },
+    {
+      "id": "usr_rlm_01m6crcyy69x57txpgjaqrewgq",
+      "userId": "<sub>",
+      "realmId": 706,
+      "auctionHouseType": "HORDE"
+    }
+  ],
+  "metadata": { "totalItems": 2, "page": 1, "pageSize": 2, "totalPages": 1 }
+}
+```
 
-Response: confirmation object (structure varies).
+| Field | Notes |
+|-------|-------|
+| `id` | String id (`usr_rlm_...`), needed to delete the entry |
+| `realmId` | `realmId` from `/v2/realms` |
+| `auctionHouseType` | `ALL`, `ALLIANCE` or `HORDE`: which of the realm's houses. A classic realm followed for both factions is two entries |
+
+In the example, 300 is Tarren Mill (Retail EU, house 97) and 706 is Everlook
+(Wrath EU, Horde house 362).
+
+### `POST desktop-backend /user-realms`
+
+```json
+{ "realmId": 706, "userId": "<sub>", "auctionHouseType": "HORDE" }
+```
+
+`auctionHouseType` must be upper case. The response body is not used by either
+client and was not captured; the app reloads the list afterwards. The server
+enforces the tier limit; the app checks it first to give a clear message.
+
+### `DELETE desktop-backend /user-realms/<id>`
+
+`<id>` is the `usr_rlm_...` string. Response body unused.
 
 ---
 
-### `GET /v2/realms2/remove/{game_version}/{region}/{realm}`
+### `GET addon-version /channels`
 
-Remove a realm from the user's account.
+Labels for the addon release channels the account may use. Bare array
+`[{"name": "beta", "label": "Beta"}]` (shape from the decompiled client; a
+success response has not been captured). Accounts with no extra channels get
+the 403 envelope:
 
-| Parameter      | Description                               |
-| -------------- | ----------------------------------------- |
-| `game_version` | `retail`, `bcc`, `classic`, `anniversary` |
-| `region`       | Region string, e.g. `EU`                  |
-| `realm`        | Realm name slug, e.g. `Tarren Mill`       |
+```json
+{ "message": "Forbidden resource", "error": "Forbidden", "statusCode": 403 }
+```
 
-Response: confirmation object (structure varies).
+The app treats 403 as "release only". Which channels exist comes from the
+`channel/<name>` token roles; this call only supplies labels.
 
 ---
 
-## AppData Download Flow
+## Socket (`tsm/api/socket.py`)
 
-This is the core data sync flow, equivalent to what `MainThread.pyc` does on a
-regular interval.
+Socket.IO v4 (Engine.IO 4) over a websocket. The app implements the packets it
+needs directly on aiohttp, without a socket.io dependency.
 
 ```
-1. GET /v2/status
-       |
-       v
-2. For each game version where TSM_AppHelper is installed:
-       |
-       v
-3. For each realm/region in the status response:
-   a. Read local AppData.lua to get stored lastModified per tag
-   b. Compare with lastModified values in appDataStrings
-   c. If remote lastModified > local: add to pending downloads
-       |
-       v
-4. For each pending (tag, realm) pair:
-   - Download blob from appDataStrings[tag].url (CDN, no auth required)
-   - If blob starts with gzip magic bytes (0x1f 0x8b): decompress
-   - Otherwise: decode as UTF-8
-   - Check that response is not an HTML error page
-       |
-       v
-5. Write all downloaded blobs into AppData.lua using LoadData() format
-6. Save snapshot to local SQLite cache
+wss://app-backend-sockets.tradeskillmaster.com/socket.io/?EIO=4&transport=websocket
+Authorization: <access token>
 ```
 
-### AppData.lua format
+The `Authorization` header is the **raw** access token, without `Bearer `.
 
-Each data blob is written as a Lua `LoadData()` call:
+### Handshake and framing
+
+```
+server  0{"sid":"GlmzGQ9gnKucO1TaFWuo","upgrades":[],"pingInterval":25000,"pingTimeout":20000,"maxPayload":1000000}
+client  40                          join namespace "/"
+server  40{"sid":"Rym4e9LIEU6_VKzgFWuq"}
+server  2                           ping, every pingInterval
+client  3                           pong
+server  42["realm_auctiondb",{...}] event: name, then arguments
+server  41                          kicked from the namespace
+server  44{"message":"..."}         connect refused (bad or expired token)
+```
+
+The first digit is the Engine.IO packet type (0 open, 2 ping, 3 pong,
+4 message), the second the Socket.IO type (0 connect, 1 disconnect, 2 event,
+4 connect error). Every event carries exactly one argument object.
+
+After joining, the server pushes the current state for every followed realm
+and its regions (a burst of about 20 events for 2 realms), then `addon` and
+`app_info`, and after that pushes again whenever something changes.
+
+### Events
+
+| Event | Sent for | Handled |
+|-------|----------|---------|
+| `realm_auctiondb` | Per followed auction house, per realm data string | Download + AppData |
+| `realm_shopping` | Same payload as `realm_auctiondb` | Same as `realm_auctiondb` |
+| `region_auctiondb` | Per region of a followed realm, per region data string | Download + AppData |
+| `addon` | Latest addon releases | Addon updater |
+| `app_info` | News and the broadcast message | APP_INFO |
+| `app_update` | New desktop app release (no payload used) | Ignored (official client schedules an update check) |
+
+#### `realm_auctiondb` / `realm_shopping`
+
+```json
+{
+  "realmId": 300,
+  "auctionHouseType": "ALL",
+  "stringType": "AUCTIONDB_NON_COMMODITY_DATA",
+  "lastModified": 1794126113,
+  "url": "https://tradeskillmaster.nyc3.digitaloceanspaces.com/pricing/nonCommodityAuctionDb/auctionHouse_97_1794126113_gzip.txt?X-Amz-Expires=7200&X-Amz-Signature=..."
+}
+```
+
+#### `region_auctiondb`
+
+```json
+{
+  "regionId": 2,
+  "stringType": "AUCTIONDB_REGION_STAT",
+  "lastModified": "1794099204",
+  "url": "https://tradeskillmaster.nyc3.digitaloceanspaces.com/pricing/regionStatDb/region_2_1794099204_gzip.txt?X-Amz-Expires=7200&X-Amz-Signature=..."
+}
+```
+
+- `lastModified` arrives as a number **or** a numeric string, even within one
+  burst. It is the time the addon gets as `downloadTime`.
+- `auctionHouseType` is upper case and matches the user-realm entry.
+- `url` is a presigned S3 (DigitalOcean Spaces) URL valid for 2 hours
+  (`X-Amz-Expires=7200`). It must be fetched **without** an Authorization
+  header. A 404 means the blob was superseded by newer data; the next event
+  brings the new URL.
+- The object path is `pricing/<db>/auctionHouse_<auctionHouseId>_<lastModified>_gzip.txt`
+  or `pricing/<db>/region_<regionId>_<lastModified>_gzip.txt`.
+
+### String types
+
+| stringType | Event | Scope | Path segment | Retail | Classic flavours |
+|------------|-------|-------|--------------|--------|------------------|
+| `AUCTIONDB_NON_COMMODITY_DATA` | realm | Auction house | `nonCommodityAuctionDb` | yes | yes |
+| `AUCTIONDB_NON_COMMODITY_SCAN_STAT` | realm | Auction house | `nonCommodityScanStatDb` | yes | yes |
+| `AUCTIONDB_NON_COMMODITY_HISTORICAL` | realm | Auction house | `nonCommodityDailyDb` | yes | yes |
+| `AUCTIONDB_COMMODITY_DATA` | region | Region | `commodityAuctionDb` | yes | no |
+| `AUCTIONDB_COMMODITY_SCAN_STAT` | region | Region | `commodityScanStatDb` | yes | no |
+| `AUCTIONDB_COMMODITY_HISTORICAL` | region | Region | `commodityDailyDb` | yes | yes |
+| `AUCTIONDB_REGION_STAT` | region | Region | `regionStatDb` | yes | yes |
+| `AUCTIONDB_REGION_SALE` | region | Region | `regionSaleDb` | yes | yes |
+| `AUCTIONDB_REGION_HISTORICAL` | region | Region | `regionHistoricalDb` | yes | yes |
+
+Captured for a retail EU realm plus a Wrath EU realm: 6 events for retail
+region 2, 4 for Wrath region 14 (no commodity data or scan stat), 3 per
+followed auction house. `realm_shopping` was not seen in the capture; the
+official client routes it through the same handler as `realm_auctiondb`.
+The app accepts any `stringType` and writes it under that tag.
+
+`AUCTIONDB_NON_COMMODITY_DATA` (realms) and `AUCTIONDB_REGION_STAT` (regions)
+drive the "last updated" column in the realm tab.
+
+### Blob format
+
+The object is stored gzipped without a `Content-Encoding` header, so the client
+has to check for the gzip magic (`1f 8b`) and decompress itself
+(`TSMApiClient.download`). The content is the Lua table that goes into
+AppData.lua, optionally prefixed with `return `:
 
 ```lua
-select(2, ...).LoadData("TAG","RealmOrRegion",[[return {downloadTime=N,...}]])
+{downloadTime=1794098097,fields={"itemString","historical"},data={{25,A8PC0CV},{35,TPLB5K},...}}
 ```
 
-The data blob received from the CDN is the verbatim content of the Lua expression
-inside `[[...]]`. The `downloadTime` field within the blob is the `lastModified`
-timestamp from the API.
+`fields` names the columns of each `data` row; values are base-32 encoded. The
+app strips a leading `return `, and refuses blobs that do not start with `{` or
+that contain `]]` (it would end the `[[...]]` string in AppData.lua).
+
+Downloads are retried on 408, 429, 5xx and network errors, 6 attempts with the
+delay doubling from 1 s up to 30 s, at most four at a time.
+
+#### `addon`
+
+```json
+{
+  "isComplete": true,
+  "data": [
+    {
+      "addon": "TradeSkillMaster",
+      "channel": "release",
+      "version": "v4.15.4",
+      "url": "https://tradeskillmaster.nyc3.cdn.digitaloceanspaces.com/addon-versions/TradeSkillMaster-v4.15.4.zip"
+    },
+    {
+      "addon": "TradeSkillMaster_AppHelper",
+      "channel": "release",
+      "version": "v4.15",
+      "url": "https://tradeskillmaster.nyc3.cdn.digitaloceanspaces.com/addon-versions/TradeSkillMaster_AppHelper-v4.15.zip"
+    }
+  ]
+}
+```
+
+- One entry per addon and channel the account may use. Accounts with beta
+  access get a second entry per addon with `"channel": "beta"`.
+- There are no per-game-version packages any more: each zip holds one addon
+  folder with a toc per client (`TradeSkillMaster.toc`,
+  `TradeSkillMaster_Classic.toc`, ...) and is installed unchanged into every
+  game version that already has the addon.
+- `url` is a public CDN URL, no auth.
+- `version` has a leading `v`; versions are compared without it.
+- `isComplete` is passed through by the official client; the app ignores it.
+
+#### `app_info`
+
+```json
+{
+  "message": { "id": 0, "msg": "" },
+  "news": [
+    {
+      "title": "TSM 4.15 brings WoW: Forever Support, plus New Desktop app",
+      "content": "We're pleased to announce that version 4.15 of the TradeSkillMaster addon is now available [...]",
+      "timestamp": 1793577133,
+      "link": "https://tradeskillmaster.com/news/tsm-4-15-brings-wow-forever-support-plus-new-desktop-app-1180"
+    }
+  ]
+}
+```
+
+`message` is the in-game broadcast (`id` 0 and empty `msg` when there is none).
+Both are written into the `APP_INFO` blob as they are.
+
+### Reconnects
+
+5 s doubling to 60 s after a dropped connection; 5 s doubling to 300 s with
+jitter after the server disconnects us (`41`/`44`, usually an expired or
+rejected token). A token refresh while disconnected reconnects at once.
 
 ---
 
-## AppData Tags
+## AppData.lua
 
-Tags observed in real `AppData.lua` files:
+Written to `<WoW>/<folder>/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua`,
+but only for game versions where TradeSkillMaster or the AppHelper is installed.
+The official 1.0.9 client writes this format; the addon reads it on login.
 
-| Tag                                  | Scope      | Description                                         |
-| ------------------------------------ | ---------- | --------------------------------------------------- |
-| `APP_INFO`                           | Global     | App version, last sync timestamp, broadcast message |
-| `AUCTIONDB_NON_COMMODITY_DATA`       | Per-realm  | Current item prices (non-commodity auctions)        |
-| `AUCTIONDB_NON_COMMODITY_HISTORICAL` | Per-realm  | Historical price data                               |
-| `AUCTIONDB_NON_COMMODITY_SCAN_STAT`  | Per-realm  | Scan statistics                                     |
-| `AUCTIONDB_COMMODITY_DATA`           | Per-region | Commodity (stackable) item prices                   |
-| `AUCTIONDB_COMMODITY_HISTORICAL`     | Per-region | Commodity historical prices                         |
-| `AUCTIONDB_COMMODITY_SCAN_STAT`      | Per-region | Commodity scan statistics                           |
-| `AUCTIONDB_REGION_STAT`              | Per-region | Region-wide item statistics                         |
-| `AUCTIONDB_REGION_SALE`              | Per-region | Region-wide sale data                               |
-| `AUCTIONDB_REGION_HISTORICAL`        | Per-region | Region-wide historical data                         |
+```lua
+select(2, ...).LoadData("APP_INFO","Global",[[return {version="1.0.9",lastSync=1794128540,message={id=0,msg=""},news={...}}]]) --<APP_INFO,Global,1794128540>
+select(2, ...).LoadData("AUCTIONDB_NON_COMMODITY_DATA","Tarren Mill",[[return {downloadTime=1794126113,...}]]) --<AUCTIONDB_NON_COMMODITY_DATA,Tarren Mill,1794126113,97>
+for _,r in ipairs({"Thorium Brotherhood","Farstriders"}) do select(2, ...).LoadData("AUCTIONDB_NON_COMMODITY_DATA",r,[[return {...}]]) end --<AUCTIONDB_NON_COMMODITY_DATA,Thorium Brotherhood|Farstriders,1794126157,5>
+select(2, ...).LoadData("AUCTIONDB_REGION_STAT","EU",[[return {downloadTime=1794099204,...}]]) --<AUCTIONDB_REGION_STAT,EU,1794099204>
+```
 
-The key tags used for staleness detection:
-
-- **Realm data:** `AUCTIONDB_NON_COMMODITY_DATA` - `lastModified` is used as the
-  realm's "last updated" display timestamp.
-- **Region data:** `AUCTIONDB_REGION_STAT` - same purpose for region rows.
-
----
-
-## Scheduled Jobs
-
-The original app runs these jobs on a timer:
-
-| Job                | Interval         | Description                               |
-| ------------------ | ---------------- | ----------------------------------------- |
-| Auction data sync  | Every 60 minutes | Full status + download cycle              |
-| Auth token refresh | Every 25 minutes | Re-exchanges OIDC token to extend session |
-
-The Linux port refreshes auth every 5 minutes instead, because the session no
-longer lives 25 minutes. See the note below.
-| WoW install scan   | Every 5 minutes  | Detects new/removed WoW installs          |
-| Addon update check | Every 6 hours    | Checks `addons` list from status response |
+- The trailing comment is the meta the writer reads back:
+  `<TYPE,Key[|Key...],lastModified[,auctionHouseId]>`. `lastModified` decides
+  whether a newer socket event needs a download.
+- Realm keys: `localizedName`, plus `-Horde` / `-Alliance` for a faction
+  auction house (`Everlook-Horde`). Connected realms share one auction house
+  and are written as one ipairs line.
+- Region keys: see the regions table. `APP_INFO` uses `Global`.
+- Lines the parser does not recognise are kept verbatim.
+- Writes are debounced (1.5 s) and batched per file; entries for realms the
+  account no longer follows are removed.
+- `APP_INFO` (`{version, lastSync, message, news}`) is rewritten every 15
+  minutes and on every `app_info` event. `version` is the official client
+  version the addon expects (`OFFICIAL_APP_VERSION` in `tsm/app.py`).
 
 ---
 
-## Known Limitations and Observations
+## Addon updates
 
-- **No HTTPS for API calls.** All `/v2/` calls use plain HTTP. Only the OIDC step
-  uses HTTPS.
-- **Shared HMAC secret.** The secret `3FB1CC5EDC5B43F21CB8ACC23B42B703` is
-  hardcoded in the distributed app binary and is the same for all users.
-- **Session tokens last about 10 minutes.** Measured 2026-08-27 by polling a
-  single session: `/v2/status` and `/v2/addon` both answered normally at 9m07s
-  after login and both returned `{"success": false, "error": "Invalid request."}`
-  at 10m07s. The original app's 25 minute refresh interval is no longer short
-  enough, and a rejected session never recovers on its own: the same token keeps
-  being sent until the client logs in again.
-- **CDN URLs require no authentication.** The blob download URLs returned by the
-  status endpoint are public CDN URLs and can be fetched without any credentials.
-- **AppHelper detection is required.** If `TSM_AppHelper/AppData.lua` is not found
-  in a WoW install directory, the server's realm list is still fetched but no data
-  is written. The UI shows no realms.
-- **Gzip handling is dual-path.** The aiohttp client auto-decompresses
-  `Content-Encoding: gzip`, but the CDN sometimes returns raw gzip bytes without
-  the header. The client checks the magic bytes (`\x1f\x8b`) and decompresses
-  manually if needed.
-- **HTML error detection.** The client checks whether the downloaded blob contains
-  `<html>` and discards it if so, treating it as an error response from an
-  intermediate proxy.
-- **`realms2` and `auth` always use `app-server`.** These endpoints are not
-  remapped by `endpointSubdomains`; the subdomain is hardcoded in the client.
-- **`endpointSubdomains` is per session.** `addon` and `auctiondb` are handed out
-  as `app-server4` or `app-server5` and can differ between two logins seconds
-  apart. A long-running client that holds one session keeps whatever mapping it
-  was given, so a rejected call needs a fresh login rather than a plain retry.
+The `addon` event lists the latest release per addon and channel. Each release
+is one zip with a toc per client, installed unchanged into every game version
+that already has the addon. Installs that are git checkouts, or whose toc reads
+`@project-version@`, are left alone.
+
+---
+
+## Differences from the old API
+
+| Old (`app-server /v2`, up to 1.1.16) | New |
+|--------------------------------------|-----|
+| Password grant, `legacy-desktop-app` client | PKCE browser login, `desktop-app` client |
+| Session token from `/v2/auth`, lived about 10 minutes | Keycloak access token, refreshed with an offline refresh token |
+| HMAC query parameters, plain HTTP | Bearer header, HTTPS |
+| `endpointSubdomains` per session | Fixed hosts |
+| Errors as HTTP 200 `{"success": false}` | HTTP status + NestJS error body |
+| Poll `/v2/status` every hour | Socket pushes changes |
+| Realms registered via `/v2/realms2/add` | `/user-realms`, shared with the official app |
+| One addon zip per game version (`-Classic`, `-Progression`, ...) | One multi-toc zip per addon |
+| Region strings `BCC-EU`, `Classic-EU` in the status payload | Built by the client from `gameVersion` + `regionPrefix` |

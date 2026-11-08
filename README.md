@@ -23,12 +23,14 @@ TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloa
 
 ## Features
 
-- TSM account login with secure credential storage (keyring / Secret Service)
-- Automatic auction data sync every 5 minutes (differential - only changed blobs downloaded); manual refresh on demand
-- WoW install auto-detection for Wine, Lutris, Faugus Launcher, Steam, and custom paths
+- TSM account sign-in through the browser, the same login as the official app; only a refresh token is kept, in the keyring (Secret Service)
+- Live auction data: the TSM server pushes new data as soon as it is ready, only changed data is downloaded; manual refresh on demand
+- Retail, Progression, Anniversary, Classic Era (including Hardcore and Season of Discovery) and World of Warcraft Forever
+- Followed realms are stored on your TSM account, shared with the official app
+- WoW install auto-detection for Wine, Lutris, Bottles, Faugus Launcher, Steam (native and Flatpak), and custom paths
 - Atomic `AppData.lua` writes: no partial/corrupt addon data
 - Scheduled SavedVariables backups with restore support
-- TSM addon version checking with auto-update on each sync; manual install, update, and uninstall per addon per game version from the Addon Versions tab
+- TSM addon auto-update as soon as a release is published; manual install, update, and uninstall per addon per game version from the Addon Versions tab
 - Accounting dashboard: player gold over time with a hover readout and 1D to All ranges, headline figures (high, low, daily sales and purchases, top sale and purchase), Sales / Expenses / Profit panels with totals, per-day averages and leading items, and every item traded with its icon framed in its quality colour, earned, spent and profit columns, WoW-style tooltips on hover, and CSV export
 - Status bar with GitHub link and Settings shortcut; system tray icon with minimise-to-tray support
 
@@ -119,6 +121,22 @@ Run it straight from the flake:
 
 ```bash
 nix run github:exceptionptr/tsm-app-linux
+```
+
+Nix ships with flakes turned off unless you are on NixOS, so that may fail with
+`experimental Nix feature 'nix-command' is disabled`. Either pass them for one
+command:
+
+```bash
+nix --extra-experimental-features 'nix-command flakes' \
+  run github:exceptionptr/tsm-app-linux
+```
+
+or turn them on for good:
+
+```bash
+mkdir -p ~/.config/nix
+echo 'experimental-features = nix-command flakes' >> ~/.config/nix/nix.conf
 ```
 
 Or install it on NixOS, in your system's `flake.nix`:

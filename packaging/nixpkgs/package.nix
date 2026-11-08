@@ -54,7 +54,7 @@ python3Packages.buildPythonApplication rec {
     owner = "exceptionptr";
     repo = "tsm-app-linux";
     tag = "v${version}";
-    hash = lib.fakeHash; # replace before submitting
+    hash = "sha256-/CPGY9s1gJpe+eWKioqM0Qp2IigPSp19fTjtxpIcm9I=";
   };
 
   # hatch-vcs takes the version from git tags, which a tarball does not carry.
@@ -111,6 +111,6 @@ python3Packages.buildPythonApplication rec {
     license = lib.licenses.mit;
     mainProgram = "tsm-app";
     platforms = lib.platforms.linux;
-    maintainers = [ ]; # add your nixpkgs maintainer entry
+    maintainers = with lib.maintainers; [ exceptionptr ];
   };
 }

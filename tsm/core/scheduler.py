@@ -8,37 +8,35 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
-    from tsm.api.types import AddonVersionInfo
-    from tsm.core.models.auction import AuctionData, RealmStatus
+    from tsm.core.models.auction import RealmStatus
     from tsm.core.models.config import AppConfig, WoWInstall
 
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from tsm.workers.jobs import job_auction_refresh, job_auth_refresh, job_backup, job_check_update
-
-# Must stay comfortably below the server's session lifetime, which is roughly
-# 10 minutes. See the auth_refresh schedule below.
-AUTH_REFRESH_MINUTES = 5
+from tsm.workers.jobs import job_backup, job_check_update
 
 logger = logging.getLogger(__name__)
 
 
 class AuctionServiceProtocol(Protocol):
     async def get_snapshot(self) -> tuple[list[RealmStatus], int]: ...
-    async def refresh_all_realms(self) -> AuctionData: ...
-    async def add_realm(self, game_version: str, realm_id: int) -> None: ...
 
 
 class AuthServiceProtocol(Protocol):
-    async def refresh_token(self) -> None: ...
+    async def refresh_token(self, force: bool = False) -> None: ...
 
 
 class UpdateServiceProtocol(Protocol):
-    async def check_and_update(self, addon_versions: list[AddonVersionInfo]) -> list[str]: ...
+    async def check_and_update(self, releases: list[Any] | None = None) -> list[str]: ...
+
+
+class SyncProtocol(Protocol):
+    async def start(self) -> None: ...
+    async def stop(self) -> None: ...
 
 
 class ConfigStoreProtocol(Protocol):
@@ -70,10 +68,10 @@ class ServiceContainer:
     wow_detector: WoWDetectorProtocol
     updater: UpdateServiceProtocol
     backup: BackupServiceProtocol | None = None
+    sync: SyncProtocol | None = None
     config_store: ConfigStoreProtocol | None = None
     backup_notify_fn: Callable[[str], None] | None = None
     addon_notify_fn: Callable[[str], None] | None = None
-    auction_data_fn: Callable[[AuctionData], None] | None = None
     wow_warn_fn: Callable[[str], None] | None = None
     update_notify_fn: Callable[[str], None] | None = None
 
@@ -119,17 +117,15 @@ class JobScheduler:
             # One-shot update check: fire and forget, does not block scheduler start.
             asyncio.create_task(job_check_update(services=svc))
 
+            # Auction data and addon releases arrive over the socket; there is
+            # nothing left to poll. Token refresh runs inside the controller too.
+            if svc.sync is not None and not skip_auto_sync:
+                try:
+                    await svc.sync.start()
+                except Exception:
+                    logger.exception("Starting the data sync failed")
+
             async with scheduler:
-                # Auction poller: check TSM API every 5 minutes for new data.
-                # refresh_all_realms() is differential so only changed blobs are
-                # downloaded. First poll after 5 min; startup refresh already ran at login.
-                if not skip_auto_sync:
-                    await scheduler.add_schedule(
-                        job_auction_refresh,
-                        IntervalTrigger(minutes=5, start_time=now + timedelta(minutes=5)),
-                        id="auction_refresh",
-                        kwargs={"services": svc},
-                    )
                 # Backup: schedule at the user-configured period.
                 if not skip_auto_backup:
                     backup_minutes = (
@@ -146,20 +142,6 @@ class JobScheduler:
                         id="backup",
                         kwargs={"services": svc},
                     )
-                # Auth: the TSM session is rejected about 10 minutes after
-                # login (measured 2026-08-27: alive at 9m07s, rejected at
-                # 10m07s). Refresh well inside that window. The API client also
-                # re-authenticates on a rejected request, so a session that
-                # lapses between runs of this job still recovers.
-                await scheduler.add_schedule(
-                    job_auth_refresh,
-                    IntervalTrigger(
-                        minutes=AUTH_REFRESH_MINUTES,
-                        start_time=now + timedelta(minutes=AUTH_REFRESH_MINUTES),
-                    ),
-                    id="auth_refresh",
-                    kwargs={"services": svc},
-                )
                 logger.info(
                     "JobScheduler started (detection=%s sync=%s backup=%s)",
                     not skip_detection,
@@ -172,6 +154,11 @@ class JobScheduler:
         self._started = True
 
     async def stop(self) -> None:
+        if self._svc.sync is not None:
+            try:
+                await self._svc.sync.stop()
+            except Exception:
+                logger.exception("Stopping the data sync failed")
         if self._started and self._scheduler is not None:
             await self._scheduler.stop()
             if self._runner_task is not None:

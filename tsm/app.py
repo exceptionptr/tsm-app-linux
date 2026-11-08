@@ -10,10 +10,10 @@ from PySide6.QtWidgets import QApplication
 
 from tsm.api.client import TSMApiClient
 from tsm.core.scheduler import JobScheduler, ServiceContainer
-from tsm.core.services.addon_writer import AddonWriterService
 from tsm.core.services.auction import AuctionDataService
 from tsm.core.services.auth import AuthService
 from tsm.core.services.backup import BackupService
+from tsm.core.services.sync import SyncController
 from tsm.core.services.updater import UpdateService
 from tsm.core.services.wow_detector import WoWDetectorService
 from tsm.storage.auction_cache import AuctionCache
@@ -27,6 +27,9 @@ from tsm.ui.viewmodels.settings_vm import SettingsViewModel
 from tsm.workers.async_runner import AsyncRunner
 
 logger = logging.getLogger(__name__)
+
+# Version of the official TSM desktop app whose backend protocol we implement.
+OFFICIAL_APP_VERSION = "1.0.9"
 
 _INSTANCE_KEY = "tsm-app-single-instance"
 
@@ -102,20 +105,23 @@ def create_app(
     config_store = ConfigStore()
 
     # API + Services
-    api_client = TSMApiClient()
+    from tsm import __version__
+
+    api_client = TSMApiClient(user_agent=f"tsm-app-linux/{__version__}")
+    # Registers itself as the client's token provider.
     auth_svc = AuthService(api_client)
-    # Recover in place when the server rejects the session: a fresh login also
-    # refreshes endpointSubdomains, which is handed out per session.
-    api_client.set_reauth_callback(auth_svc.refresh_token)
     wow_detector = WoWDetectorService(skip_scan=skip_detection)
-    addon_writer = AddonWriterService(wow_detector)
-    auction_svc = AuctionDataService(api_client, cache, addon_writer)
+    # APP_INFO.version is the desktop app version the addon shows; report the
+    # official client's, which is the protocol this app speaks.
+    auction_svc = AuctionDataService(
+        api_client, cache, wow_detector, app_version=OFFICIAL_APP_VERSION
+    )
     updater_svc = UpdateService(api_client, wow_detector)
     backup_svc = BackupService(wow_detector)
 
     # ViewModels (created before scheduler so callback can reference app_vm)
     app_vm = AppViewModel(auth_svc)
-    realm_vm = RealmViewModel(auction_svc)
+    realm_vm = RealmViewModel(auction_svc, auth_svc)
     settings_vm = SettingsViewModel(config_store)
 
     def _backup_notify(message: str) -> None:
@@ -127,6 +133,17 @@ def create_app(
     def _wow_warn(message: str) -> None:
         app_vm.set_status(message)
 
+    auction_svc.add_listener(app_vm.realm_data_received.emit)
+    auth_svc.add_session_lost_listener(app_vm.session_lost.emit)
+    sync = SyncController(
+        auth_svc,
+        auction_svc,
+        updater=updater_svc,
+        api_client=api_client,
+        addon_notify_fn=_addon_notify,
+        connection_fn=app_vm.connection_changed.emit,
+    )
+
     # Scheduler (started after successful auth)
     svc_container = ServiceContainer(
         auth=auth_svc,
@@ -134,10 +151,10 @@ def create_app(
         wow_detector=wow_detector,
         updater=updater_svc,
         backup=backup_svc,
+        sync=sync,
         config_store=config_store,
         backup_notify_fn=_backup_notify,
         addon_notify_fn=_addon_notify,
-        auction_data_fn=app_vm.realm_data_received.emit,
         wow_warn_fn=_wow_warn,
         update_notify_fn=app_vm.update_available.emit,
     )
@@ -158,6 +175,7 @@ def create_app(
         api_client=api_client,
         backup_service=backup_svc,
         updater_service=updater_svc,
+        auction_service=auction_svc,
     )
 
     # Start scheduler once the user is authenticated
@@ -173,6 +191,9 @@ def create_app(
                     else None
                 )
             )
+        else:
+            # Logout or a rejected refresh token: drop the socket and timers.
+            async_runner.submit(scheduler.stop())
 
     app_vm.authenticated_changed.connect(_on_authenticated)
 
