@@ -121,14 +121,32 @@ jobs:
           # submission time (see docs/packaging.md). That one is allowed through
           # by name. Anything else is a real finding and fails the job, which a
           # blanket continue-on-error would have hidden.
+          # Its stderr is kept apart and printed, so a linter that crashes
+          # shows why instead of leaving an empty report behind.
+          status=0
           flatpak run --command=flatpak-builder-lint org.flatpak.Builder \
-            manifest "build/${APP_ID}.yml" > lint.json || true
+            manifest "build/${APP_ID}.yml" > lint.json 2> lint.err || status=$?
+          echo "linter exit status: ${status}"
           cat lint.json
-          python3 - <<'PY'
+          cat lint.err >&2
+          LINT_STATUS="${status}" python3 - <<'PY'
           import json
+          import os
+          import pathlib
           import sys
 
-          report = json.load(open("lint.json"))
+          raw = pathlib.Path("lint.json").read_text(encoding="utf-8").strip()
+          status = int(os.environ["LINT_STATUS"])
+          if not raw:
+              # A clean manifest gives no report at all. Without a report a
+              # non-zero exit means the linter itself failed (its stderr is
+              # printed above), and that must not pass for clean.
+              if status != 0:
+                  print(f"The linter failed (exit {status}) without a report.", file=sys.stderr)
+                  sys.exit(1)
+              report = {}
+          else:
+              report = json.loads(raw)
           expected = {"finish-args-host-filesystem-access"}
 
           unexpected = sorted(set(report.get("errors", [])) - expected)

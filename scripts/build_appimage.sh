@@ -36,8 +36,21 @@ python scripts/appimage_pins.py \
     "${WORK}/recipe/requirements.txt" "${WHEEL}" "${PYTHON_VERSION}"
 
 echo "==> Assembling AppDir (python ${PYTHON_VERSION})"
-( cd "${WORK}" && python -m python_appimage build app \
-    --no-packaging -p "${PYTHON_VERSION}" recipe )
+# python-appimage downloads its Python AppImage from GitHub releases, which
+# answers with the odd 502 or 504. Retry a few times before giving up.
+for attempt in 1 2 3 4; do
+    if ( cd "${WORK}" && python -m python_appimage build app \
+        --no-packaging -p "${PYTHON_VERSION}" recipe ); then
+        break
+    fi
+    if [ "${attempt}" -eq 4 ]; then
+        echo "Assembling the AppDir failed ${attempt} times" >&2
+        exit 1
+    fi
+    echo "==> Attempt ${attempt} failed, retrying in $((attempt * 15)) s" >&2
+    find "${WORK}" -mindepth 1 -maxdepth 1 ! -name recipe -exec rm -rf {} +
+    sleep $((attempt * 15))
+done
 
 APPDIR="$(find "${WORK}" -maxdepth 1 -type d -name '*-*' ! -name recipe | head -1)"
 if [ -z "${APPDIR}" ]; then
