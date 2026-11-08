@@ -74,7 +74,6 @@ module = [
     "tsm.wow.*",
     "tsm.core.services.backup",
     "tsm.core.services.wow_detector",
-    "tsm.core.services.addon_writer",
     "tsm.core.services.updater",
     "tsm.app",
 ]

@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import re
+from concurrent.futures import Future
+from typing import Any
 
 from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
@@ -58,7 +60,7 @@ class LoginView(QDialog):
         super().__init__(parent)
         self._app_vm = app_vm
         self._auth_service = auth_service
-        self._future = None
+        self._future: Future[Any] | None = None
         self._cancelled = False
         self._url_ready.connect(self._show_url)
         self._setup_ui()
