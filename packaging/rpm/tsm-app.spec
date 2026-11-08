@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        2.0.0
+Version:        2.0.1
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,9 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sun Nov 08 2026 exceptionptr <https://github.com/exceptionptr> - 2.0.1-1
+- Fix: the delete icon in the Realm Data list was squished
+
 * Sun Nov 08 2026 exceptionptr <https://github.com/exceptionptr> - 2.0.0-1
 - Change: moved to the backend of the official TSM Desktop App 1.0.9
   (Keycloak sign-in, Bearer token REST services, push socket)

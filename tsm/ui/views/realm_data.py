@@ -125,7 +125,7 @@ class RealmDataView(QWidget):
         # One header for all groups, outside the scroll area so it stays visible.
         self._header = SharedTableHeader(
             ["Region/Realm", "AuctionDB", "Last Updated", ""],
-            [STRETCH, 120, CONTENTS, 22],
+            [STRETCH, 120, CONTENTS, 28],
             width_source=content,
         )
         vbox.addWidget(self._header)

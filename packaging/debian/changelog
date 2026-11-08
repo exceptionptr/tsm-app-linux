@@ -1,3 +1,9 @@
+tsm-app (2.0.1-1) stable; urgency=medium
+
+  * Fix: the delete icon in the Realm Data list was squished.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Sun, 08 Nov 2026 12:00:00 +0000
+
 tsm-app (2.0.0-1) stable; urgency=medium
 
   * Change: moved to the backend of the official TSM Desktop App 1.0.9. TSM
