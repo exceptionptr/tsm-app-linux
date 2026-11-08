@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        1.1.16
+Version:        2.0.0
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,18 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Sun Nov 08 2026 exceptionptr <https://github.com/exceptionptr> - 2.0.0-1
+- Change: moved to the backend of the official TSM Desktop App 1.0.9
+  (Keycloak sign-in, Bearer token REST services, push socket)
+- Change: sign-in happens in the system browser (OIDC with PKCE); passwords are
+  no longer stored and everyone has to sign in once more
+- Change: auction data is pushed by the server instead of polled
+- Change: followed realms live on the TSM account, shared with the official app
+- Change: AppData.lua uses the official client's current format; addon updates
+  arrive with the server's release announcement
+- Add: World of Warcraft Forever, Hardcore/SoD/Fresh region data and more
+  install locations (Wine prefixes under ~/Games, Bottles, Flatpak Steam Proton)
+- Remove: username and password fields and the periodic refresh jobs
 * Wed Sep 24 2026 exceptionptr <https://github.com/exceptionptr> - 1.1.16-1
 - Fix: the app cancelled reboot and shutdown on KDE Plasma. Closing to the tray
   refused the session manager's request to close, which cancels the logout for

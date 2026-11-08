@@ -1,3 +1,28 @@
+tsm-app (2.0.0-1) stable; urgency=medium
+
+  * Change: moved to the backend of the official TSM Desktop App 1.0.9. TSM
+    replaced the old HMAC-signed app-server API with Keycloak sign-in, Bearer
+    token REST services and a push socket.
+  * Change: sign-in happens in the system browser (OIDC with PKCE), so
+    two-factor login works. Passwords are no longer handled or stored; the
+    keyring keeps only an offline refresh token. Everyone signed in with an
+    earlier version has to sign in once more.
+  * Change: auction data is pushed by the server instead of polled every five
+    minutes, so AppData.lua is as fresh as with the official app.
+  * Change: followed realms live on the TSM account and are shared with the
+    official app; the tier limit (10 free, 25 gold, unlimited platinum) applies.
+  * Change: AppData.lua is written in the official client's current format, and
+    addon updates announced by the server are installed into every game version
+    that already has the addon.
+  * Add: World of Warcraft Forever support, region data for Hardcore, Season of
+    Discovery and Fresh realms, more install locations (every Wine prefix under
+    ~/Games, Bottles, Proton prefixes of Flatpak Steam) and the socket state in
+    the status bar.
+  * Remove: the username and password fields and the periodic auction and auth
+    refresh jobs.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Sun, 08 Nov 2026 12:00:00 +0000
+
 tsm-app (1.1.16-1) stable; urgency=medium
 
   * Fix: the app cancelled reboot and shutdown on KDE Plasma. Closing the window

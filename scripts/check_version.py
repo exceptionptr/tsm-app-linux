@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check that every hardcoded version matches the one being released.
 
-    python scripts/check_version.py 1.1.16      # or v1.1.16
+    python scripts/check_version.py 2.0.0      # or v2.0.0
 
 The app takes its own version from the git tag through hatch-vcs, so the wheel,
 deb, rpm and AppImage are always right. Several files cannot read the tag and

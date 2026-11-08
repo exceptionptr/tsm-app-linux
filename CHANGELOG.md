@@ -4,7 +4,10 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
-## [Unreleased]
+## [2.0.0] - 2026-11-08
+
+A new major version: TSM retired the backend every earlier release talked to.
+Everyone has to sign in once more, now through the browser.
 
 ### Changed
 

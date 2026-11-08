@@ -4,8 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to publish (e.g. 1.0.6)"
+        description: "Version to publish (e.g. 2.0.0)"
         required: true
+  # Called by the release workflow with the tag, so a leading v is stripped.
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
 
 jobs:
   publish-aur:
@@ -18,7 +24,8 @@ jobs:
       - name: Resolve target version
         id: resolve
         run: |
-          echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          VERSION="${{ inputs.version }}"
+          echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
 
       - name: Check AUR version
         id: check
