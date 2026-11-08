@@ -18,7 +18,6 @@ from PySide6.QtGui import QIcon, QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QMessageBox,
     QScrollArea,
@@ -31,6 +30,7 @@ from tsm.api.types import AddonVersionInfo
 from tsm.core.services.updater import find_addons_dir, norm_version, toc_version
 from tsm.ui.components.collapsible_group import CollapsibleGroup
 from tsm.ui.components.hover_button import HoverIconButton
+from tsm.ui.components.shared_header import CONTENTS, STRETCH, SharedTableHeader
 from tsm.ui.views._utils import set_table_cell, table_content_height
 from tsm.wow.game_versions import GAME_VERSIONS
 
@@ -150,29 +150,24 @@ class _AddonGroupWidget(QWidget):
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
 
+        # Column titles and widths come from the view's shared header.
         self._table = QTableWidget(0, 5)
-        self._table.setHorizontalHeaderLabels(["Name", "Latest", "Installed", "Status", ""])
         self._table.setAlternatingRowColors(True)
         self._table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.setShowGrid(False)
         self._table.verticalHeader().setVisible(False)
         self._table.verticalHeader().setDefaultSectionSize(28)
-        hdr = self._table.horizontalHeader()
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
-        self._table.setColumnWidth(3, 140)
-        self._table.setColumnWidth(4, 28)
-        hdr.setMinimumSectionSize(16)
         self._table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         label = _SUFFIX_LABEL.get(self._suffix, self._suffix.lstrip("-"))
         self._group = CollapsibleGroup(label, self._table)
         vbox.addWidget(self._group)
+
+    @property
+    def table(self) -> QTableWidget:
+        return self._table
 
     # ── Data update ───────────────────────────────────────────────────
 
@@ -275,9 +270,18 @@ class AddonVersionsView(QWidget):
         content_vbox.setContentsMargins(0, 0, 0, 0)
         content_vbox.setSpacing(0)
 
+        # One header for all groups, outside the scroll area so it stays visible.
+        self._header = SharedTableHeader(
+            ["Name", "Latest", "Installed", "Status", ""],
+            [STRETCH, CONTENTS, CONTENTS, 140, 28],
+            width_source=content,
+        )
+        vbox.addWidget(self._header)
+
         self._groups: dict[str, _AddonGroupWidget] = {}
         for suffix in _SUFFIXES:
             grp = _AddonGroupWidget(suffix)
+            self._header.attach(grp.table)
             self._groups[suffix] = grp
             content_vbox.addWidget(grp)
 
@@ -336,6 +340,8 @@ class AddonVersionsView(QWidget):
                 grp.set_wow_installed(None)
             else:
                 grp.set_wow_installed(suffix in wow_installed_suffixes)
+        # "Latest" and "Installed" size to their widest entry across all groups.
+        self._header.schedule_sync()
 
     def _install_or_update_addon(self, name: str, version: str) -> None:
         """Download and install the addon via AsyncBridge, then refresh the view."""

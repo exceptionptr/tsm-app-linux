@@ -12,7 +12,7 @@ to a new Python version:
     python scripts/flatpak_gen_deps.py
 
 PySide6 is swapped for PySide6-Essentials: the app only imports QtCore, QtGui,
-QtNetwork, QtSvg and QtWidgets, so the Addons half of PySide6 would add a few
+QtSvg and QtWidgets, so the Addons half of PySide6 would add a few
 hundred megabytes to the bundle for nothing.
 """
 

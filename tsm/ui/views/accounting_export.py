@@ -11,6 +11,7 @@ from __future__ import annotations
 import csv
 import logging
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Qt, QTimer, Signal
@@ -31,6 +32,11 @@ from tsm.core.services.icon_cache import IconCache
 from tsm.core.services.item_cache import ItemCache
 from tsm.storage.config_store import CONFIG_DIR
 from tsm.ui.components.wow_tooltip import WowItemTooltip
+from tsm.ui.views._accounting_selection import (
+    load_selection,
+    pick_index,
+    save_selection,
+)
 from tsm.ui.views._accounting_stats import (
     ALL_CHARACTERS,
     GoldPoint,
@@ -70,6 +76,7 @@ _FINANCIAL_KEYS = ("Sales", "Purchases", "Income", "Expenses")
 _SUFFIXES = SUFFIX_BY_FOLDER
 
 _LAST_DIR_FILE = CONFIG_DIR / "last_export_dir"
+_SELECTION_FILE = CONFIG_DIR / "accounting_selection.json"
 _TOOLTIP_DELAY_MS = 500
 
 
@@ -149,6 +156,9 @@ class AccountingExportView(QWidget):
         self._accounts: dict[str, list[str]] = {}
         self._range_days: int | None = None  # chart range, None means all
         self._last_stats = None
+        # What the user last picked. Only user changes update it, so a refill that
+        # has to fall back (account not found yet) does not overwrite the choice.
+        self._wanted = load_selection(_SELECTION_FILE)
 
         self._item_cache = ItemCache()
         self._icon_cache = IconCache()
@@ -214,7 +224,7 @@ class AccountingExportView(QWidget):
         row.addWidget(QLabel("Realm:"))
         self._realm_combo = QComboBox()
         self._realm_combo.setMinimumWidth(160)
-        self._realm_combo.currentTextChanged.connect(self._on_filter_changed)
+        self._realm_combo.currentTextChanged.connect(self._on_realm_changed)
         row.addWidget(self._realm_combo)
         row.addStretch()
 
@@ -222,7 +232,7 @@ class AccountingExportView(QWidget):
         self._character_combo = QComboBox()
         self._character_combo.setMinimumWidth(150)
         self._character_combo.addItem(ALL_CHARACTERS)
-        self._character_combo.currentTextChanged.connect(self._on_filter_changed)
+        self._character_combo.currentTextChanged.connect(self._on_character_changed)
         row.addWidget(self._character_combo)
         return row
 
@@ -242,14 +252,39 @@ class AccountingExportView(QWidget):
         self.populate()
 
     def populate(self) -> None:
+        """Rescan the accounts and refill the selectors, keeping the user's pick.
+
+        Runs after every realm data update, so it must not reset the selection
+        to the first account (issue #25).
+        """
         self._accounts = scan_tsm_accounts(self._detector)
-        populate_combo(self._account_combo, sorted(self._accounts))
-        self._on_account_changed(self._account_combo.currentText())
+        accounts = sorted(self._accounts)
+        populate_combo(self._account_combo, accounts)
+        _select(self._account_combo, pick_index(accounts, self._wanted.account))
+        self._fill_realms()
 
     # ── Slots ────────────────────────────────────────────────────────
 
     def _on_account_changed(self, account: str) -> None:
-        populate_combo(self._realm_combo, self._accounts.get(account, []))
+        self._remember(account=account)
+        self._fill_realms()
+
+    def _on_realm_changed(self, realm: str) -> None:
+        self._remember(realm=realm)
+        self._on_filter_changed()
+
+    def _on_character_changed(self, character: str) -> None:
+        self._remember(character=character)
+        self._on_filter_changed()
+
+    def _remember(self, **changes: str) -> None:
+        self._wanted = replace(self._wanted, **changes)
+        save_selection(_SELECTION_FILE, self._wanted)
+
+    def _fill_realms(self) -> None:
+        realms = self._accounts.get(self._account_combo.currentText(), [])
+        populate_combo(self._realm_combo, realms)
+        _select(self._realm_combo, pick_index(realms, self._wanted.realm))
         self._sv_cache = {}
         self._sv_cache_key = ""
         self._parsed = {}
@@ -309,16 +344,10 @@ class AccountingExportView(QWidget):
         logger.debug("Loaded SV for %s / %s (%d keys)", account, realm, len(self._sv_cache))
 
     def _populate_characters(self, db: dict, realm: str) -> None:
-        """Refill the character combo, keeping the selection when it still exists."""
-        previous = self._character_combo.currentText()
-        self._character_combo.blockSignals(True)
-        self._character_combo.clear()
-        self._character_combo.addItem(ALL_CHARACTERS)
-        for name in characters_for_realm(db, realm):
-            self._character_combo.addItem(name)
-        index = self._character_combo.findText(previous)
-        self._character_combo.setCurrentIndex(max(0, index))
-        self._character_combo.blockSignals(False)
+        """Refill the character combo, keeping the user's pick when it still exists."""
+        names = [ALL_CHARACTERS, *characters_for_realm(db, realm)]
+        populate_combo(self._character_combo, names)
+        _select(self._character_combo, pick_index(names, self._wanted.character))
 
     def _get_parsed(self, label: str) -> tuple[list[str], list[list[str]]]:
         if label in self._parsed:
@@ -490,6 +519,13 @@ class AccountingExportView(QWidget):
 
 
 # ── Module-level helpers ──────────────────────────────────────────────────────
+
+
+def _select(combo: QComboBox, index: int) -> None:
+    """Set the current index without firing the change signals."""
+    combo.blockSignals(True)
+    combo.setCurrentIndex(index)
+    combo.blockSignals(False)
 
 
 def _get_wow_root(detector) -> Path | None:

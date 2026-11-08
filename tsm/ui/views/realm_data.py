@@ -11,7 +11,6 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QMessageBox,
     QPushButton,
@@ -23,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from tsm.ui.components.collapsible_group import CollapsibleGroup
 from tsm.ui.components.hover_button import HoverIconButton
+from tsm.ui.components.shared_header import CONTENTS, STRETCH, SharedTableHeader
 from tsm.ui.viewmodels.realm_vm import RealmSummary, RealmViewModel
 from tsm.ui.views._utils import populate_combo, set_table_cell, table_content_height
 from tsm.ui.views.realm_grouping import (
@@ -122,11 +122,20 @@ class RealmDataView(QWidget):
         content_vbox.setContentsMargins(0, 0, 0, 0)
         content_vbox.setSpacing(0)
 
+        # One header for all groups, outside the scroll area so it stays visible.
+        self._header = SharedTableHeader(
+            ["Region/Realm", "AuctionDB", "Last Updated", ""],
+            [STRETCH, 120, CONTENTS, 22],
+            width_source=content,
+        )
+        vbox.addWidget(self._header)
+
         # One group per game version, created once so collapse state survives a sync.
         self._groups: dict[str, CollapsibleGroup] = {}
         self._tables: dict[str, QTableWidget] = {}
         for game_version in GV_ORDER:
             table = self._make_table()
+            self._header.attach(table)
             group = CollapsibleGroup(GV_LABELS.get(game_version, game_version), table)
             group.setVisible(False)
             self._tables[game_version] = table
@@ -140,21 +149,13 @@ class RealmDataView(QWidget):
         vbox.addWidget(self._build_bottom())
 
     def _make_table(self) -> QTableWidget:
+        # Column titles and widths come from the shared header (see _setup_ui).
         table = QTableWidget(0, 4)
-        table.setHorizontalHeaderLabels(["Region/Realm", "AuctionDB", "Last Updated", ""])
         table.setAlternatingRowColors(True)
         table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
         table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         table.setShowGrid(False)
         table.verticalHeader().setVisible(False)
-        hdr = table.horizontalHeader()
-        hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
-        hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
-        table.setColumnWidth(1, 120)
-        table.setColumnWidth(3, 22)
-        hdr.setMinimumSectionSize(16)
         table.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         return table
@@ -238,6 +239,8 @@ class RealmDataView(QWidget):
             height = table_content_height(self._tables[game_version], len(rows))
             self._tables[game_version].setFixedHeight(height)
             group.set_content_height(height)
+        # "Last Updated" sizes to its widest entry across all groups.
+        self._header.schedule_sync()
 
     def _fill_table(self, table: QTableWidget, rows: list[RealmRow]) -> None:
         table.setRowCount(len(rows))
