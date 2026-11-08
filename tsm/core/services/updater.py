@@ -52,7 +52,7 @@ def split_suffix(name: str) -> tuple[str, str]:
     return name, "_retail_"
 
 
-def _norm(version: str) -> str:
+def norm_version(version: str) -> str:
     v = version.strip()
     return v[1:] if v[:1] in ("v", "V") else v
 
@@ -159,7 +159,7 @@ class UpdateService:
         vtype, installed = toc_version(addon_dir)
         if vtype == 2:
             return False
-        return _norm(installed) != _norm(version)
+        return norm_version(installed) != norm_version(version)
 
     async def _install(self, rel: AddonRelease, addons_dirs: list[Path]) -> bool:
         assert self._client is not None

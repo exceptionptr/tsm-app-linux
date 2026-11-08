@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from tsm.api.types import AddonVersionInfo
-from tsm.core.services.updater import find_addons_dir, toc_version
+from tsm.core.services.updater import find_addons_dir, norm_version, toc_version
 from tsm.ui.components.collapsible_group import CollapsibleGroup
 from tsm.ui.components.hover_button import HoverIconButton
 from tsm.ui.views._utils import set_table_cell, table_content_height
@@ -207,7 +207,7 @@ class _AddonGroupWidget(QWidget):
                     if on_install is not None:
                         btn.clicked.connect(lambda _, n=name, v=latest: on_install(n, v))
                     self._table.setCellWidget(row, 4, btn)
-            elif version_type != 2 and latest and inst_ver != latest:
+            elif version_type != 2 and latest and norm_version(inst_ver) != norm_version(latest):
                 installed_count += 1
                 set_table_cell(self._table, row, 2, inst_ver)
                 self._table.setCellWidget(row, 3, _make_status_cell("Update available", _AMBER))
