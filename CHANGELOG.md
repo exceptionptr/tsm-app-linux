@@ -4,6 +4,15 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [2.0.1] - 2026-11-08
+
+### Fixed
+
+- The delete icon in the Realm Data list was squished. The action column is now
+  as wide as the one in Addon Versions.
+
+---
+
 ## [2.0.0] - 2026-11-08
 
 A new major version: TSM retired the backend every earlier release talked to.
