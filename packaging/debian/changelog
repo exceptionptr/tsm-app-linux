@@ -1,3 +1,10 @@
+tsm-app (2.0.2-1) stable; urgency=medium
+
+  * Fix: the Accounting tab was empty on WoW Forever. Realm names now come from
+    TSM's scope keys instead of the WTF realm folder.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Mon, 09 Nov 2026 12:00:00 +0000
+
 tsm-app (2.0.1-1) stable; urgency=medium
 
   * Fix: the delete icon in the Realm Data list was squished.

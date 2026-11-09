@@ -6,7 +6,7 @@
 #
 # Before opening the pull request, fill in the hashes:
 #   nix-prefetch-url --unpack \
-#     https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v2.0.1.tar.gz
+#     https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v2.0.2.tar.gz
 #
 # APScheduler 4 is still a pre-release, so nixpkgs has 3.x. The app uses the 4.x
 # AsyncScheduler API, so either apscheduler_4 lands in nixpkgs first or this
@@ -47,7 +47,7 @@ let
 in
 python3Packages.buildPythonApplication rec {
   pname = "tsm-app";
-  version = "2.0.1";
+  version = "2.0.2";
   pyproject = true;
 
   src = fetchFromGitHub {
