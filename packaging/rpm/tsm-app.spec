@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        2.0.1
+Version:        2.0.2
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,10 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Mon Nov 09 2026 exceptionptr <https://github.com/exceptionptr> - 2.0.2-1
+- Fix: the Accounting tab was empty on WoW Forever; realm names now come from
+  TSM's scope keys
+
 * Sun Nov 08 2026 exceptionptr <https://github.com/exceptionptr> - 2.0.1-1
 - Fix: the delete icon in the Realm Data list was squished
 
