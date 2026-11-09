@@ -236,9 +236,7 @@ class GoldChart(QWidget):
             self._clear_hover()
             return
         target = t_min + (x - rect.left()) / rect.width() * (t_max - t_min)
-        nearest = min(
-            range(len(self._points)), key=lambda i: abs(self._points[i][0] - target)
-        )
+        nearest = min(range(len(self._points)), key=lambda i: abs(self._points[i][0] - target))
         if nearest != self._hover:
             self._hover = nearest
             self.update()

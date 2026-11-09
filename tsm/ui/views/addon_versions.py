@@ -466,4 +466,3 @@ class AddonVersionsView(QWidget):
         except Exception:
             logger.debug("Could not detect addon versions", exc_info=True)
         return result
-

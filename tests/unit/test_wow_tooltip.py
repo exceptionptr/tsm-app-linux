@@ -86,9 +86,9 @@ def test_strips_leading_trailing_br():
 def test_strips_class_id_href_attributes():
     html = '<span class="q2" id="item-name" href="/foo">Green</span>'
     result = _wowhead_to_qt(html)
-    assert 'class=' not in result
-    assert 'id=' not in result
-    assert 'href=' not in result
+    assert "class=" not in result
+    assert "id=" not in result
+    assert "href=" not in result
 
 
 def test_empty_input():

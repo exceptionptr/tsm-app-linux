@@ -43,9 +43,7 @@ def _parse_tsm_csv(csv_string: str) -> tuple[list[str], list[list[str]]]:
     return all_rows[0], all_rows[1:]
 
 
-def _to_unified_rows(
-    raw_rows: list[list[str]], headers: list[str], label: str
-) -> list[dict]:
+def _to_unified_rows(raw_rows: list[list[str]], headers: list[str], label: str) -> list[dict]:
     """Convert raw CSV rows to unified dicts with label/item/qty/copper/timestamp."""
     hl = [h.lower().strip() for h in headers]
     t_idx = _find_col(hl, _TIME_COLS)

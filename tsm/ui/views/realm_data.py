@@ -42,11 +42,11 @@ _YELLOW = "#ffc107"
 _RED = "#f44336"
 
 # Realm data (AUCTIONDB_NON_COMMODITY_DATA) updates ~hourly
-_REALM_GREEN = 2 * 3600   # < 2h  -> green
+_REALM_GREEN = 2 * 3600  # < 2h  -> green
 _REALM_YELLOW = 6 * 3600  # < 6h  -> yellow, else red
 
 # Region data (AUCTIONDB_REGION_STAT) updates ~daily (MAX_DATA_AGE = 86400)
-_REGION_GREEN = 26 * 3600   # < 26h -> green
+_REGION_GREEN = 26 * 3600  # < 26h -> green
 _REGION_YELLOW = 50 * 3600  # < 50h -> yellow, else red
 
 
@@ -221,8 +221,7 @@ class RealmDataView(QWidget):
 
     def _refresh(self) -> None:
         grouped: dict[str, list[RealmRow]] = {
-            game_version: rows
-            for game_version, _label, rows in group_summaries(self._vm.summaries)
+            game_version: rows for game_version, _label, rows in group_summaries(self._vm.summaries)
         }
         labels = self._vm.gv_labels
 
@@ -332,11 +331,7 @@ class RealmDataView(QWidget):
 
     def _on_gv_changed(self, _: int) -> None:
         gv_label = self._gv_combo.currentText()
-        regions = (
-            sorted(self._realm_tree.get(gv_label, {}).keys())
-            if self._realm_tree
-            else []
-        )
+        regions = sorted(self._realm_tree.get(gv_label, {}).keys()) if self._realm_tree else []
         populate_combo(self._region_combo, regions)
         self._on_region_changed(0)
 

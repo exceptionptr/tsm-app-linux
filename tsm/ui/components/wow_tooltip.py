@@ -1,4 +1,5 @@
 """WoW-style item tooltip popup widget."""
+
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
@@ -32,9 +33,7 @@ class WowItemTooltip(QWidget):
         self._label.setWordWrap(True)
         self._label.setMaximumWidth(320)
         self._label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self._label.setStyleSheet(
-            "background: transparent; color: #ffffff; font-size: 12px;"
-        )
+        self._label.setStyleSheet("background: transparent; color: #ffffff; font-size: 12px;")
         layout.addWidget(self._label)
 
     def paintEvent(self, _event: object) -> None:
@@ -44,9 +43,7 @@ class WowItemTooltip(QWidget):
         painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
         painter.end()
 
-    def show_for(
-        self, tooltip_html: str, quality: int, global_x: int, global_y: int
-    ) -> None:
+    def show_for(self, tooltip_html: str, quality: int, global_x: int, global_y: int) -> None:
         self._border_color = QColor(_BORDER_COLORS.get(quality, "#9d9d9d"))
         self._label.setText(_wowhead_to_qt(tooltip_html))
         self.adjustSize()
@@ -55,6 +52,7 @@ class WowItemTooltip(QWidget):
         y = global_y + 14
 
         from PySide6.QtCore import QPoint
+
         screen = QApplication.screenAt(QPoint(global_x, global_y))
         if screen:
             sg = screen.availableGeometry()

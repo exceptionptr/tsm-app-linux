@@ -66,9 +66,7 @@ class IconCache:
 
         for slug in slugs:
             try:
-                req = urllib.request.Request(
-                    _ICON_URL.format(slug), headers={"User-Agent": _UA}
-                )
+                req = urllib.request.Request(_ICON_URL.format(slug), headers={"User-Agent": _UA})
                 with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
                     data = resp.read()
                 if not data:

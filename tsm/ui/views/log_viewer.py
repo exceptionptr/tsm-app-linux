@@ -150,9 +150,7 @@ class LogViewerWindow(QDialog):
             fg = _FG.get(record.levelno)
             for col, item in enumerate(items):
                 item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
-                item.setTextAlignment(
-                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop
-                )
+                item.setTextAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
                 if bg:
                     item.setBackground(QColor(bg))
                 if fg:
@@ -176,4 +174,5 @@ class LogViewerWindow(QDialog):
         QGuiApplication.clipboard().setText(text)
         self._copy_btn.setText("Copied!")
         from PySide6.QtCore import QTimer
+
         QTimer.singleShot(2000, lambda: self._copy_btn.setText("Copy to Clipboard"))

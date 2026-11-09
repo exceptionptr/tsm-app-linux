@@ -75,9 +75,11 @@ async def test_browser_login_round_trip():
     form = call.kwargs["data"]
     assert form["grant_type"] == "authorization_code"
     assert form["code"] == "abc"
-    challenge = base64.urlsafe_b64encode(
-        hashlib.sha256(form["code_verifier"].encode()).digest()
-    ).rstrip(b"=").decode()
+    challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(form["code_verifier"].encode()).digest())
+        .rstrip(b"=")
+        .decode()
+    )
     assert challenge == seen["code_challenge"]
     assert "Signed in" in seen["page"]
 

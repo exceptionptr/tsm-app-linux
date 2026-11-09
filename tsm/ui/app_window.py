@@ -184,6 +184,7 @@ class AppWindow(QMainWindow):
         cfg = self._settings_vm.config
         if cfg.wow_path and Path(cfg.wow_path).exists():
             from tsm.core.models.config import WoWInstall
+
             self._addon_service.set_installs([WoWInstall(path=cfg.wow_path)])
             logger.info("Settings saved: pushed WoW path to detector: %s", cfg.wow_path)
         self._update_status()
@@ -257,6 +258,7 @@ class AppWindow(QMainWindow):
         installs = list(self._addon_service.installs) if self._addon_service is not None else []
         if not installs and self._settings_vm.config.wow_path:
             from tsm.core.models.config import WoWInstall
+
             installs = [WoWInstall(path=self._settings_vm.config.wow_path)]
         has_wow = bool(installs)
         self._set_wow_tabs_enabled(has_wow)
@@ -266,6 +268,7 @@ class AppWindow(QMainWindow):
         missing_gv = self._realm_vm.apphelper_missing_gv
         if missing_gv:
             from tsm.wow.utils import apphelper_addon_name
+
             names = ", ".join(apphelper_addon_name(gv) for gv in missing_gv)
             self._app_vm.set_status(f"⚠ No {names} installed")
             return

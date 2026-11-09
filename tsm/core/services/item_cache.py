@@ -1,4 +1,5 @@
 """Persistent cache for WoW item data fetched from the Wowhead tooltip API."""
+
 from __future__ import annotations
 
 import json
@@ -100,8 +101,6 @@ class ItemCache:
             _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             with self._lock:
                 data_copy = dict(self._data)
-            _CACHE_FILE.write_text(
-                json.dumps(data_copy, ensure_ascii=False), encoding="utf-8"
-            )
+            _CACHE_FILE.write_text(json.dumps(data_copy, ensure_ascii=False), encoding="utf-8")
         except Exception:
             logger.warning("Could not save item cache")

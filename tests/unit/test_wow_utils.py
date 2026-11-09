@@ -41,9 +41,7 @@ def test_normalize_wow_base_anniversary():
 
 def test_addon_dir():
     base = Path("/home/user/Games/wow")
-    assert addon_dir(base, "_retail_") == Path(
-        "/home/user/Games/wow/_retail_/Interface/AddOns"
-    )
+    assert addon_dir(base, "_retail_") == Path("/home/user/Games/wow/_retail_/Interface/AddOns")
 
 
 def test_apphelper_dir_retail():
@@ -85,17 +83,14 @@ def test_appdata_lua_path_retail():
 def test_appdata_lua_path_classic_era():
     base = Path("/home/user/Games/wow")
     expected = Path(
-        "/home/user/Games/wow/_classic_era_/Interface/AddOns"
-        "/TradeSkillMaster_AppHelper/AppData.lua"
+        "/home/user/Games/wow/_classic_era_/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua"
     )
     assert appdata_lua_path(base, "_classic_era_") == expected
 
 
 def test_wtf_accounts_dir():
     base = Path("/home/user/Games/wow")
-    assert wtf_accounts_dir(base, "_retail_") == Path(
-        "/home/user/Games/wow/_retail_/WTF/Account"
-    )
+    assert wtf_accounts_dir(base, "_retail_") == Path("/home/user/Games/wow/_retail_/WTF/Account")
 
 
 def test_installed_versions_returns_existing(tmp_path):
