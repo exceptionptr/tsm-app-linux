@@ -712,9 +712,10 @@ class AuctionDataService:
             gv_name = region.get("gameVersion", "")
             folder = gvs.folder_for_region(gv_name)
             gv = gvs.BY_FOLDER.get(folder or "")
-            region_key = gvs.region_key(gv_name, region.get("regionPrefix", "")) or region.get(
-                "regionPrefix", ""
-            ).upper()
+            region_key = (
+                gvs.region_key(gv_name, region.get("regionPrefix", ""))
+                or region.get("regionPrefix", "").upper()
+            )
             ah_type = ur["auctionHouseType"].upper()
             key = gvs.realm_key(realm["localizedName"], ah_type)
             sk = ("realm", realm["realmId"], ah_type)

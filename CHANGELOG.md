@@ -4,6 +4,15 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [2.0.2] - 2026-11-09
+
+### Fixed
+
+- The Accounting tab was empty on WoW Forever. Realm names now come from TSM's
+  own scope keys instead of the WTF realm folder, which Forever names by number.
+
+---
+
 ## [2.0.1] - 2026-11-08
 
 ### Fixed

@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 
 _QUALITY_COLORS: dict[str, str] = {
-    "q":  "#ffffff",  # uncolored / common
+    "q": "#ffffff",  # uncolored / common
     "q0": "#9d9d9d",  # poor
     "q1": "#ffffff",  # common
     "q2": "#1eff00",  # uncommon
@@ -45,6 +45,7 @@ def _wowhead_to_qt(html: str) -> str:
         if "copper" in cls:
             return f'<span style="color:#cd7f32">{val}c</span>'
         return str(val)
+
     html = re.sub(r'<span\s+class="(money\w+)">([^<]*)</span>', _money, html)
 
     # 3. Adjacent top-level tables → line break between sections
@@ -80,10 +81,11 @@ def _wowhead_to_qt(html: str) -> str:
     # 9. Quality class attributes → inline color styles
     #    Handles attribute order like <span id="..." class="q2">
     def _colorize(m: re.Match) -> str:
-        tag  = m.group(1)
-        cls  = re.search(r'class="(q\w*)"', m.group(0))
+        tag = m.group(1)
+        cls = re.search(r'class="(q\w*)"', m.group(0))
         color = _QUALITY_COLORS.get(cls.group(1) if cls else "", "#ffffff")
         return f'<{tag} style="color:{color}">'
+
     html = re.sub(r"<(b|span)\b[^>]*\bclass=\"q\w*\"[^>]*>", _colorize, html, flags=re.IGNORECASE)
 
     # 10. Strip any remaining known attributes

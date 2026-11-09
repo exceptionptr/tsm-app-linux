@@ -44,13 +44,24 @@ def resolve(specs: list[str], python_version: str) -> list[str]:
     with tempfile.TemporaryDirectory() as tmp:
         report = Path(tmp) / "report.json"
         cmd = [
-            sys.executable, "-m", "pip", "install",
-            "--dry-run", "--quiet", "--only-binary", ":all:",
-            "--target", str(Path(tmp) / "unused"),
-            "--report", str(report),
-            "--python-version", python_version,
-            "--implementation", "cp",
-            "--abi", abi,
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--dry-run",
+            "--quiet",
+            "--only-binary",
+            ":all:",
+            "--target",
+            str(Path(tmp) / "unused"),
+            "--report",
+            str(report),
+            "--python-version",
+            python_version,
+            "--implementation",
+            "cp",
+            "--abi",
+            abi,
         ]
         for platform in PLATFORMS:
             cmd += ["--platform", platform]

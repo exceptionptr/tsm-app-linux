@@ -116,10 +116,9 @@ class Tokens:
     @property
     def release_channels(self) -> list[str]:
         """Addon release channels this account may use, "release" always first."""
-        roles = (
-            (self.claims.get("resource_access") or {}).get("app-addon-version", {}).get("roles")
-            or []
-        )
+        roles = (self.claims.get("resource_access") or {}).get("app-addon-version", {}).get(
+            "roles"
+        ) or []
         extra = [r[8:] for r in roles if r.startswith("channel/") and r[8:] not in ("", "release")]
         return ["release", *extra]
 

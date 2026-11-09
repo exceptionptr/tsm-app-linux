@@ -72,9 +72,7 @@ def store_credentials(username: str, refresh_token: str) -> bool:
     try:
         old = _call(lambda: keyring.get_password(SERVICE_NAME, USERNAME_KEY))
         _call(lambda: keyring.set_password(SERVICE_NAME, USERNAME_KEY, username))
-        _call(
-            lambda: keyring.set_password(SERVICE_NAME, REFRESH_PREFIX + username, refresh_token)
-        )
+        _call(lambda: keyring.set_password(SERVICE_NAME, REFRESH_PREFIX + username, refresh_token))
     except Exception:
         logger.exception("Failed to store credentials in keyring")
         return False

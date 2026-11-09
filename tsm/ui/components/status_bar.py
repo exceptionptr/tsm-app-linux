@@ -49,9 +49,7 @@ class TSMStatusBar(QStatusBar):
         self.addWidget(self._update_label, 0)
 
         github_btn = _make_statusbar_button(_GITHUB_ICON, _GITHUB_ICON_HOVER, "View on GitHub")
-        github_btn.clicked.connect(
-            lambda: QDesktopServices.openUrl(QUrl(_GITHUB_URL))
-        )
+        github_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(_GITHUB_URL)))
         self.addPermanentWidget(github_btn)
 
         logs_btn = _make_statusbar_button(_LOGS_ICON, _LOGS_ICON_HOVER, "View session logs")

@@ -18,11 +18,11 @@ from typing import Any
 
 # All known TSM API hostnames
 _HOSTS = [
-    "id.tradeskillmaster.com",        # OIDC auth (always HTTPS - Keycloak)
-    "app-server.tradeskillmaster.com", # v2/auth, v2/realms2, v2/status
-    "realm-data.tradeskillmaster.com", # typical endpointSubdomain
-    "data.tradeskillmaster.com",       # CDN blob downloads
-    "tradeskillmaster.com",            # base domain
+    "id.tradeskillmaster.com",  # OIDC auth (always HTTPS - Keycloak)
+    "app-server.tradeskillmaster.com",  # v2/auth, v2/realms2, v2/status
+    "realm-data.tradeskillmaster.com",  # typical endpointSubdomain
+    "data.tradeskillmaster.com",  # CDN blob downloads
+    "tradeskillmaster.com",  # base domain
 ]
 
 _TIMEOUT = 5

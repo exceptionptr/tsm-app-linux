@@ -41,9 +41,7 @@ def test_normalize_wow_base_anniversary():
 
 def test_addon_dir():
     base = Path("/home/user/Games/wow")
-    assert addon_dir(base, "_retail_") == Path(
-        "/home/user/Games/wow/_retail_/Interface/AddOns"
-    )
+    assert addon_dir(base, "_retail_") == Path("/home/user/Games/wow/_retail_/Interface/AddOns")
 
 
 def test_apphelper_dir_retail():
@@ -85,17 +83,14 @@ def test_appdata_lua_path_retail():
 def test_appdata_lua_path_classic_era():
     base = Path("/home/user/Games/wow")
     expected = Path(
-        "/home/user/Games/wow/_classic_era_/Interface/AddOns"
-        "/TradeSkillMaster_AppHelper/AppData.lua"
+        "/home/user/Games/wow/_classic_era_/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua"
     )
     assert appdata_lua_path(base, "_classic_era_") == expected
 
 
 def test_wtf_accounts_dir():
     base = Path("/home/user/Games/wow")
-    assert wtf_accounts_dir(base, "_retail_") == Path(
-        "/home/user/Games/wow/_retail_/WTF/Account"
-    )
+    assert wtf_accounts_dir(base, "_retail_") == Path("/home/user/Games/wow/_retail_/WTF/Account")
 
 
 def test_installed_versions_returns_existing(tmp_path):
@@ -113,3 +108,16 @@ def test_installed_versions_returns_existing(tmp_path):
 
 def test_installed_versions_empty_when_none(tmp_path):
     assert installed_versions(tmp_path) == []
+
+
+def test_tsm_realm_names_use_tsm_scope_not_folder(tmp_path):
+    # WoW Forever names the WTF realm folder "93"; TSM keys its data by "Normal".
+    from tsm.wow.accounts import tsm_realm_names
+
+    sv = tmp_path / "TradeSkillMaster.lua"
+    sv.write_text(
+        'TradeSkillMasterDB = {\n["_scopeKeys"] = {\n["factionrealm"] = {\n'
+        '"Horde - Normal",\n"Alliance - Normal",\n"Horde - Other Realm",\n},\n},\n}\n'
+    )
+    assert tsm_realm_names(sv) == ["Normal", "Other Realm"]
+    assert tsm_realm_names(tmp_path / "missing.lua") == []

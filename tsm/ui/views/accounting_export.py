@@ -239,9 +239,7 @@ class AccountingExportView(QWidget):
     def _setup_tooltip(self) -> None:
         self._wow_tooltip = WowItemTooltip()
         table = self._dashboard.table
-        self._hover_filter = _ItemHoverFilter(
-            table, self._wow_tooltip, self._item_cache, self
-        )
+        self._hover_filter = _ItemHoverFilter(table, self._wow_tooltip, self._item_cache, self)
         table.viewport().setMouseTracking(True)
         table.viewport().installEventFilter(self._hover_filter)
 
