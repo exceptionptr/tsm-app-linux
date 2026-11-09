@@ -71,7 +71,7 @@ def scan_tsm_accounts(detector) -> dict[str, list[str]]:
                 if not sv.exists():
                     continue
                 acct_key = acct_dir.name + suffix
-                realms = scan_realm_names(acct_dir)
+                realms = tsm_realm_names(sv) or scan_realm_names(acct_dir)
                 if realms:
                     result.setdefault(acct_key, []).extend(realms)
     return result
@@ -129,6 +129,16 @@ def get_active_factionrealms(install: WoWInstall, game_version: str) -> set[tupl
             result.add((region, realm_name))
 
     return result
+
+
+def tsm_realm_names(sv: Path) -> list[str]:
+    """Realm names as TSM keys its data ("Horde - Normal" -> "Normal").
+
+    The WTF realm folder name can differ: WoW Forever names it by number ("93").
+    """
+    from tsm.wow.saved_variables import get_factionrealm_scopes
+
+    return sorted({fr.split(" - ", 1)[-1] for fr in get_factionrealm_scopes(sv)})
 
 
 def scan_realm_names(acct_dir: Path) -> list[str]:
