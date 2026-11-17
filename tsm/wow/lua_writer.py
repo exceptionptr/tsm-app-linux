@@ -1,6 +1,6 @@
 """Read and atomically write TradeSkillMaster_AppHelper/AppData.lua.
 
-Format written by the official 1.0.9 client (exportAddonDataWorker), one line
+Format written by the official 1.0.14 client (exportAddonDataWorker), one line
 per entry, each ending in a meta comment the next run parses back:
 
     select(2, ...).LoadData("TYPE","Key",[[return DATA]]) --<TYPE,Key,time>

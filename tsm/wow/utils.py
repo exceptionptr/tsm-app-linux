@@ -71,7 +71,7 @@ def is_valid_wow_version_dir(path: Path) -> bool:
 
     Accepts either a WoW executable (Wow.exe, WowClassic.exe, or whatever a new
     client calls its own, matched case-insensitively) or WTF/Config.wtf, which
-    is what the official 1.0.9 client checks. Interface/AddOns is not required,
+    is what the official 1.0.14 client checks. Interface/AddOns is not required,
     so a fresh install with no addons yet is still detected.
     """
     if not path.is_dir():

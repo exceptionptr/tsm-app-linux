@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from tsm.api.official import OFFICIAL_APP_VERSION
 from tsm.core.services import auction as auction_mod
 from tsm.core.services.auction import AuctionDataService, RealmLimitReached
 from tsm.wow.lua_writer import AppDataFile
@@ -261,7 +262,7 @@ async def test_app_info_goes_to_every_game_version(tmp_path):
         entry = _appdata(base, folder).entries[0]
         assert (entry.tag, entry.key) == ("APP_INFO", "Global")
         assert 'msg="hello"' in entry.data
-        assert 'version="1.0.9"' in entry.data
+        assert f'version="{OFFICIAL_APP_VERSION}"' in entry.data
 
 
 @pytest.mark.asyncio

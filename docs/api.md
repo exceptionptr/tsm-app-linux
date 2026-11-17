@@ -1,10 +1,11 @@
 # TradeSkillMaster API Reference
 
-The backend as the official TSM Desktop App 1.0.9 (Electron AppImage) talks to
-it. Endpoints and URLs were read from the decompiled client; every response
-shape below was captured live on 2026-11-08 unless noted otherwise. User ids in
-the examples are replaced by placeholders and presigned URL signatures are
-shortened.
+The backend as the official TSM Desktop App 1.0.14 (Electron AppImage) talks to
+it, and how this app speaks to it. Endpoints and URLs were read from the
+decompiled client; response shapes were captured live (first on 2026-11-08, the
+request headers again against 1.0.14) unless noted otherwise. User ids in the
+examples are replaced by placeholders and download signatures are shortened.
+Request headers per channel are described under "Client identity per channel".
 
 This replaced the old HMAC-signed `app-server.tradeskillmaster.com/v2/*` API,
 which this app used up to 1.1.16. That API is documented in the git history
@@ -21,14 +22,61 @@ which this app used up to 1.1.16. That API is documented in the git history
 | `desktop-backend.tradeskillmaster.com` | Game versions, the account's followed realms |
 | `addon-version.tradeskillmaster.com` | Release channels the account may use |
 | `app-backend-sockets.tradeskillmaster.com` | Socket.IO push channel: auction data, addon releases, news |
-| `tradeskillmaster.nyc3.digitaloceanspaces.com` | AuctionDB blobs (presigned URLs from socket events) |
+| `pricing-data.tradeskillmaster.com` | AuctionDB blobs (URLs with a `verify` parameter from socket events, behind Cloudflare) |
 | `tradeskillmaster.nyc3.cdn.digitaloceanspaces.com` | Addon zips (public URLs from the `addon` event) |
 
 The official client also has `.dev` variants of every host for its staging
-build, and uses desktop-backend for features this app does not implement
-(`/backups`, `/sv-snapshots`, `/local-machine-name`, app updates).
+build, and uses desktop-backend for features this app does not use
+(`/backups`, `/sv-snapshots`, `/local-machine-name`, app updates). Client
+methods exist for `/backups` and `/local-machine-name`, but nothing calls them.
 
 Everything is HTTPS with a valid certificate.
+
+---
+
+## Client identity per channel
+
+The official 1.0.14 client is an Electron app that sends requests through four
+different HTTP stacks, and each one has its own `User-Agent` and header set.
+This app copies the set of the stack that sends the same request officially
+(`tsm/api/official.py`, `tsm/api/client.py`, `tsm/api/oidc.py`,
+`tsm/api/socket.py`).
+
+| Channel | Used for | User-Agent | Other headers |
+|---------|----------|------------|---------------|
+| Chromium (renderer fetch) | Keycloak token and refresh | `Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) TradeSkillMaster/1.0.14 Chrome/152.0.7977.130 Electron/44.4.3 Safari/537.36` | `Accept: application/json`, `Content-Type: application/x-www-form-urlencoded;charset=UTF-8`, `Sec-Fetch-Site: cross-site`, `Sec-Fetch-Mode: cors`, `Sec-Fetch-Dest: empty`, `Accept-Language: en-US`, `Accept-Encoding: gzip, deflate, br, zstd`. No `Origin`, no `Authorization` |
+| node-fetch | realm-api, game-versions, user-realms, channels, group-sends, backups, addon zip | `node-fetch` | `Accept: */*`, `Accept-Encoding: gzip, deflate, br`, `Authorization: Bearer <token>` (not on the addon zip). POSTs add `Content-Type: application/json`. No `Accept-Language` |
+| undici (Node global fetch) | AuctionDB downloads, local-machine-name, Keycloak revoke | `node` | `Accept: */*`, `Accept-Language: *`, `Sec-Fetch-Mode: cors`, `Accept-Encoding: br, gzip, deflate`; `Authorization: Bearer` only on local-machine-name. The official client adds Sentry `sentry-trace` and `baggage` here |
+| node-XMLHttpRequest | Socket.IO long polling | `node-XMLHttpRequest` | `Accept: */*`, `Authorization: <raw token>`; the POST adds `Content-Type: text/plain;charset=UTF-8` |
+| `ws` | Socket.IO websocket upgrade | none | `Authorization: <raw token>`, `Sec-WebSocket-*`, `permessage-deflate` offered |
+
+The Keycloak login page itself is opened in the user's own browser, so the
+authorize request carries that browser's headers (the official client uses its
+Chromium window and the Chromium User-Agent above).
+
+Known differences from the official client, which a server can still observe:
+
+- **Redirect port.** The official `redirect_uri` is `http://localhost/auth/callback`
+  (port 80, intercepted inside the Electron window). A normal process cannot
+  bind port 80 and an external browser cannot be intercepted, so this app uses
+  `http://localhost:<ephemeral port>/auth/callback`. The token request repeats
+  the same value.
+- **Header order and casing, TLS fingerprint.** aiohttp and OpenSSL decide the
+  header order, casing and TLS ClientHello; they do not match node-fetch,
+  undici or Chromium. Not reproducible without extra dependencies.
+- **Client hints.** The Chromium token requests also carry `sec-ch-ua`,
+  `sec-ch-ua-platform`, `sec-ch-ua-mobile`, `sec-fetch-storage-access`,
+  `priority` and a `cookie`. This app sends none of them, and its
+  `Accept-Encoding` leaves out `zstd`.
+- **Websocket User-Agent.** The official `ws` client sends no `User-Agent`;
+  the websocket handshake here carries the session default `node-fetch`.
+- **Brotli.** `br` is advertised in `Accept-Encoding` only when aiohttp can
+  decode it (the `brotli` or `brotlicffi` package is importable). It is not a
+  declared dependency, so without it the header lacks `br`.
+- **Sentry headers and `Connection: keep-alive`.** Not sent.
+- **`Connection: close` on polling requests.** The official client sends it; we do not, and one keep-alive connection serves the whole polling phase.
+- **Logout page.** The official client also navigates a window to the Keycloak
+  logout URL; this app only revokes the refresh token.
 
 ---
 
@@ -43,7 +91,7 @@ access grants"), so there is no way to log in without a browser.
 | Endpoint base | `https://id.tradeskillmaster.com/realms/app/protocol/openid-connect` |
 | Client id | `desktop-app` (public, no secret) |
 | Scope | `openid roles profile email tsm-profile offline_access` |
-| Redirect | `http://localhost:<ephemeral port>/auth/callback` |
+| Redirect | `http://localhost:<ephemeral port>/auth/callback` (the official client: `http://localhost/auth/callback`, no port) |
 
 Keycloak accepts any port on `localhost` with exactly that path. `127.0.0.1`
 and other paths are rejected (probed 2026-11-08). The redirect is served by a
@@ -53,14 +101,21 @@ one-shot local aiohttp server; the login gives up after 10 minutes.
 
 ```
 GET {base}/auth?client_id=desktop-app
-               &response_type=code
-               &response_mode=query
-               &scope=openid roles profile email tsm-profile offline_access
                &redirect_uri=http://localhost:<port>/auth/callback
-               &state=<random>
+               &state=<uuid>
+               &response_mode=query
+               &response_type=code
+               &scope=openid roles profile email tsm-profile offline_access
+               &nonce=<uuid>
                &code_challenge=<base64url(sha256(verifier))>
                &code_challenge_method=S256
 ```
+
+The parameters are sent in this order, as keycloak-js builds them, and the
+scope is encoded with `%20`. `state` and `nonce` are two independent random
+UUIDs. The PKCE verifier is 96 characters from `A-Za-z0-9`; the challenge is the
+base64url SHA-256 of it without padding. There is no `prompt`, `kc_idp_hint`,
+`ui_locales` or `max_age`.
 
 Keycloak redirects the browser to
 `/auth/callback?state=<state>&code=<code>&session_state=...`, or with
@@ -70,14 +125,18 @@ Keycloak redirects the browser to
 
 ```
 POST {base}/token
-Content-Type: application/x-www-form-urlencoded
+Content-Type: application/x-www-form-urlencoded;charset=UTF-8
+Accept: application/json
 
+code=<code>
 grant_type=authorization_code
 client_id=desktop-app
-code=<code>
 redirect_uri=<same redirect_uri as step 1>
 code_verifier=<verifier>
 ```
+
+The form keys go in this order, with the Chromium headers from "Client identity
+per channel". There is no scope, no client secret and no `Authorization`.
 
 Response (standard Keycloak token response):
 
@@ -108,12 +167,18 @@ Response (standard Keycloak token response):
 
 ```
 POST {base}/token
-grant_type=refresh_token&client_id=desktop-app&refresh_token=<token>
+grant_type=refresh_token&refresh_token=<token>&client_id=desktop-app
 ```
 
-Same response shape. A response without `refresh_token` keeps the previous
-one. `invalid_grant` means the token was revoked or the session ended; the user
-has to sign in again.
+Same headers as the token exchange, no scope. Same response shape.
+
+**The refresh token rotates.** Every successful refresh returns a new
+`refresh_token`; the new value must be stored and used next time (the app
+writes it to the keyring when it differs from the stored one). A response
+without `refresh_token` keeps the previous one. `invalid_grant` (HTTP 400)
+means the token was revoked, replaced or the session ended; the user has to
+sign in again. The official client refreshes when less than 90 s of validity
+remain, checking every 30 s.
 
 ### Logout
 
@@ -122,7 +187,23 @@ POST {base}/revoke
 client_id=desktop-app&token=<refresh token>&token_type_hint=refresh_token
 ```
 
-Best effort with a 5 s timeout; the answer is ignored.
+Sent with the undici headers (`User-Agent: node`, content type
+`application/x-www-form-urlencoded;charset=UTF-8`, no `Authorization`, no
+cookie). Best effort with a 5 s timeout; the answer (200, empty body) is
+ignored.
+
+The official client then navigates a window to the end-session endpoint:
+
+```
+GET {base}/logout?client_id=desktop-app
+                 &post_logout_redirect_uri=http://localhost/auth/callback
+                 &id_token_hint=<id token>
+```
+
+Keycloak answers 302 to the redirect URI and the official client shows its
+login page again. This app builds the URL (`oidc.build_logout_url`) but does
+not open it: the Keycloak browser session lives in the user's browser, so only
+the refresh token is revoked.
 
 ### Access token claims
 
@@ -165,8 +246,9 @@ Followed realm limit per tier: platinum unlimited, gold 25, free 10.
 
 ## REST requests (`tsm/api/client.py`)
 
-Every request carries `Authorization: Bearer <access token>` and a
-`User-Agent`. Bodies are plain JSON (no gzip). JSON responses are recognised by
+Every request carries `Authorization: Bearer <access token>` and the headers of
+its channel (node-fetch for the services, undici for local-machine-name; see
+"Client identity per channel"). Bodies are plain JSON (no gzip). JSON responses are recognised by
 `Content-Type: application/json`; anything else is returned as text.
 
 5xx, 408 and 429 are retried up to 3 times (2 s, 4 s, or `Retry-After` when
@@ -402,28 +484,47 @@ The app treats 403 as "release only". Which channels exist comes from the
 
 ## Socket (`tsm/api/socket.py`)
 
-Socket.IO v4 (Engine.IO 4) over a websocket. The app implements the packets it
-needs directly on aiohttp, without a socket.io dependency.
+Socket.IO v4 (Engine.IO 4). Like the official socket.io-client (transports
+`polling`, then `websocket`), the app first opens an HTTP long-polling session
+and then upgrades it to a websocket. It implements the packets it needs
+directly on aiohttp, without a socket.io dependency.
 
 ```
-wss://app-backend-sockets.tradeskillmaster.com/socket.io/?EIO=4&transport=websocket
+https://app-backend-sockets.tradeskillmaster.com/socket.io/?EIO=4&transport=polling&t=<stamp>
 Authorization: <access token>
 ```
 
-The `Authorization` header is the **raw** access token, without `Bearer `.
+The `Authorization` header is the **raw** access token, without `Bearer `, on
+every polling request and on the websocket handshake. There is no auth payload
+and no custom query; `t` is a short timestamp token on polling requests, and
+the parameter order is `EIO`, `transport`, `t`, `sid`. The 1.0.14 client's
+`appVersion` configuration value is never sent.
 
-### Handshake and framing
+### Handshake, upgrade and framing
 
 ```
-server  0{"sid":"GlmzGQ9gnKucO1TaFWuo","upgrades":[],"pingInterval":25000,"pingTimeout":20000,"maxPayload":1000000}
-client  40                          join namespace "/"
-server  40{"sid":"Rym4e9LIEU6_VKzgFWuq"}
+client  GET  ...&transport=polling&t=<stamp>             (no sid yet)
+server  0{"sid":"GlmzGQ9gnKucO1TaFWuo","upgrades":["websocket"],"pingInterval":25000,"pingTimeout":20000,"maxPayload":1000000}
+client  POST ...&sid=<sid>  body 40                      join namespace "/"
+client  GET  ...&sid=<sid>                               long poll
+server  40{"sid":"Rym4e9LIEU6_VKzgFWuq","pid":"..."}     the Socket.IO id differs from the Engine.IO sid
+client  websocket ...&transport=websocket&sid=<sid>      Authorization header
+client  2probe     server 3probe                         probe; polling is paused
+client  5                                                upgrade, all traffic now on the websocket
 server  2                           ping, every pingInterval
 client  3                           pong
 server  42["realm_auctiondb",{...}] event: name, then arguments
 server  41                          kicked from the namespace
 server  44{"message":"..."}         connect refused (bad or expired token)
 ```
+
+A polling body can hold several packets separated by the 0x1e record separator;
+the initial push for all followed realms usually arrives that way, before the
+upgrade finishes (about 0.7 s after the first request). The server pings, the
+client answers; an idle connection is dropped after `pingInterval +
+pingTimeout` (45 s). If the server offers no upgrade, or the websocket fails,
+the app stays on polling. The upgrade packets `2probe`, `3probe` and `5` are
+Engine.IO types (2 ping, 3 pong, 5 upgrade) with a text body.
 
 The first digit is the Engine.IO packet type (0 open, 2 ping, 3 pong,
 4 message), the second the Socket.IO type (0 connect, 1 disconnect, 2 event,
@@ -452,7 +553,7 @@ and its regions (a burst of about 20 events for 2 realms), then `addon` and
   "auctionHouseType": "ALL",
   "stringType": "AUCTIONDB_NON_COMMODITY_DATA",
   "lastModified": 1794126113,
-  "url": "https://tradeskillmaster.nyc3.digitaloceanspaces.com/pricing/nonCommodityAuctionDb/auctionHouse_97_1794126113_gzip.txt?X-Amz-Expires=7200&X-Amz-Signature=..."
+  "url": "https://pricing-data.tradeskillmaster.com/pricing/nonCommodityAuctionDb/auctionHouse_97_1794126113_gzip.txt?verify=..."
 }
 ```
 
@@ -463,17 +564,21 @@ and its regions (a burst of about 20 events for 2 realms), then `addon` and
   "regionId": 2,
   "stringType": "AUCTIONDB_REGION_STAT",
   "lastModified": "1794099204",
-  "url": "https://tradeskillmaster.nyc3.digitaloceanspaces.com/pricing/regionStatDb/region_2_1794099204_gzip.txt?X-Amz-Expires=7200&X-Amz-Signature=..."
+  "url": "https://pricing-data.tradeskillmaster.com/pricing/regionStatDb/region_2_1794099204_gzip.txt?verify=..."
 }
 ```
 
 - `lastModified` arrives as a number **or** a numeric string, even within one
   burst. It is the time the addon gets as `downloadTime`.
 - `auctionHouseType` is upper case and matches the user-realm entry.
-- `url` is a presigned S3 (DigitalOcean Spaces) URL valid for 2 hours
-  (`X-Amz-Expires=7200`). It must be fetched **without** an Authorization
-  header. A 404 means the blob was superseded by newer data; the next event
-  brings the new URL.
+- `url` points to `pricing-data.tradeskillmaster.com` (Cloudflare in front) and
+  carries one query parameter, `verify` (a 54 character token). Earlier
+  versions pointed at S3 style URLs on DigitalOcean Spaces with `X-Amz-*`
+  parameters; 1.0.14 has none. The URL is used as received, unchanged and in
+  particular with `verify` intact. It must be fetched **without** an
+  Authorization header and without a `Range` header, with the undici header
+  set. A 404 means the blob was superseded by newer data; the next event
+  brings the new URL. The response is `200` with `Content-Type: text/plain`.
 - The object path is `pricing/<db>/auctionHouse_<auctionHouseId>_<lastModified>_gzip.txt`
   or `pricing/<db>/region_<regionId>_<lastModified>_gzip.txt`.
 
@@ -502,9 +607,10 @@ drive the "last updated" column in the realm tab.
 
 ### Blob format
 
-The object is stored gzipped without a `Content-Encoding` header, so the client
-has to check for the gzip magic (`1f 8b`) and decompress itself
-(`TSMApiClient.download`). The content is the Lua table that goes into
+The object is a gzip file (`..._gzip.txt`). The 1.0.14 responses also carry a
+`Content-Encoding: gzip` header, so a HTTP library may already have unpacked
+it; the client therefore checks for the gzip magic (`1f 8b`) and decompresses
+only when it is still there (`TSMApiClient.download`). The content is the Lua table that goes into
 AppData.lua, optionally prefixed with `return `:
 
 ```lua
@@ -571,7 +677,8 @@ Both are written into the `APP_INFO` blob as they are.
 
 ### Reconnects
 
-5 s doubling to 60 s after a dropped connection; 5 s doubling to 300 s with
+5 s doubling to 60 s after a dropped connection (the connect attempt times out
+after 20 s); 5 s doubling to 300 s with
 jitter after the server disconnects us (`41`/`44`, usually an expired or
 rejected token). A token refresh while disconnected reconnects at once.
 
@@ -581,10 +688,10 @@ rejected token). A token refresh while disconnected reconnects at once.
 
 Written to `<WoW>/<folder>/Interface/AddOns/TradeSkillMaster_AppHelper/AppData.lua`,
 but only for game versions where TradeSkillMaster or the AppHelper is installed.
-The official 1.0.9 client writes this format; the addon reads it on login.
+The official 1.0.14 client writes this format; the addon reads it on login.
 
 ```lua
-select(2, ...).LoadData("APP_INFO","Global",[[return {version="1.0.9",lastSync=1794128540,message={id=0,msg=""},news={...}}]]) --<APP_INFO,Global,1794128540>
+select(2, ...).LoadData("APP_INFO","Global",[[return {version="1.0.14",lastSync=1794128540,message={id=0,msg=""},news={...}}]]) --<APP_INFO,Global,1794128540>
 select(2, ...).LoadData("AUCTIONDB_NON_COMMODITY_DATA","Tarren Mill",[[return {downloadTime=1794126113,...}]]) --<AUCTIONDB_NON_COMMODITY_DATA,Tarren Mill,1794126113,97>
 for _,r in ipairs({"Thorium Brotherhood","Farstriders"}) do select(2, ...).LoadData("AUCTIONDB_NON_COMMODITY_DATA",r,[[return {...}]]) end --<AUCTIONDB_NON_COMMODITY_DATA,Thorium Brotherhood|Farstriders,1794126157,5>
 select(2, ...).LoadData("AUCTIONDB_REGION_STAT","EU",[[return {downloadTime=1794099204,...}]]) --<AUCTIONDB_REGION_STAT,EU,1794099204>
@@ -602,7 +709,7 @@ select(2, ...).LoadData("AUCTIONDB_REGION_STAT","EU",[[return {downloadTime=1794
   account no longer follows are removed.
 - `APP_INFO` (`{version, lastSync, message, news}`) is rewritten every 15
   minutes and on every `app_info` event. `version` is the official client
-  version the addon expects (`OFFICIAL_APP_VERSION` in `tsm/app.py`).
+  version the addon expects (`OFFICIAL_APP_VERSION` in `tsm/api/official.py`).
 
 ---
 

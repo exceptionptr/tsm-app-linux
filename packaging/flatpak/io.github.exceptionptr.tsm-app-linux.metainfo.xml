@@ -77,6 +77,15 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.1.0" date="2026-11-17">
+      <description>
+        <ul>
+          <li>Talks to TSM the way the official Desktop App 1.0.14 does</li>
+          <li>Fixes the connection to the TSM server failing with "Session ID unknown"</li>
+          <li>Warns when the renewed sign-in cannot be saved to the system keyring</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.0.2" date="2026-11-09">
       <description>
         <ul>

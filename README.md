@@ -6,19 +6,49 @@
 
 TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloads auction data, and writes `AppData.lua` for the TSM addon running under Wine/Lutris/Steam.
 
+## Status and risk: read this first
+
+**Using this app can get your TSM account disabled.** Since November 2026 users
+report accounts being disabled after using third-party clients (the login page
+shows "Account is disabled, contact your administrator"). TSM has also told the
+maintainer, twice, that third-party tools using their non-public APIs are against
+their terms of service and asked for this project to be taken down. TSM now ships
+an official desktop app for Linux (an AppImage on their site). If your TSM
+account matters to you, use the official app.
+
+What happened, in order:
+
+| When                         | What                                                                                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2016 to 2018                 | The old desktop app was open source (GPLv3, Bitbucket). A Linux pull request was declined because the app ran under Wine. TSM went closed source afterwards.                                                        |
+| March 2026                   | This project was first published. TSM asked privately that it not be distributed. The repository was made private and the AUR package removed.                                                                      |
+| April 2026                   | TSM asked whether the repository had been made public again.                                                                                                                                                        |
+| November 2026                | TSM released a new desktop app with a Keycloak login and a push socket. This app was moved to that protocol (2.0.x, see `docs/api.md`).                                                                             |
+| Around 9 to 14 November 2026 | Auction data stopped arriving for some accounts, in this app and in the official app alike (the server only sent addon and news events). Other users reported that new accounts worked. The cause is on TSM's side. |
+| 13 November 2026             | TSM asked again for this project to be taken down.                                                                                                                                                                  |
+| November 2026                | Accounts of users of this app were disabled.                                                                                                                                                                        |
+| Around 16 November 2026      | TSM released official app versions 1.0.13 and 1.0.14, announced as "Behind-the-scenes improvements to the app's connection to TSM's servers". The maintainer reads this as the start of official flagging of third-party clients. |
+
+Full history in `docs/history.md`.
+
+Technical background is in `docs/api.md` (protocol) and `docs/network.md` (what
+the official client and this app send, and to which hosts). The project does not
+contain TSM's code. It talks to TSM's servers with the user's own login and
+writes the file format the TSM addon reads.
+
 ## Screenshots
 
 ### Main window
 
-| | |
-|---|---|
+|                  |                  |
+| ---------------- | ---------------- |
 | ![](media/1.png) | ![](media/2.png) |
 | ![](media/3.png) | ![](media/4.png) |
 
 ### Settings
 
-| | | |
-|---|---|---|
+|                  |                  |                  |
+| ---------------- | ---------------- | ---------------- |
 | ![](media/5.png) | ![](media/6.png) | ![](media/7.png) |
 
 ## Features
@@ -221,13 +251,13 @@ reporting a problem.
 
 ## File Locations
 
-| Purpose       | Path                                          |
-| ------------- | --------------------------------------------- |
-| Config        | `~/.config/tsm-app/config.toml`               |
-| Database      | `~/.local/share/tsm-app/data.db`              |
-| Log file      | `~/.local/share/tsm-app/logs/tsm-app.log`     |
-| Backups       | `~/.local/share/tsm-app/backups/`             |
-| Item cache    | `~/.local/share/tsm-app/item_cache.json`      |
+| Purpose    | Path                                      |
+| ---------- | ----------------------------------------- |
+| Config     | `~/.config/tsm-app/config.toml`           |
+| Database   | `~/.local/share/tsm-app/data.db`          |
+| Log file   | `~/.local/share/tsm-app/logs/tsm-app.log` |
+| Backups    | `~/.local/share/tsm-app/backups/`         |
+| Item cache | `~/.local/share/tsm-app/item_cache.json`  |
 
 Logs rotate automatically; the last 5 files are kept. To reset the app to a clean
 state, remove `~/.config/tsm-app/` and `~/.local/share/tsm-app/`.
@@ -236,19 +266,19 @@ state, remove `~/.config/tsm-app/` and `~/.local/share/tsm-app/`.
 
 The app scans the following paths automatically on startup:
 
-| Source                  | Path                                                                                          |
-| ----------------------- | --------------------------------------------------------------------------------------------- |
-| Wine (default prefix)   | `~/.wine/drive_c/Program Files (x86)/World of Warcraft`                                      |
-| Wine (default prefix)   | `~/.wine/drive_c/Program Files/World of Warcraft`                                             |
-| Lutris (common)         | `~/Games/world-of-warcraft`                                                                   |
-| Lutris (common)         | `~/Games/World of Warcraft`                                                                   |
-| Lutris (config)         | Wine prefix read from `~/.local/share/lutris/games/*.yml`, both Program Files variants        |
-| Faugus Launcher (config)| Wine prefix read from `~/.config/faugus-launcher/games.json`, both Program Files variants    |
-| Faugus Launcher (common)| All subdirectories of `~/Faugus/`, both Program Files variants                               |
-| Steam                   | `~/.local/share/Steam/steamapps/common/World of Warcraft`                                    |
-| Snap Wine               | `~/snap/wine-platform-5-stable/common/.wine/drive_c/Program Files (x86)/World of Warcraft`   |
-| Mount (games partition) | `/mnt/games/World of Warcraft`                                                                |
-| System opt              | `/opt/games/World of Warcraft`                                                                |
+| Source                   | Path                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| Wine (default prefix)    | `~/.wine/drive_c/Program Files (x86)/World of Warcraft`                                    |
+| Wine (default prefix)    | `~/.wine/drive_c/Program Files/World of Warcraft`                                          |
+| Lutris (common)          | `~/Games/world-of-warcraft`                                                                |
+| Lutris (common)          | `~/Games/World of Warcraft`                                                                |
+| Lutris (config)          | Wine prefix read from `~/.local/share/lutris/games/*.yml`, both Program Files variants     |
+| Faugus Launcher (config) | Wine prefix read from `~/.config/faugus-launcher/games.json`, both Program Files variants  |
+| Faugus Launcher (common) | All subdirectories of `~/Faugus/`, both Program Files variants                             |
+| Steam                    | `~/.local/share/Steam/steamapps/common/World of Warcraft`                                  |
+| Snap Wine                | `~/snap/wine-platform-5-stable/common/.wine/drive_c/Program Files (x86)/World of Warcraft` |
+| Mount (games partition)  | `/mnt/games/World of Warcraft`                                                             |
+| System opt               | `/opt/games/World of Warcraft`                                                             |
 
 If your WoW installation isn't detected automatically, add the path manually via **Settings -> WoW Installations**.
 

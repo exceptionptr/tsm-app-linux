@@ -38,7 +38,7 @@ def _install(base: Path, folder: str, name: str, version: str | None) -> Path:
 
 def _svc(base: Path, data: bytes) -> tuple[UpdateService, MagicMock]:
     client = MagicMock()
-    client.download = AsyncMock(return_value=data)
+    client.download_addon_zip = AsyncMock(return_value=data)
     detector = SimpleNamespace(installs=[SimpleNamespace(path=str(base))])
     return UpdateService(client, detector), client
 
@@ -61,7 +61,7 @@ async def test_one_download_updates_every_game_version(tmp_path):
     forever = _install(tmp_path, "_forever_", "TradeSkillMaster", "v4.15.0")
     svc, client = _svc(tmp_path, _zip("TradeSkillMaster", "v4.15.4"))
     assert await svc.check_and_update([REL]) == ["TradeSkillMaster"]
-    client.download.assert_awaited_once_with("u")
+    client.download_addon_zip.assert_awaited_once_with("u")
     for addons in (retail, forever):
         d = addons / "TradeSkillMaster"
         assert (d / "Core.lua").exists()
@@ -73,7 +73,7 @@ async def test_matching_version_ignores_leading_v(tmp_path):
     _install(tmp_path, "_retail_", "TradeSkillMaster", "4.15.4")
     svc, client = _svc(tmp_path, b"")
     assert await svc.check_and_update([REL]) == []
-    client.download.assert_not_awaited()
+    client.download_addon_zip.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -84,7 +84,7 @@ async def test_not_installed_dev_and_git_copies_are_left_alone(tmp_path):
     (era / "TradeSkillMaster" / ".git").mkdir()
     svc, client = _svc(tmp_path, _zip("TradeSkillMaster", "v4.15.4"))
     assert await svc.check_and_update([REL]) == []
-    client.download.assert_not_awaited()
+    client.download_addon_zip.assert_not_awaited()
     assert (era / "TradeSkillMaster" / "Old.lua").exists()
 
 

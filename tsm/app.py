@@ -10,6 +10,7 @@ from typing import IO
 from PySide6.QtWidgets import QApplication
 
 from tsm.api.client import TSMApiClient
+from tsm.api.official import OFFICIAL_APP_VERSION
 from tsm.core.scheduler import JobScheduler, ServiceContainer
 from tsm.core.services.auction import AuctionDataService
 from tsm.core.services.auth import AuthService
@@ -29,9 +30,6 @@ from tsm.ui.viewmodels.settings_vm import SettingsViewModel
 from tsm.workers.async_runner import AsyncRunner
 
 logger = logging.getLogger(__name__)
-
-# Version of the official TSM desktop app whose backend protocol we implement.
-OFFICIAL_APP_VERSION = "1.0.9"
 
 DATA_DIR = Path.home() / ".local" / "share" / "tsm-app"
 
@@ -97,9 +95,7 @@ def create_app(
     config_store = ConfigStore()
 
     # API + Services
-    from tsm import __version__
-
-    api_client = TSMApiClient(user_agent=f"tsm-app-linux/{__version__}")
+    api_client = TSMApiClient()
     # Registers itself as the client's token provider.
     auth_svc = AuthService(api_client)
     wow_detector = WoWDetectorService(skip_scan=skip_detection)

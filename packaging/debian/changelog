@@ -1,3 +1,15 @@
+tsm-app (2.1.0-1) stable; urgency=medium
+
+  * Change: requests follow the official TSM Desktop App 1.0.14 (headers, user
+    agents, Keycloak sign-in parameters); the socket starts on HTTP long polling
+    and upgrades to a websocket.
+  * Change: AuctionDB downloads use the pricing-data URLs from the socket events.
+  * Fix: the socket kept failing with HTTP 400 "Session ID unknown"; polling now
+    uses one keep-alive connection.
+  * Fix: a warning is logged when the rotated refresh token cannot be stored.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Tue, 17 Nov 2026 12:00:00 +0000
+
 tsm-app (2.0.2-1) stable; urgency=medium
 
   * Fix: the Accounting tab was empty on WoW Forever. Realm names now come from

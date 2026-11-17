@@ -1,4 +1,4 @@
-"""AuctionDataService: event driven AuctionDB sync, as in the official 1.0.9 client.
+"""AuctionDataService: event driven AuctionDB sync, as in the official 1.0.14 client.
 
 The backend no longer has a status endpoint to poll. Instead:
 
@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from tsm.api.client import TSMApiClient, TSMApiError
+from tsm.api.official import OFFICIAL_APP_VERSION
 from tsm.api.types import AddonRelease, Realm, Region, UserRealm
 from tsm.core.models.auction import AppInfo, AuctionData, RealmStatus
 from tsm.storage.auction_cache import AuctionCache
@@ -122,7 +123,7 @@ class AuctionDataService:
         api_client: TSMApiClient | None = None,
         cache: AuctionCache | None = None,
         wow_detector: Any = None,
-        app_version: str = "1.0.9",
+        app_version: str = OFFICIAL_APP_VERSION,
     ):
         self._client = api_client
         self._cache = cache
