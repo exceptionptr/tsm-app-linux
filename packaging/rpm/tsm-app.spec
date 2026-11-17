@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        2.0.2
+Version:        2.1.0
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -72,6 +72,14 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Tue Nov 17 2026 exceptionptr <https://github.com/exceptionptr> - 2.1.0-1
+- Change: requests follow the official TSM Desktop App 1.0.14; the socket starts
+  on HTTP long polling and upgrades to a websocket
+- Change: AuctionDB downloads use the pricing-data URLs from the socket events
+- Fix: the socket kept failing with HTTP 400 "Session ID unknown"; polling now
+  uses one keep-alive connection
+- Fix: a warning is logged when the rotated refresh token cannot be stored
+
 * Mon Nov 09 2026 exceptionptr <https://github.com/exceptionptr> - 2.0.2-1
 - Fix: the Accounting tab was empty on WoW Forever; realm names now come from
   TSM's scope keys

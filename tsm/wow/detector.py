@@ -42,7 +42,7 @@ _STEAM_ROOTS = [
 ]
 
 # Directories whose every subdir may be a Wine prefix (directly, or under pfx/).
-# The same list the official 1.0.9 client searches: ~/Games (Lutris, Heroic),
+# The same list the official 1.0.14 client searches: ~/Games (Lutris, Heroic),
 # Bottles native and Flatpak.
 _PREFIX_PARENTS = [
     Path.home() / "Games",

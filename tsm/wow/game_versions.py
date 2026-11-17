@@ -37,7 +37,7 @@ SUFFIX_BY_FOLDER: dict[str, str] = {gv.folder: gv.account_suffix for gv in GAME_
 
 # realm-api region.gameVersion -> (game version folder, AppData region key prefix).
 #
-# From the official 1.0.9 client. Several server-side game modes share one client
+# From the official 1.0.14 client. Several server-side game modes share one client
 # folder (Hardcore and Season of Discovery both run in _classic_era_), and the
 # prefix keeps their region data apart inside that folder's AppData.lua.
 # "Season of Mastery" maps to _classic_era_ in the client but has no prefix, so the

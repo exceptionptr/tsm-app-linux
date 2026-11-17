@@ -1,4 +1,4 @@
-"""TSM REST client for the backend the official 1.0.9 desktop app uses.
+"""TSM REST client for the backend the official 1.0.14 desktop app uses.
 
 Replaces the legacy app-server /v2 API (HMAC-signed query strings, plain HTTP,
 per-session endpointSubdomains). Every service here is HTTPS with a verified
@@ -10,6 +10,10 @@ certificate and takes the Keycloak access token as a Bearer header.
                      POST /user-realms                follow a realm auction house
                      DELETE /user-realms/<id>         stop following one
     addon-version    GET  /channels                   labels for beta channels
+
+Header sets follow a capture of the official client, per channel: its REST worker
+scripts use node-fetch, its blob downloads and machine-name calls use Node's
+undici. See node_fetch_headers() and undici_headers().
 
 Auction data itself is not fetched here: the socket (tsm/api/socket.py) pushes a
 presigned download URL for every blob, which download() then fetches.
@@ -25,7 +29,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 import aiohttp
+from aiohttp.compression_utils import HAS_BROTLI
 
+from tsm.api.official import UA_NODE_FETCH, UA_UNDICI
 from tsm.api.types import GameVersionInfo, Realm, Region, UserRealm
 
 logger = logging.getLogger(__name__)
@@ -63,6 +69,42 @@ def is_transient_error(exc: BaseException) -> bool:
     return isinstance(exc, aiohttp.ClientError | TimeoutError)
 
 
+def _accept_encoding(official: str) -> str:
+    """The official Accept-Encoding minus br when aiohttp cannot decode it."""
+    if HAS_BROTLI:
+        return official
+    return ", ".join(e for e in official.split(", ") if e != "br")
+
+
+def node_fetch_headers(token: str | None = None) -> dict[str, str]:
+    """Headers of the official node-fetch channel (REST services, addon zip)."""
+    headers = {
+        "Accept": "*/*",
+        "Accept-Encoding": _accept_encoding("gzip, deflate, br"),
+    }
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    headers["User-Agent"] = UA_NODE_FETCH
+    return headers
+
+
+def undici_headers(token: str | None = None) -> dict[str, str]:
+    """Headers of the official undici channel (presigned downloads, machine names)."""
+    headers: dict[str, str] = {}
+    if token is not None:
+        headers["Authorization"] = "Bearer " + token
+    headers.update(
+        {
+            "Accept": "*/*",
+            "Accept-Language": "*",
+            "Sec-Fetch-Mode": "cors",
+            "User-Agent": UA_UNDICI,
+            "Accept-Encoding": _accept_encoding("br, gzip, deflate"),
+        }
+    )
+    return headers
+
+
 def _gunzip_if_needed(raw: bytes) -> bytes:
     if raw[:2] == b"\x1f\x8b":
         try:
@@ -73,10 +115,9 @@ def _gunzip_if_needed(raw: bytes) -> bytes:
 
 
 class TSMApiClient:
-    def __init__(self, user_agent: str = "tsm-app-linux") -> None:
+    def __init__(self) -> None:
         self._session: aiohttp.ClientSession | None = None
         self._token_provider: TokenProvider | None = None
-        self._user_agent = user_agent
 
     # ------------------------------------------------------------------ #
     # Session
@@ -86,7 +127,9 @@ class TSMApiClient:
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=120, sock_read=60),
-                headers={"User-Agent": self._user_agent},
+                # Fallback only; REST and download calls set their channel headers
+                # per request, the OIDC and socket channels override this too.
+                headers={"User-Agent": UA_NODE_FETCH},
             )
         return self._session
 
@@ -115,11 +158,16 @@ class TSMApiClient:
         params: dict[str, str] | None = None,
         json_body: Any = None,
         endpoint: str = "",
+        undici: bool = False,
     ) -> Any:
-        """Authenticated JSON request with retries on transient failures."""
+        """Authenticated JSON request with retries on transient failures.
+
+        Sends the node-fetch header set, or the undici one with undici=True.
+        """
         session = await self.session()
+        build = undici_headers if undici else node_fetch_headers
         for attempt in range(MAX_RETRIES):
-            headers = {"Authorization": "Bearer " + await self._token()}
+            headers = build(await self._token())
             try:
                 async with session.request(
                     method, url, params=params, json=json_body, headers=headers
@@ -219,22 +267,77 @@ class TSMApiClient:
         )
 
     # ------------------------------------------------------------------ #
+    # Group sends, machine names, backups
+    # ------------------------------------------------------------------ #
+
+    async def claim_group_sends(self, game_types: list[str]) -> list[Any]:
+        data = await self.request(
+            "POST",
+            f"{DESKTOP_BACKEND}/group-sends/claim",
+            json_body={"gameTypes": game_types},
+            endpoint="group sends claim",
+        )
+        return data if isinstance(data, list) else []
+
+    async def local_machine_names(self, system_ids: list[str]) -> list[dict[str, Any]]:
+        data = await self.request(
+            "GET",
+            f"{DESKTOP_BACKEND}/local-machine-name",
+            params={"systemIds": ",".join(system_ids)},
+            endpoint="local machine names GET",
+            undici=True,
+        )
+        items: list[dict[str, Any]] = data.get("items", []) if isinstance(data, dict) else []
+        return items
+
+    async def set_local_machine_name(self, system_id: str, name: str) -> None:
+        await self.request(
+            "POST",
+            f"{DESKTOP_BACKEND}/local-machine-name",
+            json_body={"systemId": system_id, "localMachineName": name},
+            endpoint="local machine names POST",
+            undici=True,
+        )
+
+    async def remote_backups(self) -> Any:
+        return await self.request(
+            "GET", f"{DESKTOP_BACKEND}/backups", endpoint="remote backups"
+        )
+
+    # ------------------------------------------------------------------ #
     # Downloads (presigned, no auth header)
     # ------------------------------------------------------------------ #
 
-    async def download(self, url: str, attempts: int = 6) -> bytes | None:
+    async def download_addon_zip(self, url: str) -> bytes | None:
+        """Fetch an addon zip the way the official installer does (node-fetch headers)."""
+        return await self.download(url, headers=node_fetch_headers())
+
+    async def download(
+        self,
+        url: str,
+        attempts: int = 6,
+        *,
+        headers: dict[str, str] | None = None,
+    ) -> bytes | None:
         """Fetch a presigned blob URL. Returns None on 404 (superseded data).
 
+        Sends the undici headers without Authorization or Range, as the official
+        worker does, unless headers says otherwise.
+
         Retries 408, 429 and 5xx with backoff like the official worker. The body
-        is gunzipped when it carries the gzip magic, which every AuctionDB blob
-        does: the object is stored gzipped without a Content-Encoding header.
+        is gunzipped when it still carries the gzip magic: AuctionDB blobs are
+        gzip files, and a Content-Encoding header may or may not have unpacked
+        them already.
         """
         session = await self.session()
+        headers = headers if headers is not None else undici_headers()
         delay = 1.0
         last: BaseException | None = None
         for attempt in range(1, attempts + 1):
             try:
-                async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
+                async with session.get(
+                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=120)
+                ) as resp:
                     if resp.status == 404:
                         return None
                     if resp.status == 200:

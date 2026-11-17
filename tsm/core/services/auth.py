@@ -1,6 +1,6 @@
 """AuthService: browser login, token lifetime, logout.
 
-Flow (official 1.0.9 client, see tsm/api/oidc.py):
+Flow (official 1.0.14 client, see tsm/api/oidc.py):
 1. The login page opens in the system browser (authorization code + PKCE).
 2. The resulting access token is used directly as a Bearer token by every TSM
    service, and raw as the socket's Authorization header.
@@ -224,8 +224,9 @@ class AuthService:
                         logger.exception("Session lost listener failed")
                 return
             self._tokens = new
-            if self._remember and new.refresh_token != tokens.refresh_token:
-                store_credentials(new.username, new.refresh_token)
+            rotated = self._remember and new.refresh_token != tokens.refresh_token
+            if rotated and not store_credentials(new.username, new.refresh_token):
+                logger.warning("Could not store the rotated refresh token in the keyring")
             logger.debug("Access token refreshed, valid for %.0f s", new.expires_at - time.time())
         await self._notify()
 

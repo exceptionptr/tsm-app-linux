@@ -1,4 +1,4 @@
-"""UpdateService: keep the TSM addons current, as the official 1.0.9 client does.
+"""UpdateService: keep the TSM addons current, as the official 1.0.14 client does.
 
 The socket's ``addon`` event lists the current release of each addon:
 
@@ -166,7 +166,7 @@ class UpdateService:
         name = rel["addon"]
         logger.info("Downloading %s %s", name, rel["version"])
         try:
-            raw = await self._client.download(rel["url"])
+            raw = await self._client.download_addon_zip(rel["url"])
         except Exception:
             logger.exception("Failed to download %s", name)
             return False

@@ -4,6 +4,48 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [2.1.0] - 2026-11-17
+
+### Changed
+
+- **Follows the official TSM Desktop App 1.0.14 on the wire.** Every request now
+  carries the User-Agent and headers of the channel the official client sends it
+  through: the Chromium identity for the Keycloak token calls, `node-fetch` for
+  the REST services, `node` for downloads and token revoke, and
+  `node-XMLHttpRequest` for the socket. The app version written to AppData.lua
+  is 1.0.14.
+- **Keycloak sign-in matches 1.0.14**: authorize parameters in the official order
+  with a `nonce`, form keys in the official order for token, refresh and revoke,
+  and the rotated refresh token of every refresh is stored.
+- **The socket starts on HTTP long polling and upgrades to a websocket**, like
+  the official client, instead of connecting by websocket directly.
+- **AuctionDB downloads** use the `pricing-data.tradeskillmaster.com` URLs from
+  the socket events, with the `verify` parameter, without an Authorization or
+  Range header.
+
+### Fixed
+
+- The socket now keeps one keep-alive connection while polling. Polling over
+  separate connections failed with HTTP 400 `Session ID unknown`.
+- Polling requests now send the same `Accept-Encoding` as the official client.
+- A warning is logged when the rotated refresh token cannot be stored in the
+  keyring.
+
+### Known differences
+
+- The redirect address has an ephemeral port (`http://localhost:<port>/auth/callback`);
+  the official client uses `http://localhost/auth/callback`.
+- Header order and the TLS fingerprint are those of aiohttp and OpenSSL.
+- Chromium client hints (`sec-ch-ua*`, `priority`, `cookie`) are not sent.
+- The websocket handshake sends `User-Agent: node-fetch`; the official client
+  sends none.
+- `br` is offered in `Accept-Encoding` only when the `brotli` or `brotlicffi`
+  package is installed.
+
+See `docs/api.md` and `docs/network.md`.
+
+---
+
 ## [2.0.2] - 2026-11-09
 
 ### Fixed
