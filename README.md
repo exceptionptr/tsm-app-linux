@@ -29,10 +29,12 @@ What happened, in order:
 | November 2026                | Accounts of users of this app were disabled.                                                                                                                                                                        |
 | Around 16 November 2026      | TSM released official app versions 1.0.13 and 1.0.14, announced as "Behind-the-scenes improvements to the app's connection to TSM's servers". The maintainer reads this as the start of official flagging of third-party clients. |
 
-Full history in `docs/history.md`.
+The full history, including TSM's e-mail to users of this app, is in
+[docs/history.md](docs/history.md).
 
-Technical background is in `docs/api.md` (protocol) and `docs/network.md` (what
-the official client and this app send, and to which hosts). The project does not
+Technical background is in [docs/api.md](docs/api.md) (protocol) and
+[docs/network.md](docs/network.md) (what the official client and this app send,
+and to which hosts). The project does not
 contain TSM's code. It talks to TSM's servers with the user's own login and
 writes the file format the TSM addon reads.
 
