@@ -15,7 +15,7 @@
       forAllSystems = fn: nixpkgs.lib.genAttrs systems (system: fn nixpkgs.legacyPackages.${system});
 
       # Keep in step with the version the release is tagged with.
-      version = "2.0.2";
+      version = "2.1.0";
     in
     {
       overlays.default = final: _prev: {
