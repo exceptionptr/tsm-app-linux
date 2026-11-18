@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytest.importorskip("PySide6.QtCore")
+pytest.importorskip("PySide6.QtCore", exc_type=ImportError)
 
 import tsm.workers.bridge as bridge_mod  # noqa: E402
 from tsm.__main__ import run_startup  # noqa: E402
