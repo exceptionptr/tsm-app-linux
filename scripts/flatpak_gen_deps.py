@@ -11,9 +11,10 @@ to a new Python version:
 
     python scripts/flatpak_gen_deps.py
 
-PySide6 is swapped for PySide6-Essentials: the app only imports QtCore, QtGui,
-QtSvg and QtWidgets, so the Addons half of PySide6 would add a few
-hundred megabytes to the bundle for nothing.
+PySide6 is left out: the app builds on io.qt.PySide.BaseApp, which brings
+PySide6 built against the KDE runtime and, through io.qt.qtwebengine.BaseApp,
+the QtWebEngine with Flatpak sandbox support that the login window needs. A
+PySide6 wheel would bring a second, unsandboxed Qt.
 """
 
 from __future__ import annotations
@@ -45,14 +46,14 @@ _PIP_INSTALL = (
 
 
 def runtime_requirements() -> list[str]:
-    """The app's dependencies, with PySide6 narrowed to Essentials."""
+    """The app's dependencies, without PySide6 (the base app provides it)."""
     with (ROOT / "pyproject.toml").open("rb") as fh:
         deps = tomllib.load(fh)["project"]["dependencies"]
     out = []
     for dep in deps:
         spec = dep.split("#", 1)[0].strip()
         if spec.lower().startswith("pyside6"):
-            spec = "PySide6-Essentials" + spec[len("PySide6") :]
+            continue
         out.append(spec)
     return out
 

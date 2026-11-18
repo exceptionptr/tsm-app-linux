@@ -32,7 +32,8 @@ AppInfo (auction.py)
   version, last_sync, message_id, message_text, news
 
 UserSession (auth.py)
-  username, user_id (OIDC sub), premium_tier, release_channels, remember_failed
+  username, user_id (OIDC sub), premium_tier, release_channels,
+  remember_failed (True when the refresh token could not be saved to the keyring)
   realm_limit (property): None for platinum, 25 gold, 10 free
 ```
 

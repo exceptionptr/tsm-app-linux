@@ -1,6 +1,6 @@
 # Maintainer: exceptionptr <https://github.com/exceptionptr>
 pkgname=tsm-app
-pkgver=2.1.0
+pkgver=2.2.0
 pkgrel=1
 pkgdesc="TradeSkillMaster Desktop App for Linux - auction data downloader for WoW under Wine/Lutris/Steam"
 arch=('x86_64')
@@ -9,6 +9,8 @@ license=('MIT')
 depends=(
     'python>=3.11'
     'pyside6'
+    'qt6-webengine'
+    'qt6-webchannel'
     'python-aiohttp'
     'python-pydantic'
     'python-aiosqlite'

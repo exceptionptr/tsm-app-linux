@@ -10,6 +10,7 @@ Kept free of Qt imports so it can be used from tests and worker code.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 
@@ -19,20 +20,22 @@ class GameVersion:
     key: str  # stable id stored in config and the realm snapshot
     label: str  # fallback display name; the game-versions API can override it
     account_suffix: str  # suffix the Windows app appends to account names
+    game_type: str  # the backend's gameType for group sends
 
 
 # Display order: the same order the official app sorts its game versions in.
 GAME_VERSIONS: tuple[GameVersion, ...] = (
-    GameVersion("_retail_", "retail", "Retail", ""),
-    GameVersion("_classic_", "bcc", "Progression", "-Progression"),
-    GameVersion("_anniversary_", "anniversary", "Anniversary", "-Anniversary"),
-    GameVersion("_classic_era_", "classic", "Classic Era", "-Classic"),
-    GameVersion("_forever_", "forever", "Forever", "-Forever"),
+    GameVersion("_retail_", "retail", "Retail", "", "retail"),
+    GameVersion("_classic_", "bcc", "Progression", "-Progression", "classic-progression"),
+    GameVersion("_anniversary_", "anniversary", "Anniversary", "-Anniversary", "classic"),
+    GameVersion("_classic_era_", "classic", "Classic Era", "-Classic", "classic"),
+    GameVersion("_forever_", "forever", "Forever", "-Forever", "forever"),
 )
 
 FOLDERS: tuple[str, ...] = tuple(gv.folder for gv in GAME_VERSIONS)
 BY_FOLDER: dict[str, GameVersion] = {gv.folder: gv for gv in GAME_VERSIONS}
 BY_KEY: dict[str, GameVersion] = {gv.key: gv for gv in GAME_VERSIONS}
+GAME_TYPE_BY_FOLDER: dict[str, str] = {gv.folder: gv.game_type for gv in GAME_VERSIONS}
 SUFFIX_BY_FOLDER: dict[str, str] = {gv.folder: gv.account_suffix for gv in GAME_VERSIONS}
 
 # realm-api region.gameVersion -> (game version folder, AppData region key prefix).
@@ -51,6 +54,20 @@ REGION_GAME_VERSIONS: dict[str, tuple[str, str]] = {
     "Classic Era - Fresh": ("_anniversary_", "Fresh-"),
     "Forever": ("_forever_", "Forever-"),
 }
+
+
+def game_types_for(folders: Iterable[str]) -> list[str]:
+    """Unique group send gameTypes of installed folders, in the official order.
+
+    The official client lists the WoW base directory, so the folders come in
+    directory order; sorted by name this gives the captured ["forever", "retail"].
+    """
+    out: list[str] = []
+    for folder in sorted(set(folders)):
+        game_type = GAME_TYPE_BY_FOLDER.get(folder)
+        if game_type is not None and game_type not in out:
+            out.append(game_type)
+    return out
 
 
 def folder_for_region(game_version: str) -> str | None:

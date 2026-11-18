@@ -4,6 +4,70 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [2.2.0] - 2026-11-18
+
+### Changed
+
+- **Sign-in runs in an embedded Keycloak window (QtWebEngine)** with the official
+  redirect `http://localhost/auth/callback`. There is no local listener, no own
+  login dialog and no own Remember me; the refresh token is always stored, like
+  the official client. Cancelling or an error shows a small view with a
+  "Login Again" button.
+- **Token, refresh and revoke** go out in the official header order: token and
+  refresh over aiohttp with the Chromium header set (no `Origin`, no cookie),
+  revoke with the undici headers.
+- **Logout works like the official client**: revoke, Keycloak logout, back to
+  the login.
+- **The app reads the current official version from the public update feed** at
+  start, on every socket connect and after an `app_update`, with 1.0.14 as the
+  fallback. A persistent updater id is sent as `x-user-staging-id`. Sentry is
+  deliberately never sent.
+- **Wire details**: header order and casing, TLS contexts per channel (without
+  ALPN, and `http/1.1`), websocket `permessage-deflate`, and the socket probe
+  runs parallel to the first long poll.
+- **Group sends** are claimed on connect and on `group_send` and written as
+  `GROUP_IMPORTS` to AppData.lua. They raise the tray notification only; there
+  is no new UI.
+- **Builds and packages bundle QtWebEngine**: Nuitka build, AppImage, Flatpak
+  (Chromium sandbox on, `io.qt.PySide.BaseApp`), PKGBUILD, deb, rpm and nix.
+
+### Fixed
+
+- Data the server pushes for a realm before the follow list is reloaded is no
+  longer dropped; the realm no longer stays on Waiting after it is added.
+- The app quit when the login window closed.
+- Startup restore retries no longer open a second login window after a logout.
+- Crashes: the background bridge was deleted on the wrong thread, and the login
+  window teardown.
+- Token requests have a 30 s timeout.
+- The app shuts down cleanly with requests in flight.
+
+### Known differences
+
+- The engine is the user's QtWebEngine (Chromium 134 in the venv, AppImage and
+  Nuitka build; 130 to 140 in other packages), not Chromium 152. Header values
+  say 152.
+- Token and refresh requests are aiohttp, not Chromium: no `Cookie`, no
+  `Origin` (the official one has none either), and the TLS ClientHello, HTTP
+  version (HTTP/1.1 instead of HTTP/2) and header casing are aiohttp's and
+  OpenSSL's.
+- QtWebEngine sends `sec-ch-ua*` on navigations too; the official navigations
+  carry none.
+- The logout navigation goes out with `Sec-Fetch-Site: none`; the official one
+  has `cross-site`.
+- The JA4 fingerprint and the OpenSSL cipher list are not compared yet.
+- Polling keeps one keep-alive connection; the official client probably sends
+  `Connection: close`.
+- `br` and `zstd` are offered in `Accept-Encoding` only when aiohttp can decode
+  them.
+- There is no group sends banner and no Sentry, on purpose.
+- Not verified: `priority` and `Host` casing on the version feed request,
+  `sec-ch-ua-platform-version`, the websocket header order.
+
+See `docs/api.md` and `docs/network.md`.
+
+---
+
 ## [2.1.0] - 2026-11-17
 
 ### Changed

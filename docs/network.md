@@ -119,13 +119,13 @@ and LLMNR (UDP 5355) multicast queries on the local link. Their origin
 
 ---
 
-## This app (2.0.2) on the wire
+## This app (2.2.0) on the wire
 
 | Destination | When | What |
 |-------------|------|------|
-| `id.tradeskillmaster.com` | Login, token refresh 90 s before expiry, logout | OIDC PKCE, see `docs/api.md` |
+| `id.tradeskillmaster.com` | Login (embedded window), token refresh 90 s before expiry, logout | OIDC PKCE, see `docs/api.md` |
 | `realm-api.tradeskillmaster.com` | Realm tab refresh | `/v2/realms`, `/v2/regions`, cached in SQLite |
-| `desktop-backend.tradeskillmaster.com` | Start, realm tab | `/game-versions`, `/user-realms` (GET, POST, DELETE) |
+| `desktop-backend.tradeskillmaster.com` | Start, realm tab, every socket connect | `/game-versions`, `/user-realms` (GET, POST, DELETE), `/group-sends/claim`, the version feed (`/app-updates/release/latest-linux.yml`) |
 | `addon-version.tradeskillmaster.com` | Start | `/channels` |
 | `app-backend-sockets.tradeskillmaster.com` | Start, reconnect | Polling session, then websocket upgrade |
 | `pricing-data.tradeskillmaster.com` | Per socket event | Blob download with the `verify` URL, no auth header |
@@ -138,19 +138,20 @@ Differences from the official client that a server can observe:
 | Aspect | Official 1.0.14 | This app |
 |--------|-----------------|----------|
 | REST `User-Agent` | `node-fetch` (worker), `node` (undici) | the same, per channel |
-| Keycloak `User-Agent` | Chromium `TradeSkillMaster/1.0.14 ...` | the same on token and refresh; `node` on revoke |
-| Authorize and token `redirect_uri` | `http://localhost/auth/callback` | `http://localhost:<ephemeral port>/auth/callback` |
-| Header names and order | per library (node-fetch, undici, Chromium) | aiohttp's order and casing |
-| TLS fingerprint | Node / Chromium | Python OpenSSL |
+| Keycloak `User-Agent` | Chromium `TradeSkillMaster/<version> ...` | the same on login window, token and refresh (live version); `node` on revoke |
+| Authorize and token `redirect_uri` | `http://localhost/auth/callback` | the same, caught in the embedded login window |
+| Header names and order | per library (node-fetch, undici, Chromium) | the same, set by `OrderedRequest` (websocket order read from the bundle, not seen on the wire) |
+| TLS fingerprint | Node / Chromium | Python OpenSSL (TLS 1.2 minimum, ALPN as the official channel), cipher list not matched |
 | `accept-encoding` | `gzip, deflate, br` (node-fetch), `br, gzip, deflate` (undici), `gzip, deflate, br, zstd` (Chromium) | the same without `zstd`, and without `br` when brotli is not installed |
-| Chromium client hints (`sec-ch-ua*`, `priority`, `cookie`) | sent on Keycloak token calls | not sent |
+| Chromium client hints (`sec-ch-ua*`, `priority`) | sent on Keycloak token calls | sent on token and refresh (aiohttp, captured order); the login window sends its own, `sec-ch-ua` rewritten |
+| `Origin`, `cookie` on token calls | none, none | none, none |
 | Socket transport | polling, then upgrade | polling, then upgrade |
 | Socket `User-Agent` | `node-XMLHttpRequest` (polling), none (websocket) | `node-XMLHttpRequest` (polling), `node-fetch` (websocket default) |
-| Websocket `permessage-deflate` | offered | not offered |
-| Sentry `sentry-trace`, `baggage`, `Connection: keep-alive` | sent | not sent |
-| Keycloak logout page | opened in a window | not opened, refresh token revoked only |
-| Extra calls | `/group-sends/claim`, `/local-machine-name`, Sentry | none (client methods exist for the first two but nothing calls them) |
-| `app_info.version` written to AppData | the official version | `OFFICIAL_APP_VERSION` (1.0.14) |
+| Websocket `permessage-deflate` | offered | offered |
+| Sentry `sentry-trace`, `baggage` | sent | never sent (deliberate) |
+| Keycloak logout | revoke, logout page in the window | revoke, logout URL in a hidden window, then the login window opens again |
+| Extra calls | `/group-sends/claim`, `/local-machine-name`, version feed, Sentry | `/group-sends/claim`, version feed; no `/local-machine-name`, no Sentry |
+| `app_info.version` written to AppData | the official version | the live version from the update feed (1.0.14 fallback) |
 
 ---
 

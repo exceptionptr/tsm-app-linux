@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        2.1.0
+Version:        2.2.0
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -16,14 +16,19 @@ BuildRequires:  python3-hatch-vcs
 BuildRequires:  git
 
 Requires:       python3
+# python3-pyside6 stays for the system libraries Qt needs (GL, xkbcommon, fonts).
+# Its Qt has no QtWebEngine on Fedora, so the PySide6 wheels with QtWebEngine and
+# QtWebChannel are bundled under /usr/lib/tsm-app/vendor/ and win on sys.path.
 Requires:       python3-pyside6
+Requires:       libnss3.so()(64bit)
 Requires:       python3-aiohttp
 Requires:       python3-pydantic
 Requires:       python3-aiosqlite
 Requires:       python3-keyring
 Requires:       python3-PyYAML
-# apscheduler (4.x), structlog, and tomli-w are bundled under
-# /usr/lib/tsm-app/vendor/ because they are not packaged in Fedora/openSUSE.
+# apscheduler (4.x), structlog, tomli-w and PySide6 (with QtWebEngine) are bundled
+# under /usr/lib/tsm-app/vendor/ because Fedora/openSUSE do not package them
+# in a usable form.
 
 %description
 Downloads auction house data from the TSM API and writes Lua files for
@@ -47,9 +52,9 @@ install -Dm644 tsm/ui/assets/tsm_256.png %{buildroot}%{_datadir}/icons/hicolor/2
 install -Dm644 LICENSE \
     %{buildroot}%{_datadir}/licenses/%{name}/LICENSE
 
-# Bundle Python deps not packaged in Fedora/openSUSE repos
+# Bundle Python deps not packaged (or packaged without QtWebEngine) in Fedora/openSUSE repos
 pip3 install --target=%{buildroot}/usr/lib/tsm-app/vendor \
-    "apscheduler>=4.0.0,<5" structlog tomli-w
+    "apscheduler>=4.0.0,<5" structlog tomli-w "PySide6>=6.6.0"
 
 # Inject vendor path into the entry point so it takes precedence over any
 # system-installed incompatible version (e.g. apscheduler 3.x)
@@ -72,6 +77,16 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Wed Nov 18 2026 exceptionptr <https://github.com/exceptionptr> - 2.2.0-1
+- Change: sign-in runs in an embedded Keycloak window (QtWebEngine) like the
+  official client 1.0.14; no browser, no Remember me
+- Change: the app reads the current official version from the public update feed
+- Change: group sends are claimed and written to AppData.lua
+- Change: packages now bundle QtWebEngine
+- Fix: data pushed for a realm before the follow list was reloaded was dropped
+- Fix: the app quit when the login window closed; several crashes and a second
+  login window after logout
+
 * Tue Nov 17 2026 exceptionptr <https://github.com/exceptionptr> - 2.1.0-1
 - Change: requests follow the official TSM Desktop App 1.0.14; the socket starts
   on HTTP long polling and upgrades to a websocket

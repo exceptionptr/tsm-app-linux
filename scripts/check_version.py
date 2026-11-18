@@ -28,17 +28,12 @@ APP_ID = "io.github.exceptionptr.tsm-app-linux"
 
 # Each entry: file, a regex with one capture group, and what it feeds.
 CHECKS: list[tuple[str, str, str]] = [
-    # Both Nix files also define apscheduler4, whose version must not be picked
-    # up instead, so each pattern is anchored on something unique to the app.
+    # The flake also defines apscheduler4, whose version must not be picked up
+    # instead, so the pattern is anchored on something unique to the app.
     (
         "flake.nix",
         r'# Keep in step with the version the release is tagged with\.\s*\n\s*version = "([^"]+)";',
         "the version nix run reports",
-    ),
-    (
-        "packaging/nixpkgs/package.nix",
-        r'pname = "tsm-app";\s*\n\s*version = "([^"]+)";',
-        "the nixpkgs expression",
     ),
     ("packaging/PKGBUILD", r"^pkgver=(.+)$", "the AUR package"),
     ("packaging/rpm/tsm-app.spec", r"^Version:\s+(.+?)\s*$", "the rpm"),

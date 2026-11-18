@@ -46,8 +46,23 @@ class AsyncRunner(QThread):
         try:
             self._loop.run_forever()
         finally:
+            self._drain_loop(self._loop)
             self._loop.close()
             logger.info("AsyncRunner event loop stopped")
+
+    @staticmethod
+    def _drain_loop(loop: asyncio.AbstractEventLoop) -> None:
+        """Cancel what is still running and close async generators before the loop closes.
+
+        Without it a coroutine in flight (a connect, a login) is destroyed pending and
+        its cleanup runs against a closed loop ("Event loop is closed").
+        """
+        pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+        for task in pending:
+            task.cancel()
+        if pending:
+            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+        loop.run_until_complete(loop.shutdown_asyncgens())
 
     def wait_ready(self, timeout: float = 5.0) -> None:
         """Block until the event loop is running. Raises RuntimeError on timeout."""

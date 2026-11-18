@@ -8,10 +8,10 @@ they run where no suitable PySide6 exists. The Nix flake builds from nixpkgs.
 |---|---|---|---|
 | wheel | `release.yml` | the user's pip | |
 | deb | `release.yml` | apt, Ubuntu 26.04+ | APScheduler 4 bundled |
-| rpm | `release.yml` | dnf or zypper | APScheduler 4 bundled |
+| rpm | `release.yml` | PySide6 wheels (with QtWebEngine) bundled | APScheduler 4 bundled |
 | AUR | `packaging/PKGBUILD` | `pyside6` package | |
-| Flatpak | `packaging.yml` | PySide6 wheel | app id is reverse-DNS |
-| AppImage | `packaging.yml` | PySide6 wheel | around 240 MB |
+| Flatpak | `packaging.yml` | `io.qt.PySide.BaseApp` (on `io.qt.qtwebengine.BaseApp`) | app id is reverse-DNS |
+| AppImage | `packaging.yml` | PySide6 Essentials and Addons wheels | whole Addons wheel (about 425 MB), not pruned |
 | Nix flake | `packaging.yml` | `python3Packages.pyside6` | |
 
 `packaging.yml` also runs on pushes to `develop` that touch packaging, so a
@@ -100,7 +100,8 @@ reports the Python, PySide6 and Qt versions and the platform plugin that loaded.
 QT_QPA_PLATFORM=offscreen tsm-app --self-test
 ```
 
-It opens no database, reads no keyring, makes no network call and takes no
+It does not load QtWebEngine, so it proves Qt starts but not that the login window
+opens. It opens no database, reads no keyring, makes no network call and takes no
 single instance lock, so it is safe to run while the app is already running, and
 it is a useful thing to ask for in a bug report.
 
@@ -108,12 +109,31 @@ CI runs it inside each package: through `flatpak run`, through the AppImage, and
 through the Nix wrapper, where it also proves `wrapQtAppsHook` wired the plugin
 path up.
 
-## Why PySide6-Essentials
+## Why QtWebEngine
 
-The Flatpak and AppImage install `PySide6-Essentials` rather than `PySide6`. The
-app imports only QtCore, QtGui, QtNetwork, QtSvg and QtWidgets, all of which are
-in Essentials. The Addons half carries QtWebEngine and QtMultimedia and would add
-several hundred megabytes for nothing.
+The login runs in an embedded Chromium window (QtWebEngine, QtWebChannel), so
+every package has to bring it. The AppImage installs `PySide6-Essentials` and
+`PySide6-Addons` (QtWebEngine lives in Addons) and its build checks that the
+WebEngine pieces are in the bundle. The Nuitka binary names the three modules
+explicitly. deb and AUR add the QtWebEngine packages of the distribution, Nix
+adds `qt6.qtwebengine`. Fedora's PySide6 has no QtWebEngine bindings, so the rpm
+bundles the PySide6 wheels next to APScheduler.
+
+The Chromium version differs per package, because each brings its own QtWebEngine:
+134 in the venv and in the AppImage and Nuitka wheels (6.10), 140 for nix and Arch,
+the base app's for the Flatpak, the distribution's for deb. The app logs it at
+startup; `docs/api.md` lists the effect on the traffic. None of these packages has
+been built or run with the login window yet, and no before/after sizes were
+recorded: build and sign in once per format before a release.
+
+The Chromium sandbox is never switched off, by environment variable or by
+command line flag, in any package.
+
+The Flatpak builds on `io.qt.PySide.BaseApp`, which itself builds on
+`io.qt.qtwebengine.BaseApp`. Only that QtWebEngine carries the patches that let
+Chromium start its sandboxed processes inside Flatpak, and a PySide6 wheel would
+load its own unpatched copy beside it. So the Flatpak installs no PySide6 wheel,
+and `scripts/flatpak_gen_deps.py` leaves PySide6 out.
 
 ## Flatpak
 
@@ -183,7 +203,7 @@ Two things to know before editing the script:
 - **Requirements must be exact `==` pins.** python-appimage joins its pip
   arguments into one shell string without quoting them, so `>=` or `<` is read as
   a redirect and the constraint is silently dropped:
-  `PySide6-Essentials>=6.6.0` installs whatever is newest and leaves a file
+  `PySide6-Addons>=6.6.0` installs whatever is newest and leaves a file
   called `=6.6.0`. `scripts/appimage_pins.py` resolves exact pins and refuses to
   emit anything containing shell metacharacters.
 - **Packaging runs separately from assembly.** python-appimage names its output
@@ -191,6 +211,10 @@ Two things to know before editing the script:
   `appimagetool` replaces the spaces with underscores, so letting it package the
   bundle fails on a file it cannot find. The script assembles the AppDir with
   `--no-packaging` and runs `appimagetool` itself.
+
+The build fails when a QtWebEngine piece the login window needs is missing from the
+bundle (the checked list is in `scripts/build_appimage.sh`); it does not reject the
+rest of the Addons wheel, which ships whole.
 
 Users without FUSE need `APPIMAGE_EXTRACT_AND_RUN=1`.
 
@@ -207,7 +231,7 @@ ship. Read off `ldd` against the bundled Qt libraries in a bare Ubuntu container
 Without glib, PySide6 does not import at all. Any desktop installation has the
 lot; a container does not, which is why the CI smoke test installs them.
 
-Only the AppImage has this exposure. The Flatpak runs inside the KDE runtime,
+Only the AppImage has this exposure. QtWebEngine adds more host needs (NSS, and unprivileged user namespaces for its sandbox, which Ubuntu 24.04 and later restrict through AppArmor); neither was checked yet. The Flatpak runs inside the KDE runtime,
 which provides them, and the Nix package gets them through its closure.
 
 ## Nix
@@ -228,16 +252,3 @@ it as a package, so it can be reused or dropped once nixpkgs has it.
 A Qt application needs its plugin paths wired up, which `buildPythonApplication`
 does not do. `qt6.wrapQtAppsHook` is added with `dontWrapQtApps = true`, and its
 arguments are folded into the wrapper the Python builder already creates.
-
-### Submitting to nixpkgs
-
-`packaging/nixpkgs/package.nix` is ready to copy to
-`pkgs/by-name/ts/tsm-app/package.nix`. It fetches a release tarball instead of
-the working tree and takes its dependencies as arguments. Before opening the
-pull request:
-
-1. Replace `lib.fakeHash` with the real hash:
-   `nix-prefetch-url --unpack https://github.com/exceptionptr/tsm-app-linux/archive/refs/tags/v2.0.0.tar.gz`
-2. Add yourself to `meta.maintainers`.
-3. Consider submitting `apscheduler_4` as its own package first. Reviewers
-   generally prefer a shared dependency over one vendored into an application.

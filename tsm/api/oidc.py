@@ -2,17 +2,16 @@
 
 Matches the official 1.0.14 client (keycloak-js inside Electron): same authorize
 parameters in the same order, same PKCE, state and nonce formats, and the token,
-refresh and revoke requests with the headers the official channels send (the
-token calls come from Chromium, the revoke call from undici). We differ in one
-point: we hand the login page to the system browser and catch the redirect on a
-loopback listener (RFC 8252) instead of embedding a browser. The official
-redirect_uri has no port (http://localhost/auth/callback) and cannot be bound
-without privileges, so redirect_uri() puts the ephemeral listener port in.
-Keycloak accepts http://localhost:<any port>/auth/callback for the desktop-app
-client (probed 2026-11-08: 127.0.0.1 and other paths are rejected).
+refresh and revoke requests with the headers the official channels send. The
+token calls go through aiohttp with the Chromium header set (no Origin, no
+cookie; TLS differs), because a page fetch cannot read Keycloak's error answers
+(no CORS headers on 4xx). The revoke call carries the undici set. The login page runs
+in an embedded Chromium window (tsm/ui/login_window.py) and the redirect_uri is
+the official one, http://localhost/auth/callback, which the window catches before
+it reaches the network. No system browser and no listener are involved.
 
 The desktop-app client refuses the password grant ("Client not allowed for
-direct access grants"), so the browser is the only way in. In exchange the app
+direct access grants"), so the login page is the only way in. In exchange the app
 never sees the password: it keeps an offline refresh token instead.
 """
 
@@ -26,19 +25,24 @@ import logging
 import secrets
 import time
 import uuid
-import webbrowser
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, quote_plus, urlencode
 
 import aiohttp
-from aiohttp import web
 from aiohttp.compression_utils import HAS_BROTLI
+from multidict import CIMultiDict, CIMultiDictProxy
+from yarl import URL
 
+from tsm.api.chromium import SEC_CH_UA
+from tsm.api.http import AUTO, UNDICI_SSL
 from tsm.api.official import UA_CHROMIUM, UA_UNDICI
 
 logger = logging.getLogger(__name__)
+
+LoginFlow = Callable[[str], Awaitable[dict[str, str]]]
+UserAgentFn = Callable[[], str]
 
 AUTH_BASE = "https://id.tradeskillmaster.com/realms/app/protocol/openid-connect"
 CLIENT_ID = "desktop-app"
@@ -47,37 +51,26 @@ CALLBACK_PATH = "/auth/callback"
 # The official client refreshes when fewer than 90 s of validity remain.
 REFRESH_MARGIN_SECONDS = 90
 LOGIN_TIMEOUT_SECONDS = 600
+# Token requests are short: a stuck connect must end in an error, not in silence.
+TOKEN_TIMEOUT = aiohttp.ClientTimeout(total=30, sock_connect=10)
 PKCE_VERIFIER_LENGTH = 96
 _PKCE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-
-_DONE_PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>TSM</title>
-<style>body{{font-family:sans-serif;background:#1e1e1e;color:#ddd;display:flex;
-align-items:center;justify-content:center;height:100vh;margin:0}}</style></head>
-<body><div><h2>{title}</h2><p>{text}</p></div></body></html>"""
-
 
 class OIDCError(RuntimeError):
     """The identity server refused a request (bad grant, revoked token, ...)."""
 
 
 class LoginCancelled(RuntimeError):
-    """The browser login was abandoned or timed out."""
+    """The login was abandoned or timed out."""
 
 
 def _b64url(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
-def redirect_uri(port: int | None = None) -> str:
-    """The OAuth redirect URI, the one place it is built.
-
-    The official client uses http://localhost/auth/callback (no port, Electron
-    intercepts it in its own window). A system browser needs a listener, which
-    cannot bind port 80 unprivileged, so the listener's ephemeral port is added.
-    ``port=None`` gives the official form (used for the logout redirect).
-    """
-    host = "http://localhost" if port is None else f"http://localhost:{port}"
-    return host + CALLBACK_PATH
+def redirect_uri() -> str:
+    """The OAuth redirect URI, the one place it is built (official, no port)."""
+    return "http://localhost" + CALLBACK_PATH
 
 
 def _pkce_verifier() -> str:
@@ -91,8 +84,8 @@ def _encode(params: list[tuple[str, str]]) -> str:
 
 
 def build_authorize_url(redirect: str, state: str, nonce: str, challenge: str) -> str:
-    """Authorize URL with the parameters and order of keycloak-js 1.0.14."""
-    return f"{AUTH_BASE}/auth?" + _encode(
+    """Authorize URL with the parameters and order of keycloak-js 1.0.14 (space is +)."""
+    return f"{AUTH_BASE}/auth?" + urlencode(
         [
             ("client_id", CLIENT_ID),
             ("redirect_uri", redirect),
@@ -103,7 +96,8 @@ def build_authorize_url(redirect: str, state: str, nonce: str, challenge: str) -
             ("nonce", nonce),
             ("code_challenge", challenge),
             ("code_challenge_method", "S256"),
-        ]
+        ],
+        quote_via=quote_plus,  # the official authorize URL has scope=openid+roles+...
     )
 
 
@@ -124,29 +118,46 @@ def _accept_encoding(official: str) -> str:
     return ", ".join(e for e in official.split(", ") if e in allowed)
 
 
-def chromium_token_headers() -> dict[str, str]:
-    """Headers of the renderer fetch that posts to the token endpoint (no Origin)."""
+def chromium_token_headers(user_agent: str = UA_CHROMIUM) -> dict[str, str]:
+    """Headers of the renderer fetch that posts to the token endpoint.
+
+    Order and casing as captured (HTTP/2, so lower case). No Origin and no cookie,
+    like the capture; Host and Content-Length are placed by aiohttp.
+    """
     return {
-        "User-Agent": UA_CHROMIUM,
-        "Accept": "application/json",
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "Sec-Fetch-Site": "cross-site",
-        "Sec-Fetch-Mode": "cors",
-        "Sec-Fetch-Dest": "empty",
-        "Accept-Encoding": _accept_encoding("gzip, deflate, br, zstd"),
-        "Accept-Language": "en-US",
+        "host": AUTO,
+        "content-length": AUTO,
+        "sec-ch-ua-platform": '"Linux"',
+        "user-agent": user_agent,
+        "accept": "application/json",
+        "sec-ch-ua": SEC_CH_UA,
+        "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-site": "cross-site",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-storage-access": "active",
+        "accept-encoding": _accept_encoding("gzip, deflate, br, zstd"),
+        "accept-language": "en-US",
+        "priority": "u=1, i",
     }
 
 
 def undici_revoke_headers() -> dict[str, str]:
-    """Headers of the main-process undici fetch that posts to the revoke endpoint."""
+    """Headers of the main-process undici fetch that posts to the revoke endpoint.
+
+    Same order and casing as client.undici_headers() without Authorization.
+    """
     return {
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "Accept": "*/*",
-        "Accept-Language": "*",
-        "Sec-Fetch-Mode": "cors",
-        "User-Agent": UA_UNDICI,
-        "Accept-Encoding": _accept_encoding("br, gzip, deflate"),
+        "host": AUTO,
+        "connection": AUTO,
+        "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "accept": "*/*",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "user-agent": UA_UNDICI,
+        "accept-encoding": _accept_encoding("br, gzip, deflate"),
+        "content-length": AUTO,
     }
 
 
@@ -217,84 +228,105 @@ class Tokens:
         return ["release", *extra]
 
 
+def _read_token_answer(status: int, text: str) -> dict[str, Any]:
+    """Tokens (or the error) from a token endpoint answer."""
+    try:
+        data: dict[str, Any] = json.loads(text)
+    except ValueError:
+        if status >= 400:
+            raise _status_error(status) from None
+        raise
+    if status >= 500 or status == 429:
+        raise _status_error(status)  # transient, let the caller retry
+    if status != 200 or "error" in data:
+        raise OIDCError(data.get("error_description") or data.get("error") or str(status))
+    return data
+
+
+def _status_error(status: int) -> aiohttp.ClientResponseError:
+    request_info = aiohttp.RequestInfo(
+        url=URL(f"{AUTH_BASE}/token"),
+        method="POST",
+        headers=CIMultiDictProxy(CIMultiDict()),
+        real_url=URL(f"{AUTH_BASE}/token"),
+    )
+    return aiohttp.ClientResponseError(request_info, (), status=status)
+
+
 async def _post_token(
-    session: aiohttp.ClientSession, form: list[tuple[str, str]]
-) -> dict[str, Any]:
-    async with session.post(
-        f"{AUTH_BASE}/token", data=_encode(form), headers=chromium_token_headers()
-    ) as resp:
-        try:
-            data: dict[str, Any] = await resp.json(content_type=None)
-        except (aiohttp.ContentTypeError, ValueError):
-            resp.raise_for_status()
-            raise
-        if resp.status >= 500 or resp.status == 429:
-            resp.raise_for_status()  # transient, let the caller retry
-        if resp.status != 200 or "error" in data:
-            raise OIDCError(data.get("error_description") or data.get("error") or str(resp.status))
-        return data
-
-
-async def browser_login(
     session: aiohttp.ClientSession,
-    open_url: Callable[[str], object] = webbrowser.open,
-    timeout: float = LOGIN_TIMEOUT_SECONDS,
-    on_url: Callable[[str], None] | None = None,
-) -> Tokens:
-    """Run the full browser login and return the tokens.
+    form: list[tuple[str, str]],
+    user_agent: UserAgentFn | None = None,
+) -> dict[str, Any]:
+    """POST the form to the token endpoint with the Chromium header set.
 
-    ``on_url`` receives the login URL so the UI can show it for copying, in case
-    no browser opens.
+    A 4xx answer is readable here: invalid_grant raises OIDCError (the token is
+    rejected), network errors and 5xx/429 raise aiohttp errors (transient).
+    """
+    headers = chromium_token_headers(user_agent() if user_agent is not None else UA_CHROMIUM)
+    grant = dict(form).get("grant_type", "")
+    try:
+        async with session.post(
+            f"{AUTH_BASE}/token",
+            data=_encode(form),
+            headers=headers,
+            timeout=TOKEN_TIMEOUT,
+        ) as resp:
+            text = await resp.text()
+            data = _read_token_answer(resp.status, text)
+    except TimeoutError as e:
+        logger.info("Token request failed (%s): timeout", grant)
+        raise TimeoutError("Token request timeout: no answer from the TSM login server") from e
+    except (aiohttp.ClientError, OIDCError, ValueError) as e:
+        # The message carries no form data, so no code, verifier or token.
+        logger.info("Token request failed (%s): %s: %s", grant, type(e).__name__, e)
+        raise
+    logger.info("Token request answered (%s)", grant)
+    return data
+
+
+def _check_nonce(id_token: object, nonce: str) -> None:
+    """Like keycloak-js: an id_token whose nonce is not ours is not adopted.
+
+    The signature is not checked (the token came over TLS from the token endpoint);
+    this guards against a response that belongs to another login.
+    """
+    if not id_token:
+        return
+    if not isinstance(id_token, str):
+        raise OIDCError("Invalid id_token")
+    if decode_jwt(id_token).get("nonce") != nonce:
+        raise OIDCError("Nonce mismatch")
+
+
+async def window_login(
+    session: aiohttp.ClientSession,
+    open_window: LoginFlow,
+    timeout: float = LOGIN_TIMEOUT_SECONDS,
+    user_agent: UserAgentFn | None = None,
+) -> Tokens:
+    """Run the full login in the embedded window and return the tokens.
+
+    ``open_window`` shows the authorize URL and resolves to the query of the
+    callback (``code``/``state`` or ``error``). Cancelling or timing out the wait
+    makes it close the window.
     """
     verifier = _pkce_verifier()
     challenge = _b64url(hashlib.sha256(verifier.encode()).digest())
     state = str(uuid.uuid4())
     nonce = str(uuid.uuid4())
-    loop = asyncio.get_running_loop()
-    result: asyncio.Future[dict[str, str]] = loop.create_future()
-
-    async def callback(request: web.Request) -> web.Response:
-        q = dict(request.query)
-        if q.get("state") != state:
-            return web.Response(status=400, text="State mismatch")
-        if not result.done():
-            result.set_result(q)
-        ok = "code" in q
-        page = _DONE_PAGE.format(
-            title="Signed in to TSM" if ok else "Sign-in failed",
-            text="You can close this tab and return to the TSM Desktop App."
-            if ok
-            else q.get("error_description", q.get("error", "")),
-        )
-        return web.Response(text=page, content_type="text/html")
-
-    app = web.Application()
-    app.router.add_get(CALLBACK_PATH, callback)
-    runner = web.AppRunner(app, access_log=None)
-    await runner.setup()
-    site = web.TCPSite(runner, "localhost", 0)
-    await site.start()
+    callback_uri = redirect_uri()
+    url = build_authorize_url(callback_uri, state, nonce, challenge)
+    logger.info("Opening the TSM login window")
     try:
-        server = site._server
-        sockets = getattr(server, "sockets", None) or []
-        port = sockets[0].getsockname()[1]
-        callback_uri = redirect_uri(port)
-        url = build_authorize_url(callback_uri, state, nonce, challenge)
-        if on_url is not None:
-            on_url(url)
-        logger.info("Opening the TSM login page in the browser (callback port %d)", port)
-        await loop.run_in_executor(None, open_url, url)
-        try:
-            query = await asyncio.wait_for(result, timeout)
-        except TimeoutError as e:
-            raise LoginCancelled("Login timed out") from e
-        # Let the browser receive the "you can close this tab" page.
-        await asyncio.sleep(0.2)
-    finally:
-        await runner.cleanup()
-
+        query = await asyncio.wait_for(open_window(url), timeout)
+    except TimeoutError as e:
+        raise LoginCancelled("Login timed out") from e
+    if query.get("state") != state:
+        raise OIDCError("State mismatch")
     if "code" not in query:
         raise OIDCError(query.get("error_description") or query.get("error") or "Login failed")
+    logger.info("Exchanging the login code")
     data = await _post_token(
         session,
         [
@@ -304,13 +336,17 @@ async def browser_login(
             ("redirect_uri", callback_uri),
             ("code_verifier", verifier),
         ],
+        user_agent,
     )
+    _check_nonce(data.get("id_token"), nonce)
     tokens = Tokens.from_response(data)
-    logger.info("Browser login complete")
+    logger.info("Login complete")
     return tokens
 
 
-async def refresh(session: aiohttp.ClientSession, refresh_token: str) -> Tokens:
+async def refresh(
+    session: aiohttp.ClientSession, refresh_token: str, user_agent: UserAgentFn | None = None
+) -> Tokens:
     """Exchange a refresh token for fresh tokens. Raises OIDCError if it was revoked."""
     data = await _post_token(
         session,
@@ -319,6 +355,7 @@ async def refresh(session: aiohttp.ClientSession, refresh_token: str) -> Tokens:
             ("refresh_token", refresh_token),
             ("client_id", CLIENT_ID),
         ],
+        user_agent,
     )
     return Tokens.from_response(data, previous_refresh=refresh_token)
 
@@ -336,6 +373,7 @@ async def revoke(session: aiohttp.ClientSession, refresh_token: str) -> None:
                 ]
             ),
             headers=undici_revoke_headers(),
+            ssl=UNDICI_SSL,
             timeout=aiohttp.ClientTimeout(total=5),
         ):
             pass

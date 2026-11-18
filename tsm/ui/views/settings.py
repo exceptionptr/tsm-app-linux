@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class SettingsDialog(QDialog):
+    logout_started = Signal()
     logged_out = Signal()
 
     def __init__(
@@ -333,15 +334,21 @@ class SettingsDialog(QDialog):
     def _logout_reset(self) -> None:
         """Logout and reset all settings to defaults."""
         self._vm.reset_to_defaults()
-
-        if self._auth_service:
-            from tsm.workers.bridge import AsyncBridge
-
-            bridge = AsyncBridge(self)
-            bridge.run(self._auth_service.logout())
-
         self.reject()
-        self.logged_out.emit()
+        self.logout_started.emit()  # the main window goes away at once
+
+        if not self._auth_service:
+            self.logged_out.emit()
+            return
+
+        from tsm.workers.bridge import AsyncBridge
+
+        # The login window must not open before the logout has finished: the
+        # logout navigation uses the same window and would be refused, and the
+        # Keycloak session would stay alive. finished fires on success and error.
+        bridge = AsyncBridge(self)
+        bridge.finished.connect(self.logged_out)
+        bridge.run(self._auth_service.logout())
 
 
 _PERIOD_MAP = {

@@ -1,12 +1,13 @@
-"""AuthService: browser login, token lifetime, logout.
+"""AuthService: login window, token lifetime, logout.
 
 Flow (official 1.0.14 client, see tsm/api/oidc.py):
-1. The login page opens in the system browser (authorization code + PKCE).
+1. The login page opens in an embedded Chromium window (authorization code + PKCE).
 2. The resulting access token is used directly as a Bearer token by every TSM
    service, and raw as the socket's Authorization header.
 3. Shortly before the access token expires it is refreshed with the offline
    refresh token, which also survives restarts in the keyring.
-4. Logout revokes the refresh token.
+4. Logout revokes the refresh token, then sends the login window to the Keycloak
+   logout URL, like the official client.
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-import webbrowser
 from collections.abc import Awaitable, Callable
 
 import aiohttp
@@ -50,12 +50,24 @@ class NotAuthenticated(RuntimeError):
 
 
 class AuthService:
-    def __init__(self, api_client: TSMApiClient | None = None):
+    def __init__(
+        self,
+        api_client: TSMApiClient | None = None,
+        login_flow: oidc.LoginFlow | None = None,
+        user_agent: oidc.UserAgentFn | None = None,
+        logout_flow: Callable[[str], Awaitable[None]] | None = None,
+    ):
         self._client = api_client
+        self._login_flow = login_flow
+        # Live Chromium user agent for the token and refresh requests.
+        self._user_agent = user_agent
+        # Navigates the login profile to the Keycloak logout URL.
+        self._logout_flow = logout_flow
         self._session: UserSession | None = None
         self._tokens: oidc.Tokens | None = None
-        self._remember = True
         self._lock: asyncio.Lock | None = None
+        # Bumped by cancel_restore(): a restore that started earlier stops quietly.
+        self._restore_epoch = 0
         self._listeners: list[TokenListener] = []
         self._lost_listeners: list[Callable[[], None]] = []
         # Set when restore found a password from the old login, so the dialog can
@@ -98,25 +110,20 @@ class AuthService:
     # Login and restore
     # ------------------------------------------------------------------ #
 
-    async def login(
-        self,
-        remember_me: bool = True,
-        open_url: Callable[[str], object] = webbrowser.open,
-        on_url: Callable[[str], None] | None = None,
-    ) -> UserSession:
-        """Sign in through the browser. Raises oidc.LoginCancelled on timeout."""
-        logger.info("Starting browser login")
-        tokens = await oidc.browser_login(await self._http(), open_url=open_url, on_url=on_url)
-        return await self._adopt(tokens, remember_me)
+    async def login(self) -> UserSession:
+        """Sign in through the login window. Raises oidc.LoginCancelled on close or timeout."""
+        if self._login_flow is None:
+            raise RuntimeError("Login window not configured")
+        logger.info("Starting login")
+        tokens = await oidc.window_login(
+            await self._http(), self._login_flow, user_agent=self._user_agent
+        )
+        return await self._adopt(tokens)
 
-    async def _adopt(self, tokens: oidc.Tokens, remember_me: bool) -> UserSession:
+    async def _adopt(self, tokens: oidc.Tokens) -> UserSession:
         self._tokens = tokens
-        self._remember = remember_me
-        remember_failed = False
-        if remember_me:
-            remember_failed = not store_credentials(tokens.username, tokens.refresh_token)
-        else:
-            delete_credentials()
+        # Like the official client, the refresh token is always kept.
+        remember_failed = not store_credentials(tokens.username, tokens.refresh_token)
         self._session = UserSession(
             username=tokens.username,
             user_id=tokens.user_id,
@@ -130,9 +137,7 @@ class AuthService:
                 "you will have to log in again next time"
             )
         else:
-            logger.info(
-                "Logged in (tier=%s, remember=%s)", tokens.premium_tier or "free", remember_me
-            )
+            logger.info("Logged in (tier=%s)", tokens.premium_tier or "free")
         await self._notify()
         return self._session
 
@@ -143,9 +148,12 @@ class AuthService:
         ready yet when the app starts with the desktop session. Returns False
         straight away when nothing is saved or the server rejects the token.
         """
+        epoch = self._restore_epoch
         for delay in (*RESTORE_RETRY_DELAYS, None):
+            if epoch != self._restore_epoch:
+                return False
             try:
-                return await self._restore_once()
+                return await self._restore_once(epoch)
             except Exception as e:
                 if not _worth_retrying(e):
                     raise
@@ -156,7 +164,11 @@ class AuthService:
                 await asyncio.sleep(delay)
         return False
 
-    async def _restore_once(self) -> bool:
+    def cancel_restore(self) -> None:
+        """Stop a running session restore (logout): it returns False without a session."""
+        self._restore_epoch += 1
+
+    async def _restore_once(self, epoch: int | None = None) -> bool:
         """One restore attempt. Raises only for a failure that is worth retrying."""
         username = get_username()
         if not username or self._client is None:
@@ -164,18 +176,21 @@ class AuthService:
         refresh_token = get_refresh_token(username)
         if not refresh_token:
             if has_legacy_password(username):
-                logger.info("Found a password from the old login; a browser sign-in is needed")
+                logger.info("Found a password from the old login; a sign-in is needed")
                 self.migrated_from_password = True
             return False
         logger.info("Restoring the session for %s", username)
         try:
-            tokens = await oidc.refresh(await self._http(), refresh_token)
+            tokens = await oidc.refresh(await self._http(), refresh_token, self._user_agent)
         except Exception as e:
             if is_transient_error(e):
                 raise
             logger.warning("Stored login no longer accepted (%s), need to sign in again", e)
             return False
-        await self._adopt(tokens, remember_me=True)
+        if epoch is not None and epoch != self._restore_epoch:
+            logger.info("Session restore cancelled, not adopting the refreshed tokens")
+            return False
+        await self._adopt(tokens)
         logger.info("Session restored")
         return True
 
@@ -208,7 +223,9 @@ class AuthService:
             if not force and not tokens.needs_refresh():
                 return
             try:
-                new = await oidc.refresh(await self._http(), tokens.refresh_token)
+                new = await oidc.refresh(
+                    await self._http(), tokens.refresh_token, self._user_agent
+                )
             except Exception as e:
                 if is_transient_error(e):
                     logger.warning("Token refresh failed, will retry: %s", e)
@@ -224,7 +241,7 @@ class AuthService:
                         logger.exception("Session lost listener failed")
                 return
             self._tokens = new
-            rotated = self._remember and new.refresh_token != tokens.refresh_token
+            rotated = new.refresh_token != tokens.refresh_token
             if rotated and not store_credentials(new.username, new.refresh_token):
                 logger.warning("Could not store the rotated refresh token in the keyring")
             logger.debug("Access token refreshed, valid for %.0f s", new.expires_at - time.time())
@@ -253,10 +270,16 @@ class AuthService:
             raise NotAuthenticated("Not authenticated, please log in")
 
     async def logout(self) -> None:
+        self.cancel_restore()
         tokens = self._tokens
         self._tokens = None
         self._session = None
         delete_credentials()
         if tokens is not None and self._client is not None:
             await oidc.revoke(await self._http(), tokens.refresh_token)
+        if tokens is not None and tokens.id_token and self._logout_flow is not None:
+            try:
+                await self._logout_flow(oidc.build_logout_url(tokens.id_token))
+            except Exception as e:  # noqa: BLE001 - best effort, the local logout is done
+                logger.warning("Keycloak logout page not reached: %s", e)
         logger.info("Logged out")

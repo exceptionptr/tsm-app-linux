@@ -172,9 +172,11 @@ jobs:
         run: |
           # Install the app package itself (no deps - RPM Requires provides them)
           pip install --no-deps --target=staging/usr/lib/tsm-app dist/*.whl
-          # Bundle Python deps absent from Fedora/openSUSE repos
+          # Bundle Python deps absent from Fedora/openSUSE repos. PySide6 comes
+          # from its wheels because the distro builds lack QtWebEngine, which
+          # the login window needs.
           pip install --pre --target=staging/usr/lib/tsm-app \
-            "apscheduler>=4.0.0a1,<5" structlog tomli-w
+            "apscheduler>=4.0.0a1,<5" structlog tomli-w "PySide6>=6.6.0"
           # Shell wrapper: version-agnostic, avoids Ubuntu-generated shebang/path issues
           mkdir -p staging/usr/bin
           printf '#!/bin/sh\nPYTHONPATH=/usr/lib/tsm-app${PYTHONPATH:+:$PYTHONPATH}\nexport PYTHONPATH\nexec python3 -m tsm "$@"\n' \
@@ -284,6 +286,9 @@ jobs:
           apt-get install -y \
             python3-pyside6.qtcore python3-pyside6.qtgui \
             python3-pyside6.qtsvg \
+            python3-pyside6.qtwebchannel \
+            python3-pyside6.qtwebenginecore \
+            python3-pyside6.qtwebenginewidgets \
             python3-pyside6.qtwidgets \
             python3-aiohttp python3-pydantic python3-aiosqlite \
             python3-keyring python3-yaml

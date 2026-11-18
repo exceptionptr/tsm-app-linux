@@ -31,6 +31,7 @@ from typing import Any
 import aiohttp
 from aiohttp.compression_utils import HAS_BROTLI
 
+from tsm.api.http import AUTO, NODE_SSL, UNDICI_SSL, OrderedRequest, raw_url
 from tsm.api.official import UA_NODE_FETCH, UA_UNDICI
 from tsm.api.types import GameVersionInfo, Realm, Region, UserRealm
 
@@ -77,29 +78,46 @@ def _accept_encoding(official: str) -> str:
 
 
 def node_fetch_headers(token: str | None = None) -> dict[str, str]:
-    """Headers of the official node-fetch channel (REST services, addon zip)."""
+    """Headers of the official node-fetch channel (REST services, addon zip).
+
+    Order as captured: accept, accept-encoding, authorization, content-length and
+    content-type (bodies only), user-agent, then Host and Connection capitalised.
+    AUTO entries fix a position, aiohttp fills the value (see tsm/api/http.py).
+    """
     headers = {
         "Accept": "*/*",
         "Accept-Encoding": _accept_encoding("gzip, deflate, br"),
     }
     if token is not None:
         headers["Authorization"] = "Bearer " + token
+    headers["Content-Length"] = AUTO
+    headers["Content-Type"] = AUTO
     headers["User-Agent"] = UA_NODE_FETCH
+    headers["Host"] = AUTO
+    headers["Connection"] = AUTO
     return headers
 
 
 def undici_headers(token: str | None = None) -> dict[str, str]:
-    """Headers of the official undici channel (presigned downloads, machine names)."""
-    headers: dict[str, str] = {}
+    """Headers of the official undici channel (presigned downloads, machine names).
+
+    Order as captured: host, connection: keep-alive, Authorization, content-type,
+    accept, accept-language, sec-fetch-mode, user-agent, accept-encoding,
+    content-length. Names are lower case except Authorization. The official client
+    adds sentry-trace and baggage after accept-encoding; this app never does.
+    """
+    headers: dict[str, str] = {"host": AUTO, "connection": AUTO}
     if token is not None:
         headers["Authorization"] = "Bearer " + token
     headers.update(
         {
-            "Accept": "*/*",
-            "Accept-Language": "*",
-            "Sec-Fetch-Mode": "cors",
-            "User-Agent": UA_UNDICI,
-            "Accept-Encoding": _accept_encoding("br, gzip, deflate"),
+            "content-type": AUTO,
+            "accept": "*/*",
+            "accept-language": "*",
+            "sec-fetch-mode": "cors",
+            "user-agent": UA_UNDICI,
+            "accept-encoding": _accept_encoding("br, gzip, deflate"),
+            "content-length": AUTO,
         }
     )
     return headers
@@ -125,11 +143,11 @@ class TSMApiClient:
 
     async def session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
+            # No default headers: every channel builder sends its own full set and
+            # OrderedRequest adds nothing (no User-Agent, Accept or Accept-Encoding).
             self._session = aiohttp.ClientSession(
                 timeout=aiohttp.ClientTimeout(total=120, sock_read=60),
-                # Fallback only; REST and download calls set their channel headers
-                # per request, the OIDC and socket channels override this too.
-                headers={"User-Agent": UA_NODE_FETCH},
+                request_class=OrderedRequest,
             )
         return self._session
 
@@ -170,7 +188,12 @@ class TSMApiClient:
             headers = build(await self._token())
             try:
                 async with session.request(
-                    method, url, params=params, json=json_body, headers=headers
+                    method,
+                    url,
+                    params=params,
+                    json=json_body,
+                    headers=headers,
+                    ssl=UNDICI_SSL if undici else NODE_SSL,
                 ) as resp:
                     if resp.status >= 400:
                         msg = resp.reason or ""
@@ -310,7 +333,7 @@ class TSMApiClient:
 
     async def download_addon_zip(self, url: str) -> bytes | None:
         """Fetch an addon zip the way the official installer does (node-fetch headers)."""
-        return await self.download(url, headers=node_fetch_headers())
+        return await self.download(url, headers=node_fetch_headers(), node_fetch=True)
 
     async def download(
         self,
@@ -318,11 +341,14 @@ class TSMApiClient:
         attempts: int = 6,
         *,
         headers: dict[str, str] | None = None,
+        node_fetch: bool = False,
     ) -> bytes | None:
         """Fetch a presigned blob URL. Returns None on 404 (superseded data).
 
         Sends the undici headers without Authorization or Range, as the official
-        worker does, unless headers says otherwise.
+        worker does, unless headers says otherwise. The URL goes out byte for byte.
+        node_fetch selects the TLS context of the node-fetch channel (addon zip)
+        instead of the undici one.
 
         Retries 408, 429 and 5xx with backoff like the official worker. The body
         is gunzipped when it still carries the gzip magic: AuctionDB blobs are
@@ -331,12 +357,16 @@ class TSMApiClient:
         """
         session = await self.session()
         headers = headers if headers is not None else undici_headers()
+        tls = NODE_SSL if node_fetch else UNDICI_SSL
         delay = 1.0
         last: BaseException | None = None
         for attempt in range(1, attempts + 1):
             try:
                 async with session.get(
-                    url, headers=headers, timeout=aiohttp.ClientTimeout(total=120)
+                    raw_url(url),
+                    headers=headers,
+                    ssl=tls,
+                    timeout=aiohttp.ClientTimeout(total=120),
                 ) as resp:
                     if resp.status == 404:
                         return None

@@ -7,7 +7,7 @@ from collections.abc import Coroutine
 from concurrent.futures import Future
 from typing import Any
 
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QObject, Signal, Slot
 
 from tsm.workers.async_runner import get_runner
 
@@ -29,15 +29,21 @@ class AsyncBridge(QObject):
     finished: Signal = Signal()
 
     def __init__(self, parent: QObject | None = None):
+        # A bridge without a parent would be owned by its Python wrapper, and the
+        # last reference is dropped on the async thread: Qt then deletes a main
+        # thread object from the wrong thread while the main thread may still
+        # deliver its events (heap corruption). The application owns it instead,
+        # and it is deleted on the main thread once its answer has been delivered.
+        if parent is None:
+            parent = QCoreApplication.instance()
         super().__init__(parent)
+        self.finished.connect(self._release)
 
     def run(self, coro: Coroutine[Any, Any, Any]) -> Future[Any]:
         """Submit coroutine to async runner; emit result_ready or error_occurred when done.
 
         Returns the concurrent future, so a caller can cancel() a long wait.
         """
-        # Keep a self-reference so Python doesn't GC this bridge before the callback fires.
-        self._self_ref: AsyncBridge | None = self
         runner = get_runner()
         future = runner.submit(coro)
         future.add_done_callback(self._on_done)
@@ -52,5 +58,9 @@ class AsyncBridge(QObject):
             logger.exception("AsyncBridge caught exception")
             self.error_occurred.emit(str(exc))
         finally:
-            self.finished.emit()
-            self._self_ref = None  # release self-reference
+            self.finished.emit()  # last use of self on this thread
+
+    @Slot()
+    def _release(self) -> None:
+        """Main thread, after result_ready/error_occurred were delivered."""
+        self.deleteLater()

@@ -44,6 +44,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 
+from tsm.api.http import NODE_SSL
 from tsm.api.official import UA_XHR
 
 logger = logging.getLogger(__name__)
@@ -333,6 +334,7 @@ class TSMSocket:
             self._polling_url(sid),
             headers=self._poll_headers(token),
             skip_auto_headers=POLL_SKIP_HEADERS,
+            ssl=NODE_SSL,
             timeout=aiohttp.ClientTimeout(total=timeout),
         ) as resp:
             if resp.status != 200:
@@ -350,6 +352,7 @@ class TSMSocket:
             data=body.encode("utf-8"),
             headers=headers,
             skip_auto_headers=POLL_SKIP_HEADERS,
+            ssl=NODE_SSL,
             timeout=aiohttp.ClientTimeout(total=CONNECT_TIMEOUT),
         ) as resp:
             if resp.status != 200:
@@ -393,8 +396,12 @@ class TSMSocket:
         try:
             ws = await session.ws_connect(
                 self._websocket_url(sid),
+                # aiohttp supplies the handshake headers; OrderedRequest orders them
+                # like the ws library and adds no User-Agent, Accept or Accept-Encoding.
                 headers={"Authorization": token},
+                ssl=NODE_SSL,
                 heartbeat=None,
+                compress=15,  # offers "permessage-deflate; client_max_window_bits"
                 autoping=True,
                 max_msg_size=0,
             )
@@ -441,13 +448,15 @@ class TSMSocket:
             async def post(body: str) -> None:
                 await self._poll_post(session, token, sid, body)
 
-            await self._poll_post(session, token, sid, "40")
-            if self._wake.is_set():
-                return state.joined
+            # Like engine.io-client, the upgrade probe starts together with the
+            # namespace connect and before the first long poll goes out.
             if "websocket" in upgrades:
                 probe_task = asyncio.get_running_loop().create_task(
                     self._probe(session, token, sid), name="tsm-socket-probe"
                 )
+            await self._poll_post(session, token, sid, "40")
+            if self._wake.is_set():
+                return state.joined
             pending = RECORD_SEPARATOR.join(packets[1:])
             ws: aiohttp.ClientWebSocketResponse | None = None
             while ws is None:
@@ -530,6 +539,7 @@ class TSMSocket:
                 data=b"1",
                 headers=headers,
                 skip_auto_headers=POLL_SKIP_HEADERS,
+                ssl=NODE_SSL,
                 timeout=aiohttp.ClientTimeout(total=CLOSE_TIMEOUT),
             ):
                 pass

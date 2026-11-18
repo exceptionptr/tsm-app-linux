@@ -4,17 +4,19 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import IO
+from typing import IO, Any
 
 from PySide6.QtWidgets import QApplication
 
+from tsm.api.app_version import AppVersion
 from tsm.api.client import TSMApiClient
-from tsm.api.official import OFFICIAL_APP_VERSION
 from tsm.core.scheduler import JobScheduler, ServiceContainer
 from tsm.core.services.auction import AuctionDataService
 from tsm.core.services.auth import AuthService
 from tsm.core.services.backup import BackupService
+from tsm.core.services.group_sends import GroupSendsService
 from tsm.core.services.sync import SyncController
 from tsm.core.services.updater import UpdateService
 from tsm.core.services.wow_detector import WoWDetectorService
@@ -23,6 +25,7 @@ from tsm.storage.auction_cache import AuctionCache
 from tsm.storage.config_store import ConfigStore
 from tsm.storage.database import Database
 from tsm.ui.app_window import AppWindow, _make_window_icon
+from tsm.ui.login_window import ChromiumLogin, log_engine_versions
 from tsm.ui.styles.theme import load_theme
 from tsm.ui.viewmodels.app_vm import AppViewModel
 from tsm.ui.viewmodels.realm_vm import RealmViewModel
@@ -63,7 +66,9 @@ def create_app(
     skip_detection: bool = False,
     skip_auto_sync: bool = False,
     skip_auto_backup: bool = False,
-) -> tuple[QApplication, AppWindow, AsyncRunner, AuthService]:
+) -> tuple[
+    QApplication, AppWindow, AsyncRunner, AuthService, Callable[[], Coroutine[Any, Any, bool]]
+]:
     """Wire up all dependencies and return the configured application."""
     qt_app = QApplication(argv or sys.argv)
     qt_app.setApplicationName("TSM Desktop App")
@@ -71,6 +76,10 @@ def create_app(
 
     qt_app.setApplicationVersion(__version__)
     qt_app.setOrganizationName("tsm-app")
+    # The app lives in the tray and the login window is the only window while
+    # signing in: closing it must not end the program (it did, and took the
+    # token request in flight with it). Quitting is explicit (AppWindow, login page).
+    qt_app.setQuitOnLastWindowClosed(False)
     # Names the app to the desktop: without it Qt falls back to the interpreter,
     # so the window carries no usable identity and KDE had nothing to put in
     # "Logout cancelled by ''" (issue #21). Matches packaging/tsm-app.desktop.
@@ -96,13 +105,20 @@ def create_app(
 
     # API + Services
     api_client = TSMApiClient()
-    # Registers itself as the client's token provider.
-    auth_svc = AuthService(api_client)
+    app_version = AppVersion(DATA_DIR / ".updaterId")
+    log_engine_versions()
+    chromium_login = ChromiumLogin(DATA_DIR, app_version.chromium_user_agent)
+    auth_svc = AuthService(
+        api_client,
+        login_flow=chromium_login.run,
+        user_agent=app_version.chromium_user_agent,
+        logout_flow=chromium_login.logout,
+    )
     wow_detector = WoWDetectorService(skip_scan=skip_detection)
     # APP_INFO.version is the desktop app version the addon shows; report the
     # official client's, which is the protocol this app speaks.
     auction_svc = AuctionDataService(
-        api_client, cache, wow_detector, app_version=OFFICIAL_APP_VERSION
+        api_client, cache, wow_detector, app_version=lambda: app_version.version
     )
     updater_svc = UpdateService(api_client, wow_detector)
     backup_svc = BackupService(wow_detector)
@@ -122,6 +138,14 @@ def create_app(
         app_vm.set_status(message)
 
     auction_svc.add_listener(app_vm.realm_data_received.emit)
+    group_sends = GroupSendsService(
+        api_client,
+        auction_svc,
+        DATA_DIR / "group_sends.json",
+        notify_fn=app_vm.group_send_notification.emit,
+        is_connected=lambda: sync.connected,
+    )
+    auction_svc.on_app_info_tick = group_sends.refresh
     auth_svc.add_session_lost_listener(app_vm.session_lost.emit)
     sync = SyncController(
         auth_svc,
@@ -130,6 +154,8 @@ def create_app(
         api_client=api_client,
         addon_notify_fn=_addon_notify,
         connection_fn=app_vm.connection_changed.emit,
+        app_version=app_version,
+        group_sends=group_sends,
     )
 
     # Scheduler (started after successful auth)
@@ -192,6 +218,7 @@ def create_app(
         await db.close()
 
     qt_app.aboutToQuit.connect(lambda: async_runner.submit(_shutdown()).result(timeout=5))
+    qt_app.aboutToQuit.connect(chromium_login.shutdown)
     qt_app.aboutToQuit.connect(async_runner.stop)
 
     # Logging out is announced as commitDataRequest. Take it as notice to stop
@@ -201,4 +228,17 @@ def create_app(
     # session save, which is not a logout.
     qt_app.commitDataRequest.connect(lambda _manager: window.begin_session_end())
 
-    return qt_app, window, async_runner, auth_svc
+    async def _startup() -> bool:
+        """Ask the version feed (bounded by its own timeout), then restore the session."""
+        try:
+            await app_version.check(await api_client.session())
+        except Exception:
+            logger.exception("Startup version check failed")
+        logger.info(
+            "App version %s (%s)",
+            app_version.version,
+            "update feed" if app_version.from_feed else "built-in fallback",
+        )
+        return await auth_svc.restore_session()
+
+    return qt_app, window, async_runner, auth_svc, _startup
