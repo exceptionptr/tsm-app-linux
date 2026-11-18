@@ -13,9 +13,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QHBoxLayout,
     QMainWindow,
     QMenu,
+    QMessageBox,
     QPushButton,
     QSizePolicy,
     QStackedWidget,
@@ -32,8 +34,9 @@ from tsm.ui.viewmodels.settings_vm import SettingsViewModel
 from tsm.ui.views.accounting_export import AccountingExportView
 from tsm.ui.views.addon_versions import AddonVersionsView
 from tsm.ui.views.backups import BackupsView
-from tsm.ui.views.login import LoginView
+from tsm.ui.views.login import LoginView, format_auth_error
 from tsm.ui.views.realm_data import RealmDataView, fmt_ts
+from tsm.workers.bridge import AsyncBridge
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +76,12 @@ class AppWindow(QMainWindow):
         self._auction_service = auction_service
         self._connected = False
         self._quitting = False
+        self._logging_out = False
+        # True from the moment a login bridge runs until its answer arrives.
+        self._login_pending = False
+        # Set once something else has taken over from the startup session restore
+        # (a login started, a logout began): the restore chain then does nothing.
+        self._startup_superseded = False
         self._session_ending = False
         self._backup_stats: str = ""
         self._log_viewer: LogViewerWindow | None = None
@@ -167,6 +176,7 @@ class AppWindow(QMainWindow):
         self._backup_view.stats_updated.connect(self._on_backup_stats)
         self._backup_view.refresh()
         self._app_vm.addon_notification.connect(self._notify_addon)
+        self._app_vm.group_send_notification.connect(self.notify)
         self._app_vm.realm_data_received.connect(self._realm_vm.on_data_received)
         self._app_vm.connection_changed.connect(self._on_connection_changed)
         self._app_vm.session_lost.connect(self._on_session_lost)
@@ -234,8 +244,6 @@ class AppWindow(QMainWindow):
                     name=name,
                 ),
             )
-
-        from tsm.workers.bridge import AsyncBridge
 
         bridge = AsyncBridge(self)
         bridge.result_ready.connect(lambda _: done_callback())
@@ -309,6 +317,8 @@ class AppWindow(QMainWindow):
     # ── Settings dialog ──────────────────────────────────────────────
 
     def _open_settings(self) -> None:
+        if self._logging_out:
+            return
         from tsm.ui.views.settings import SettingsDialog
 
         dlg = SettingsDialog(
@@ -317,6 +327,7 @@ class AppWindow(QMainWindow):
             wow_detector=self._addon_service,
             parent=self,
         )
+        dlg.logout_started.connect(self._on_logout_started)
         dlg.logged_out.connect(self._on_logged_out)
         dlg.exec()
 
@@ -368,8 +379,6 @@ class AppWindow(QMainWindow):
         self._session_ending = True
 
     def _confirm_quit(self) -> bool:
-        from PySide6.QtWidgets import QMessageBox
-
         reply = QMessageBox.question(
             self,
             "Quit TSM",
@@ -412,19 +421,79 @@ class AppWindow(QMainWindow):
     # ── Login ────────────────────────────────────────────────────────
 
     def show_login(self) -> None:
-        login = LoginView(self._app_vm, self._auth_service, parent=None)
-        login.login_successful.connect(self._on_login_success)
-        result = login.exec()
-        # If user dismissed login without logging in, quit the app.
-        if result == 0 and not self._app_vm.authenticated:
+        """Open the TSM login window at once, like the official client."""
+        self._start_login()
+
+    @property
+    def startup_superseded(self) -> bool:
+        """True when the startup restore must no longer open windows."""
+        return self._startup_superseded
+
+    def _start_login(self) -> None:
+        self._startup_superseded = True
+        if self._auth_service is None:
+            self._show_login_page("Auth service not configured.")
+            return
+        if self._login_pending:
+            logger.info("A login is already in progress, not starting another")
+            return
+        self._login_pending = True
+        bridge = AsyncBridge(self)
+        bridge.result_ready.connect(self._on_login_result)
+        bridge.error_occurred.connect(self._on_login_error)
+        bridge.run(self._auth_service.login())
+
+    def _on_login_result(self, session) -> None:
+        self._login_pending = False
+        if session.remember_failed:
+            QMessageBox.warning(
+                self,
+                "TSM - Sign In",
+                "You are signed in, but your login could not be saved because the "
+                "system keyring is not available.\n\n"
+                "Make sure a Secret Service provider such as GNOME Keyring or KWallet "
+                "is running and unlocked. Until then you will be asked to sign in "
+                "each time the app starts.",
+            )
+        self._app_vm.on_login_success(session)
+        self._on_login_success()
+
+    def _on_login_error(self, error_msg: str) -> None:
+        self._login_pending = False
+        self._show_login_page(format_auth_error(error_msg))
+
+    def _show_login_page(self, error: str) -> None:
+        """The window was closed or the login failed: one button to try again."""
+        info = ""
+        if getattr(self._auth_service, "migrated_from_password", False):
+            info = (
+                "TSM now signs in through its website. Please sign in once more; "
+                "your old saved password has been removed."
+            )
+        login = LoginView(error, info, parent=None)
+        if login.exec() == QDialog.DialogCode.Accepted:
+            self._start_login()
+        elif not self._app_vm.authenticated:
             app = QApplication.instance()
             if app is not None:
                 app.quit()
 
-    def _on_logged_out(self) -> None:
-        """Called when the user clicks Logout in Settings - hide and re-show login."""
+    def _on_logout_started(self) -> None:
+        """Logout clicked in Settings: leave the signed-in state and hide the window now."""
+        if self._logging_out:
+            return
+        self._logging_out = True
+        self._startup_superseded = True
+        if self._auth_service is not None:
+            self._auth_service.cancel_restore()
         self._app_vm.on_logout()
         self.hide()
+
+    def _on_logged_out(self) -> None:
+        """The logout has finished: show the login, once per logout."""
+        if not self._logging_out:
+            return
+        self._logging_out = False
         self.show_login()
 
     def _on_session_lost(self) -> None:

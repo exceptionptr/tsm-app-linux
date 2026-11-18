@@ -7,6 +7,9 @@ python -m nuitka \
   --standalone \
   --onefile \
   --enable-plugin=pyside6 \
+  --include-module=PySide6.QtWebEngineCore \
+  --include-module=PySide6.QtWebEngineWidgets \
+  --include-module=PySide6.QtWebChannel \
   --linux-icon=packaging/tsm-app.png \
   --output-dir=dist/ \
   --output-filename=tsm-app \

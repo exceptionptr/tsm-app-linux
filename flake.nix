@@ -15,7 +15,7 @@
       forAllSystems = fn: nixpkgs.lib.genAttrs systems (system: fn nixpkgs.legacyPackages.${system});
 
       # Keep in step with the version the release is tagged with.
-      version = "2.1.0";
+      version = "2.2.0";
     in
     {
       overlays.default = final: _prev: {
@@ -88,7 +88,13 @@
           # wrapper the Python builder already creates.
           # wrapQtAppsHook reads the plugin prefix off qtbase, and fails with
           # "qtPluginPrefix is unset" when it is not among the build inputs.
-          buildInputs = [ final.qt6.qtbase ];
+          # qtwebengine and qtwebchannel are there for the login window: the
+          # hook adds their plugin, resource and helper paths to the wrapper.
+          buildInputs = [
+            final.qt6.qtbase
+            final.qt6.qtwebengine
+            final.qt6.qtwebchannel
+          ];
           nativeBuildInputs = [ final.qt6.wrapQtAppsHook ];
           dontWrapQtApps = true;
           preFixup = ''

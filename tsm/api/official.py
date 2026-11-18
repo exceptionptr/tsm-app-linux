@@ -10,11 +10,16 @@ OFFICIAL_APP_VERSION = "1.0.14"
 OFFICIAL_ELECTRON_VERSION = "44.4.3"
 OFFICIAL_CHROMIUM_VERSION = "152.0.7977.130"
 
-UA_CHROMIUM = (
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
-    f"TradeSkillMaster/{OFFICIAL_APP_VERSION} Chrome/{OFFICIAL_CHROMIUM_VERSION} "
-    f"Electron/{OFFICIAL_ELECTRON_VERSION} Safari/537.36"
-)
+def chromium_user_agent_for(app_version: str) -> str:
+    """The Chromium renderer User-Agent for a given app version."""
+    return (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+        f"TradeSkillMaster/{app_version} Chrome/{OFFICIAL_CHROMIUM_VERSION} "
+        f"Electron/{OFFICIAL_ELECTRON_VERSION} Safari/537.36"
+    )
+
+
+UA_CHROMIUM = chromium_user_agent_for(OFFICIAL_APP_VERSION)
 UA_NODE_FETCH = "node-fetch"
 UA_UNDICI = "node"
 UA_XHR = "node-XMLHttpRequest"

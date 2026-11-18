@@ -38,7 +38,7 @@ from tsm.api.types import AddonRelease, Realm, Region, UserRealm
 from tsm.core.models.auction import AppInfo, AuctionData, RealmStatus
 from tsm.storage.auction_cache import AuctionCache
 from tsm.wow import game_versions as gvs
-from tsm.wow.lua_writer import AppDataFile, render_app_info
+from tsm.wow.lua_writer import AppDataFile, group_sent_at, render_app_info, render_group_imports
 from tsm.wow.utils import installed_versions, normalize_wow_base
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,8 @@ NEW_REALM_RECONNECT_DELAY_SECONDS = 5.0
 _REALM_TAG = "AUCTIONDB_NON_COMMODITY_DATA"
 _REGION_TAG = "AUCTIONDB_REGION_STAT"
 _AH_TYPES = ("ALL", "ALLIANCE", "HORDE")
+_GROUP_IMPORTS_TAG = "GROUP_IMPORTS"
+_GROUP_IMPORTS_KEY = "Global"  # the APP_INFO key too: removals must name the tag
 
 ChangeListener = Callable[[AuctionData], Awaitable[None] | None]
 
@@ -104,6 +106,7 @@ class _Write:
     data: str
     time: int
     auction_house_id: int | None
+    replace: bool = False  # drop the stored entry first, so an older timestamp still wins
 
 
 @dataclass
@@ -113,6 +116,7 @@ class _FileState:
     stored: dict[tuple[str, str], int] | None = None
     pending: list[_Write] = field(default_factory=list)
     removals: set[str] = field(default_factory=set)
+    tag_removals: set[tuple[str, str]] = field(default_factory=set)  # (tag, key)
     flush: asyncio.Task[None] | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -123,12 +127,13 @@ class AuctionDataService:
         api_client: TSMApiClient | None = None,
         cache: AuctionCache | None = None,
         wow_detector: Any = None,
-        app_version: str = OFFICIAL_APP_VERSION,
+        app_version: str | Callable[[], str] = OFFICIAL_APP_VERSION,
     ):
         self._client = api_client
         self._cache = cache
         self._detector = wow_detector
-        self._app_version = app_version
+        # A callable lets the version follow the update feed while the app runs.
+        self._app_version_src = app_version
         self._user_id = ""
         self._realms: dict[int, Realm] = {}
         self._regions: dict[int, Region] = {}
@@ -138,6 +143,9 @@ class AuctionDataService:
         # Newest lastModified the server announced: ("realm", id, ahType) / ("region", id, "")
         self._server_lm: dict[tuple[str, int, str], int] = {}
         self._in_flight: dict[tuple[str, int, str], int] = {}
+        # Realm strings that arrived before the follow was known locally (the server can
+        # push right after the follow call, before the list is reloaded); replayed on follow.
+        self._early: dict[tuple[int, str, str], dict[str, Any]] = {}
         self._files: dict[Path, _FileState] = {}
         self._sem: asyncio.Semaphore | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
@@ -149,6 +157,8 @@ class AuctionDataService:
         self._last_event = 0
         self._written = 0
         self.reconnect: Callable[[], Awaitable[None]] | None = None
+        # Runs with every APP_INFO loop tick (group sends refresh their import states).
+        self.on_app_info_tick: Callable[[], Awaitable[None]] | None = None
 
     # ------------------------------------------------------------------ #
     # Wiring
@@ -268,6 +278,7 @@ class AuctionDataService:
         self._user_realms_loaded = False
         self._server_lm.clear()
         self._in_flight.clear()
+        self._early.clear()
         self._files.clear()
 
     async def load_user_realms(self) -> None:
@@ -278,6 +289,14 @@ class AuctionDataService:
         logger.info("Account follows %d realm auction houses", len(self._user_realms))
         await self._prune()
         await self._emit()
+        await self._replay_early()
+
+    async def _replay_early(self) -> None:
+        """Handle realm strings that were dropped as not followed, now that they are."""
+        ready = [k for k in self._early if self._followed(k[0], k[1]) is not None]
+        for k in ready:
+            payload = self._early.pop(k)
+            await self._on_realm_string(payload)
 
     def _followed(self, realm_id: int, ah_type: str) -> UserRealm | None:
         for ur in self._user_realms:
@@ -408,6 +427,40 @@ class AuctionDataService:
             out.append(appdata or d / "AppData.lua")
         return out
 
+    def bases(self) -> list[Path]:
+        return self._bases()
+
+    def installed_folders(self) -> list[str]:
+        """Installed game version folders across all WoW installs, without repeats."""
+        out: list[str] = []
+        for base in self._bases():
+            for folder in installed_versions(base):
+                if folder not in out:
+                    out.append(folder)
+        return out
+
+    def set_group_imports(self, folder: str, sends: list[dict[str, Any]]) -> int:
+        """Queue GROUP_IMPORTS/Global for one game version: replace it, or remove it without sends.
+
+        Returns the number of AppData.lua files that have a target. Goes through the same
+        per-file queue as every other write, and never touches the APP_INFO entry.
+        """
+        paths = self._targets(folder)
+        blob = render_group_imports(sends) if sends else ""
+        stamp = max((group_sent_at(s) for s in sends), default=0)
+        ident = (_GROUP_IMPORTS_TAG, _GROUP_IMPORTS_KEY)
+        for path in paths:
+            st = self._state(path)
+            st.pending = [w for w in st.pending if (w.tag, w.key) != ident]
+            st.tag_removals.discard(ident)
+            if sends:
+                st.pending.append(_Write(*ident, blob, stamp, None, replace=True))
+            else:
+                st.tag_removals.add(ident)
+            if st.flush is None or st.flush.done():
+                st.flush = self._spawn(self._flush(path))
+        return len(paths)
+
     def apphelper_missing(self) -> list[str] | None:
         bases = self._bases()
         if not bases:
@@ -499,6 +552,10 @@ class AuctionDataService:
                 return
         if self._user_realms_loaded and self._followed(realm_id, ah_type) is None:
             logger.info("Data for realm %d/%s not followed, ignored", realm_id, ah_type)
+            tag = str(p.get("stringType") or "")
+            old = self._early.get((realm_id, ah_type, tag))
+            if old is None or _int(p.get("lastModified")) >= _int(old.get("lastModified")):
+                self._early[(realm_id, ah_type, tag)] = p
             return
         region = realm["region"]
         folder = gvs.folder_for_region(region.get("gameVersion", ""))
@@ -603,15 +660,21 @@ class AuctionDataService:
         async with st.lock:
             writes, st.pending = st.pending, []
             removals, st.removals = st.removals, set()
-            if not writes and not removals:
+            tag_removals, st.tag_removals = st.tag_removals, set()
+            if not writes and not removals and not tag_removals:
                 return
 
             def apply() -> tuple[dict[tuple[str, str], int], int, list[str]]:
                 f = AppDataFile(path)
                 removed = f.remove(removals) if removals else []
+                for tag, key in tag_removals:
+                    removed += [f"{tag}/{k}" for k in f.remove([key], tag=tag)]
                 n = 0
                 for w in writes:
-                    if f.update(w.tag, w.key, w.data, w.time, w.auction_house_id):
+                    if w.replace:
+                        f.replace(w.tag, w.key, w.data, w.time, w.auction_house_id)
+                        n += 1
+                    elif f.update(w.tag, w.key, w.data, w.time, w.auction_house_id):
                         n += 1
                 f.save()
                 return {(e.tag, e.key): e.time for e in f.entries if not e.raw}, n, removed
@@ -677,6 +740,16 @@ class AuctionDataService:
                     await self.write_app_info()
                 except Exception:
                     logger.exception("Writing APP_INFO failed")
+            if self.on_app_info_tick is not None:
+                try:
+                    await self.on_app_info_tick()
+                except Exception:
+                    logger.exception("Group send refresh failed")
+
+    @property
+    def _app_version(self) -> str:
+        src = self._app_version_src
+        return src() if callable(src) else src
 
     async def write_app_info(self) -> None:
         now = int(time.time())

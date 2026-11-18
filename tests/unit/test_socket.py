@@ -11,6 +11,7 @@ import pytest
 from aiohttp import web
 
 from tsm.api import socket as sock
+from tsm.api.http import OrderedRequest
 from tsm.api.official import OFFICIAL_APP_VERSION, UA_CHROMIUM, UA_XHR
 from tsm.api.socket import TSMSocket, backoff_delay, parse_packet, yeast
 
@@ -48,6 +49,7 @@ class FakeEngineIO:
         ws_script: Any = None,
         refuse: bool = False,
         affinity: bool = False,
+        post_delay: float = 0.0,
     ) -> None:
         self.upgrades = upgrades
         self.after_connect = after_connect
@@ -57,11 +59,13 @@ class FakeEngineIO:
         # Like a load balancer with session affinity: the open response sets a cookie
         # and every later request without it is answered HTTP 400.
         self.affinity = affinity
+        self.post_delay = post_delay  # holds back the namespace connect (body 40)
         self.queue: asyncio.Queue[str] = asyncio.Queue()
         self.requests: list[tuple[str, str, dict[str, str], str]] = []
         self.posts: list[str] = []
         self.peers: list[int] = []  # client port of every polling GET/POST
         self.ws_frames: list[str] = []
+        self.ws_raw_headers: list[list[tuple[str, str]]] = []
         self.connects = 0
         self.open_gets = 0
         self.gets_open_at_5: int | None = None
@@ -78,11 +82,16 @@ class FakeEngineIO:
             )
         if q["transport"] == "websocket":
             self.requests.append(("WS", request.query_string, headers, ""))
+            self.ws_raw_headers.append(
+                [(k.decode(), v.decode()) for k, v in request.raw_headers]
+            )
             if not self.ws_ok:
                 return web.Response(status=400)
             return await self._websocket(request)
         if request.method == "POST":
             body = await request.text()
+            if body == "40" and self.post_delay:
+                await asyncio.sleep(self.post_delay)
             self.requests.append(("POST", request.query_string, headers, body))
             self.peers.append(request.transport.get_extra_info("peername")[1])  # type: ignore[union-attr,index]
             self.posts.append(body)
@@ -165,7 +174,7 @@ async def _run_socket(server: FakeEngineIO, token_value: str = "raw-token"):
     states: list[bool] = []
     # unsafe=True: the fake server listens on an IP, where aiohttp stores no cookies otherwise.
     session = aiohttp.ClientSession(
-        headers={"User-Agent": "node-fetch"}, cookie_jar=aiohttp.CookieJar(unsafe=True)
+        request_class=OrderedRequest, cookie_jar=aiohttp.CookieJar(unsafe=True)
     )
 
     async def get_session():
@@ -232,6 +241,55 @@ async def test_polling_open_connect_first_body_events_and_upgrade():
         await session.close()
         await server.stop()
     assert states == [True, False]
+
+
+@pytest.mark.asyncio
+async def test_websocket_handshake_matches_the_ws_library():
+    server = FakeEngineIO(["websocket"], [])
+    await server.start()
+    s, session, _, _ = await _run_socket(server)
+    try:
+        s.start()
+        await _until(lambda: "5" in server.ws_frames)
+        (raw,) = server.ws_raw_headers
+        # Order and casing of the ws library, Host last like Node; no UA, Accept
+        # or Accept-Encoding; no Sentry headers.
+        assert [k for k, _ in raw] == [
+            "Authorization",
+            "Sec-WebSocket-Version",
+            "Sec-WebSocket-Key",
+            "Connection",
+            "Upgrade",
+            "Sec-WebSocket-Extensions",
+            "Host",
+        ]
+        by_name = {k.lower(): v for k, v in raw}
+        assert by_name["authorization"] == "raw-token"
+        assert by_name["connection"] == "Upgrade"
+        assert by_name["upgrade"] == "websocket"
+        assert by_name["sec-websocket-extensions"] == "permessage-deflate; client_max_window_bits"
+    finally:
+        await s.stop()
+        await session.close()
+        await server.stop()
+
+
+@pytest.mark.asyncio
+async def test_probe_starts_with_the_namespace_connect_not_after_it():
+    # The namespace connect is held back; the websocket must already be open, as
+    # engine.io-client starts the probe right after the handshake.
+    server = FakeEngineIO(["websocket"], [], post_delay=0.5)
+    await server.start()
+    s, session, _, _ = await _run_socket(server)
+    try:
+        s.start()
+        await _until(lambda: "5" in server.ws_frames or "2probe" in server.ws_frames)
+        assert "40" not in server.posts
+        assert [r[0] for r in server.requests][:2] == ["GET", "WS"]
+    finally:
+        await s.stop()
+        await session.close()
+        await server.stop()
 
 
 @pytest.mark.asyncio
@@ -449,3 +507,16 @@ async def test_reconnect_on_polling_sends_the_close_packet(monkeypatch):
         await s.stop()
         await session.close()
         await server.stop()
+
+
+def test_ssl_contexts_per_channel():
+    import ssl
+
+    from tsm.api.http import NODE_SSL, UNDICI_SSL, ssl_context
+
+    assert ssl_context() is NODE_SSL
+    assert NODE_SSL is not UNDICI_SSL
+    for ctx in (NODE_SSL, UNDICI_SSL):
+        assert ctx.minimum_version == ssl.TLSVersion.TLSv1_2
+        assert ctx.verify_mode == ssl.CERT_REQUIRED
+        assert ctx.check_hostname

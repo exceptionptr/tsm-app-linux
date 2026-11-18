@@ -77,6 +77,18 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.2.0" date="2026-11-18">
+      <description>
+        <ul>
+          <li>Signs in to TSM in a window inside the app, like the official Desktop App, instead of the browser</li>
+          <li>Shows a Login Again button when the sign-in is cancelled or fails</li>
+          <li>Picks up group sends and hands them to the TSM addon</li>
+          <li>Follows the current official app version automatically</li>
+          <li>Fixes data for a newly added realm staying on Waiting</li>
+          <li>Fixes the app closing when the sign-in window was closed, and several crashes</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-11-17">
       <description>
         <ul>

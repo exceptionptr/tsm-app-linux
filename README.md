@@ -29,10 +29,12 @@ What happened, in order:
 | November 2026                | Accounts of users of this app were disabled.                                                                                                                                                                        |
 | Around 16 November 2026      | TSM released official app versions 1.0.13 and 1.0.14, announced as "Behind-the-scenes improvements to the app's connection to TSM's servers". The maintainer reads this as the start of official flagging of third-party clients. |
 
-Full history in `docs/history.md`.
+The full history, including TSM's e-mail to users of this app, is in
+[docs/history.md](docs/history.md).
 
-Technical background is in `docs/api.md` (protocol) and `docs/network.md` (what
-the official client and this app send, and to which hosts). The project does not
+Technical background is in [docs/api.md](docs/api.md) (protocol) and
+[docs/network.md](docs/network.md) (what the official client and this app send,
+and to which hosts). The project does not
 contain TSM's code. It talks to TSM's servers with the user's own login and
 writes the file format the TSM addon reads.
 
@@ -53,9 +55,11 @@ writes the file format the TSM addon reads.
 
 ## Features
 
-- TSM account sign-in through the browser, the same login as the official app; only a refresh token is kept, in the keyring (Secret Service)
+- TSM account sign-in in an embedded Keycloak window, the same login as the official app (no browser needed); only a refresh token is kept, in the keyring (Secret Service)
 - Live auction data: the TSM server pushes new data as soon as it is ready, only changed data is downloaded; manual refresh on demand
 - Retail, Progression, Anniversary, Classic Era (including Hardcore and Season of Discovery) and World of Warcraft Forever
+- Group sends from TSM are claimed and handed to the addon through `AppData.lua`
+- The app follows the current official app version automatically
 - Followed realms are stored on your TSM account, shared with the official app
 - WoW install auto-detection for Wine, Lutris, Bottles, Faugus Launcher, Steam (native and Flatpak), and custom paths
 - Atomic `AppData.lua` writes: no partial/corrupt addon data
@@ -73,7 +77,7 @@ The Flatpak, AppImage and Nix packages carry everything else they need. Only the
 deb, rpm, AUR and from-source installs require the system to provide:
 
 - Python 3.11+
-- PySide6 (Qt6)
+- PySide6 (Qt6) with QtWebEngine (the sign-in window)
 
 ## Installation
 
@@ -114,7 +118,7 @@ sudo dnf install tsm-app-*.noarch.rpm
 ### Flatpak (any distro)
 
 Download the bundle from the [latest release](https://github.com/exceptionptr/tsm-app-linux/releases/latest).
-It carries its own Python and Qt, so no distro PySide6 is needed:
+It carries its own Python and Qt (with QtWebEngine), so no distro PySide6 is needed:
 
 ```bash
 flatpak install ./io.github.exceptionptr.tsm-app-linux.flatpak
@@ -126,7 +130,7 @@ release the same way to upgrade.
 
 ### AppImage (any distro)
 
-One file with Python, Qt and every dependency inside. Around 240 MB:
+One file with Python, Qt and every dependency inside. Around 425 MB, because it carries QtWebEngine:
 
 ```bash
 chmod +x TSM_Desktop_App-*.AppImage
@@ -295,6 +299,7 @@ If your WoW installation isn't detected automatically, add the path manually via
 | WoW          | `tsm/wow/`                      | Install detection, Lua writer, SavedVariables reader |
 | UI           | `tsm/ui/`                       | MVVM views + viewmodels (PySide6)                    |
 | API client   | `tsm/api/client.py`             | aiohttp TSM API client with retry logic              |
+| Login window | `tsm/ui/login_window.py`        | Embedded Keycloak window (QtWebEngine)               |
 
 ## Development
 

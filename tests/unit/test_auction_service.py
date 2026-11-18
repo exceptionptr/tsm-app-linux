@@ -188,6 +188,22 @@ async def test_unfollowed_realm_is_ignored(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_data_pushed_before_the_follow_is_applied_is_kept(tmp_path):
+    client = _client(user_realms=[])
+    svc, base = await _service(tmp_path, client)
+    await svc.handle_event("realm_auctiondb", _realm_event(300))
+    await svc.flush_all()
+    client.download.assert_not_awaited()
+    client.user_realms = AsyncMock(
+        return_value=[{"id": "x", "userId": "u", "realmId": 300, "auctionHouseType": "ALL"}]
+    )
+    await svc.load_user_realms()
+    await svc.flush_all()
+    f = _appdata(base, "_retail_")
+    assert f.last_update("AUCTIONDB_NON_COMMODITY_DATA", "Tarren Mill") == 100
+
+
+@pytest.mark.asyncio
 async def test_nothing_is_downloaded_without_apphelper(tmp_path):
     client = _client()
     svc, _ = await _service(tmp_path, client, folders=("_classic_",))
@@ -249,6 +265,19 @@ async def test_statuses_list_realms_under_their_region(tmp_path):
     assert tm.auctiondb_status == "Up to date"
     assert statuses[("bcc", "BCC-EU", "Everlook-Horde")].auctiondb_status == "Waiting"
     assert statuses[("forever", "Forever-EU", "Forever-EU")].is_region
+
+
+@pytest.mark.asyncio
+async def test_app_info_uses_the_live_version(tmp_path):
+    svc, base = await _service(tmp_path)
+    current = ["1.0.20"]
+    svc._app_version_src = lambda: current[0]
+    await svc.handle_event("app_info", {"message": {"id": 1, "msg": "hi"}, "news": []})
+    await svc.flush_all()
+    assert 'version="1.0.20"' in _appdata(base, "_retail_").entries[0].data
+    assert svc.current().app_info.version == "1.0.20"
+    current[0] = "1.0.21"
+    assert svc.current().app_info.version == "1.0.21"
 
 
 @pytest.mark.asyncio

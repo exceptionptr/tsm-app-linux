@@ -13,6 +13,7 @@ from aiohttp import web
 from aiohttp.compression_utils import HAS_BROTLI
 
 import tsm.api.client as mod
+from tsm.api import oidc
 from tsm.api.client import TSMApiClient
 
 NODE_FETCH_AE = "gzip, deflate, br" if HAS_BROTLI else "gzip, deflate"
@@ -36,6 +37,8 @@ async def server() -> AsyncIterator[tuple[str, Recorder]]:
                 "path": request.path,
                 "query": dict(request.query),
                 "headers": dict(request.headers),
+                "raw": [(k.decode(), v.decode()) for k, v in request.raw_headers],
+                "raw_path": request.raw_path,
                 "body": body,
             }
         )
@@ -66,21 +69,69 @@ async def _client(monkeypatch: pytest.MonkeyPatch, base: str) -> TSMApiClient:
     return c
 
 
-def _check_node_fetch(h: dict[str, str]) -> None:
-    assert h["User-Agent"] == "node-fetch"
-    assert h["Accept"] == "*/*"
-    assert h["Accept-Encoding"] == NODE_FETCH_AE
-    assert h["Authorization"] == "Bearer tok"
-    assert "Accept-Language" not in h
-    assert "Sec-Fetch-Mode" not in h
+def _names(raw: list[tuple[str, str]]) -> list[str]:
+    return [k for k, _ in raw]
 
 
-def _check_undici(h: dict[str, str]) -> None:
-    assert h["User-Agent"] == "node"
-    assert h["Accept"] == "*/*"
-    assert h["Accept-Language"] == "*"
-    assert h["Sec-Fetch-Mode"] == "cors"
-    assert h["Accept-Encoding"] == UNDICI_AE
+def _lower(raw: list[tuple[str, str]]) -> dict[str, str]:
+    return {k.lower(): v for k, v in raw}
+
+
+def _check_no_sentry(raw: list[tuple[str, str]]) -> None:
+    assert not {"sentry-trace", "baggage"} & set(_lower(raw))
+
+
+def _node_fetch_order(*, body: bool, token: bool = True) -> list[str]:
+    names = ["Accept", "Accept-Encoding"]
+    if token:
+        names.append("Authorization")
+    if body:
+        names += ["Content-Length", "Content-Type"]
+    return [*names, "User-Agent", "Host", "Connection"]
+
+
+def _undici_order(*, body: bool, token: bool, content_type: bool = False) -> list[str]:
+    names = ["host", "connection"]
+    if token:
+        names.append("Authorization")
+    if content_type:
+        names.append("content-type")
+    names += ["accept", "accept-language", "sec-fetch-mode", "user-agent", "accept-encoding"]
+    if body:
+        names.append("content-length")
+    return names
+
+
+def _check_node_fetch(
+    raw: list[tuple[str, str]], *, body: bool = False, token: bool = True
+) -> None:
+    assert _names(raw) == _node_fetch_order(body=body, token=token)
+    h = _lower(raw)
+    assert h["user-agent"] == "node-fetch"
+    assert h["accept"] == "*/*"
+    assert h["accept-encoding"] == NODE_FETCH_AE
+    assert h["connection"] == "keep-alive"
+    if token:
+        assert h["authorization"] == "Bearer tok"
+    _check_no_sentry(raw)
+
+
+def _check_undici(
+    raw: list[tuple[str, str]],
+    *,
+    body: bool = False,
+    token: bool = False,
+    content_type: bool = False,
+) -> None:
+    assert _names(raw) == _undici_order(body=body, token=token, content_type=content_type)
+    h = _lower(raw)
+    assert h["user-agent"] == "node"
+    assert h["accept"] == "*/*"
+    assert h["accept-language"] == "*"
+    assert h["sec-fetch-mode"] == "cors"
+    assert h["accept-encoding"] == UNDICI_AE
+    assert h["connection"] == "keep-alive"
+    _check_no_sentry(raw)
 
 
 async def test_rest_get_channels_use_node_fetch(server, monkeypatch):
@@ -100,9 +151,10 @@ async def test_rest_get_channels_use_node_fetch(server, monkeypatch):
         "/user-realms/abc",
     ]
     assert rec.seen[1]["query"] == {"userIds": "u1"}
-    for s in rec.seen:
-        _check_node_fetch(s["headers"])
-        assert "Content-Type" not in s["headers"]
+    for s in rec.seen[:4]:
+        _check_node_fetch(s["raw"])
+    # DELETE has no body: node-fetch sends no Content-Length for it.
+    _check_node_fetch(rec.seen[4]["raw"])
 
 
 async def test_post_user_realms_body_and_content_headers(server, monkeypatch):
@@ -118,9 +170,9 @@ async def test_post_user_realms_body_and_content_headers(server, monkeypatch):
     assert claim["path"] == "/group-sends/claim"
     assert json.loads(claim["body"]) == {"gameTypes": ["forever", "retail"]}
     for s in (follow, claim):
-        _check_node_fetch(s["headers"])
-        assert s["headers"]["Content-Type"] == "application/json"
-        assert s["headers"]["Content-Length"] == str(len(s["body"]))
+        _check_node_fetch(s["raw"], body=True)
+        assert _lower(s["raw"])["content-type"] == "application/json"
+        assert _lower(s["raw"])["content-length"] == str(len(s["body"]))
 
 
 async def test_machine_names_use_undici(server, monkeypatch):
@@ -132,9 +184,10 @@ async def test_machine_names_use_undici(server, monkeypatch):
     get, post = rec.seen
     assert get["query"] == {"systemIds": "a,b"}
     assert json.loads(post["body"]) == {"systemId": "a", "localMachineName": "Box"}
-    for s in (get, post):
-        _check_undici(s["headers"])
-        assert s["headers"]["Authorization"] == "Bearer tok"
+    _check_undici(get["raw"], token=True)
+    _check_undici(post["raw"], body=True, token=True, content_type=True)
+    assert _lower(post["raw"])["content-type"] == "application/json"
+    assert _lower(get["raw"])["authorization"] == "Bearer tok"
 
 
 async def test_presigned_download_has_no_auth_and_no_range(server, monkeypatch):
@@ -143,10 +196,30 @@ async def test_presigned_download_has_no_auth_and_no_range(server, monkeypatch):
     assert await c.download(f"{base}/blob/x?verify=abc") == b"{x=1}"
     await c.close()
     (s,) = rec.seen
-    _check_undici(s["headers"])
-    assert "Authorization" not in s["headers"]
-    assert "Range" not in s["headers"]
+    _check_undici(s["raw"])
+    assert "range" not in _lower(s["raw"])
     assert s["query"] == {"verify": "abc"}
+
+
+async def test_presigned_download_url_goes_out_byte_for_byte(server):
+    base, rec = server
+    c = TSMApiClient()
+    query = "verify=a%2Bb%2Fc%3D%3D&X-Amz-Signature=AbC%2fdE=&t=1"
+    await c.download(f"{base}/blob/x?{query}")
+    await c.close()
+    (s,) = rec.seen
+    assert s["raw_path"] == f"/blob/x?{query}"
+
+
+async def test_revoke_goes_out_in_undici_order(server, monkeypatch):
+    base, rec = server
+    monkeypatch.setattr(oidc, "AUTH_BASE", base)
+    c = TSMApiClient()
+    await oidc.revoke(await c.session(), "r-old")
+    await c.close()
+    (s,) = rec.seen
+    _check_undici(s["raw"], body=True, content_type=True)
+    assert _lower(s["raw"])["content-type"] == "application/x-www-form-urlencoded;charset=UTF-8"
 
 
 async def test_addon_zip_download_uses_node_fetch_without_auth(server):
@@ -155,13 +228,28 @@ async def test_addon_zip_download_uses_node_fetch_without_auth(server):
     await c.download_addon_zip(f"{base}/blob/zip")
     await c.close()
     (s,) = rec.seen
-    assert s["headers"]["User-Agent"] == "node-fetch"
-    assert s["headers"]["Accept-Encoding"] == NODE_FETCH_AE
-    assert "Authorization" not in s["headers"]
-    assert "Range" not in s["headers"]
+    _check_node_fetch(s["raw"], token=False)
+    assert "range" not in _lower(s["raw"])
 
 
 def test_br_is_not_advertised_without_decoder(monkeypatch):
     monkeypatch.setattr(mod, "HAS_BROTLI", False)
     assert mod.node_fetch_headers()["Accept-Encoding"] == "gzip, deflate"
-    assert mod.undici_headers()["Accept-Encoding"] == "gzip, deflate"
+    assert mod.undici_headers()["accept-encoding"] == "gzip, deflate"
+
+
+async def test_download_tls_context_follows_the_channel(server, monkeypatch):
+    base, _rec = server
+    seen: list[Any] = []
+    orig = mod.aiohttp.ClientSession.get
+
+    def spy(self, url, **kwargs):
+        seen.append(kwargs["ssl"])
+        return orig(self, url, **kwargs)
+
+    monkeypatch.setattr(mod.aiohttp.ClientSession, "get", spy)
+    c = TSMApiClient()
+    await c.download(f"{base}/blob/x")
+    await c.download_addon_zip(f"{base}/blob/zip")
+    await c.close()
+    assert seen == [mod.UNDICI_SSL, mod.NODE_SSL]

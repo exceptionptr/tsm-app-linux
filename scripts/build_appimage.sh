@@ -4,9 +4,9 @@
 #   scripts/build_appimage.sh [path/to/tsm_app-*.whl]
 #
 # Without an argument a wheel is built from the working tree. The dependency
-# list is derived from pyproject.toml so it cannot drift, with PySide6 narrowed
-# to PySide6-Essentials: the app imports only QtCore, QtGui, QtSvg
-# and QtWidgets, so the Addons half would add hundreds of megabytes for nothing.
+# list is derived from pyproject.toml so it cannot drift, with PySide6 split into
+# PySide6-Essentials and PySide6-Addons: the login window needs QtWebEngine and
+# QtWebChannel, and those live in the Addons half.
 #
 # python-appimage assembles the AppDir, then appimagetool is run separately.
 # Letting python-appimage package it too fails here: it derives the output name
@@ -59,13 +59,28 @@ if [ -z "${APPDIR}" ]; then
 fi
 echo "==> AppDir: $(basename "${APPDIR}")"
 
-# The whole point of pinning PySide6-Essentials is to leave the Addons half
-# out. If a change to python-appimage ever defeats that, the bundle silently
-# triples in size, so check rather than trust.
-if find "${APPDIR}" -maxdepth 6 -name "pyside6_addons*" | grep -q .; then
-    echo "PySide6 Addons ended up in the bundle: the --no-deps pin is not working" >&2
+# The login window runs on QtWebEngine. If a change to python-appimage or to the
+# pins ever drops the Addons half, the AppImage would start and fail only when
+# somebody signs in, so check that every piece the window needs is bundled.
+PYSIDE="$(find "${APPDIR}" -maxdepth 6 -type d -name PySide6 | head -1)"
+if [ -z "${PYSIDE}" ]; then
+    echo "PySide6 is missing from the bundle" >&2
     exit 1
 fi
+for needed in \
+    QtWebEngineCore.abi3.so \
+    QtWebEngineWidgets.abi3.so \
+    QtWebChannel.abi3.so \
+    Qt/libexec/QtWebEngineProcess \
+    Qt/resources/qtwebengine_resources.pak \
+    Qt/resources/icudtl.dat \
+    Qt/lib/libQt6WebEngineCore.so.6 \
+    Qt/lib/libQt6WebChannel.so.6; do
+    if [ ! -e "${PYSIDE}/${needed}" ]; then
+        echo "QtWebEngine piece missing from the bundle: ${needed}" >&2
+        exit 1
+    fi
+done
 
 echo "==> Packaging"
 mkdir -p dist

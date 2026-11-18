@@ -10,8 +10,10 @@ version happens to be newest and writes a file called "=6.6.0". Exact == pins
 contain nothing the shell treats specially, and they make the bundle
 reproducible besides.
 
-The dependency set comes from pyproject.toml, with PySide6 narrowed to
-PySide6-Essentials, so it cannot drift from what the app actually declares.
+The dependency set comes from pyproject.toml, with PySide6 split into its two
+halves, PySide6-Essentials and PySide6-Addons. The login window needs
+QtWebEngine and QtWebChannel, which live in Addons. The meta package "PySide6"
+itself is not pinned: it only depends on the two halves.
 """
 
 from __future__ import annotations
@@ -34,7 +36,9 @@ def requirements() -> list[str]:
     for dep in deps:
         spec = dep.split("#", 1)[0].strip()
         if spec.lower().startswith("pyside6"):
-            spec = "PySide6-Essentials" + spec[len("PySide6") :]
+            constraint = spec[len("PySide6") :]
+            out += [f"PySide6-Essentials{constraint}", f"PySide6-Addons{constraint}"]
+            continue
         out.append(spec)
     return out
 
@@ -82,10 +86,10 @@ def main() -> None:
         raise SystemExit(f"refusing to emit shell-unsafe requirements: {shell_unsafe}")
 
     # --no-deps because the pins above are the full resolved set, and
-    # pyproject.toml asks for PySide6 while the pins carry PySide6-Essentials.
-    # Without it pip installs the full PySide6 on top, Addons and all, which
-    # triples the bundle. python-appimage joins its pip arguments into a shell
-    # string, so the flag and the path arrive as two arguments.
+    # pyproject.toml asks for PySide6 while the pins carry its two halves.
+    # Without it pip installs the PySide6 meta package on top. python-appimage
+    # joins its pip arguments into a shell string, so the flag and the path
+    # arrive as two arguments.
     target.write_text("\n".join([*pins, f"--no-deps {wheel}"]) + "\n")
     print(f"    {len(pins)} pinned dependencies")
 

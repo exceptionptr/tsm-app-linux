@@ -2,19 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import json
 import time
-import urllib.request
 import uuid
-from urllib.parse import parse_qs, parse_qsl, urlparse
+from urllib.parse import parse_qsl, urlparse
 
 import aiohttp
 import pytest
 from aioresponses import aioresponses
 
-from tsm.api import oidc
+from tsm.api import chromium, oidc
 from tsm.api.official import UA_CHROMIUM
 
 
@@ -49,30 +49,32 @@ def test_refresh_keeps_the_old_refresh_token_when_none_comes_back():
     assert t.refresh_token == "old"
 
 
-@pytest.mark.asyncio
-async def test_browser_login_round_trip():
-    seen: dict[str, str] = {}
+def _flow(seen: dict[str, str], **extra: str):
+    """A fake login window: records the authorize URL and answers with the callback."""
 
-    def fake_browser(url: str) -> None:
-        q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+    async def open_window(url: str) -> dict[str, str]:
+        q = dict(parse_qsl(urlparse(url).query))
         seen.update(q)
-        cb = f"{q['redirect_uri']}?state={q['state']}&code=abc"
-        with urllib.request.urlopen(cb) as resp:  # noqa: S310 - local callback
-            seen["page"] = resp.read().decode()
+        return {"state": q["state"], "code": "abc", **extra}
 
+    return open_window
+
+
+@pytest.mark.asyncio
+async def test_window_login_round_trip():
+    seen: dict[str, str] = {}
     async with aiohttp.ClientSession() as session:
-        with aioresponses(passthrough=["http://localhost"]) as m:
+        with aioresponses() as m:
             m.post(
                 f"{oidc.AUTH_BASE}/token",
                 payload={"access_token": _jwt(CLAIMS), "refresh_token": "r1"},
             )
-            tokens = await oidc.browser_login(session, open_url=fake_browser, timeout=10)
+            tokens = await oidc.window_login(session, _flow(seen), timeout=10)
             call = next(iter(m.requests.values()))[0]
     assert tokens.refresh_token == "r1"
     assert seen["client_id"] == "desktop-app"
     assert seen["code_challenge_method"] == "S256"
-    assert seen["redirect_uri"].startswith("http://localhost:")
-    assert seen["redirect_uri"].endswith("/auth/callback")
+    assert seen["redirect_uri"] == "http://localhost/auth/callback"
     assert "offline_access" in seen["scope"]
     assert [k for k, _ in parse_qsl(call.kwargs["data"])] == [
         "code",
@@ -84,27 +86,52 @@ async def test_browser_login_round_trip():
     form = dict(parse_qsl(call.kwargs["data"]))
     assert form["grant_type"] == "authorization_code"
     assert form["code"] == "abc"
+    assert form["redirect_uri"] == "http://localhost/auth/callback"
     challenge = (
         base64.urlsafe_b64encode(hashlib.sha256(form["code_verifier"].encode()).digest())
         .rstrip(b"=")
         .decode()
     )
     assert challenge == seen["code_challenge"]
-    assert "Signed in" in seen["page"]
 
 
 @pytest.mark.asyncio
-async def test_wrong_state_is_rejected_and_login_times_out():
-    def fake_browser(url: str) -> None:
-        q = {k: v[0] for k, v in parse_qs(urlparse(url).query).items()}
+async def test_wrong_state_is_rejected():
+    async def open_window(url: str) -> dict[str, str]:
+        return {"state": "evil", "code": "x"}
+
+    async with aiohttp.ClientSession() as session:
+        with pytest.raises(oidc.OIDCError, match="State mismatch"):
+            await oidc.window_login(session, open_window, timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_login_error_from_the_callback_is_raised():
+    async def open_window(url: str) -> dict[str, str]:
+        state = dict(parse_qsl(urlparse(url).query))["state"]
+        return {"state": state, "error": "access_denied", "error_description": "Nope"}
+
+    async with aiohttp.ClientSession() as session:
+        with pytest.raises(oidc.OIDCError, match="Nope"):
+            await oidc.window_login(session, open_window, timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_login_times_out_and_cancels_the_window():
+    cancelled = asyncio.Event()
+
+    async def open_window(url: str) -> dict[str, str]:
         try:
-            urllib.request.urlopen(f"{q['redirect_uri']}?state=evil&code=x")  # noqa: S310
-        except urllib.error.HTTPError as e:
-            assert e.code == 400
+            await asyncio.sleep(60)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        return {}
 
     async with aiohttp.ClientSession() as session:
         with pytest.raises(oidc.LoginCancelled):
-            await oidc.browser_login(session, open_url=fake_browser, timeout=0.5)
+            await oidc.window_login(session, open_window, timeout=0.2)
+    assert cancelled.is_set()
 
 
 @pytest.mark.asyncio
@@ -151,13 +178,12 @@ def test_authorize_url_names_order_and_encoding():
     assert q["response_mode"] == "query"
     assert q["response_type"] == "code"
     assert q["scope"] == "openid roles profile email tsm-profile offline_access"
-    assert "scope=openid%20roles%20profile" in query
-    assert "+" not in query
+    assert "scope=openid+roles+profile+email+tsm-profile+offline_access" in query
+    assert "%20" not in query
 
 
 def test_redirect_uri_is_built_in_one_place():
     assert oidc.redirect_uri() == "http://localhost/auth/callback"
-    assert oidc.redirect_uri(4321) == "http://localhost:4321/auth/callback"
 
 
 def test_pkce_verifier_format():
@@ -170,12 +196,13 @@ def test_pkce_verifier_format():
 async def test_login_url_has_uuid_state_and_separate_nonce():
     seen: dict[str, str] = {}
 
-    def fake_browser(url: str) -> None:
+    async def open_window(url: str) -> dict[str, str]:
         seen.update(dict(parse_qsl(urlparse(url).query)))
+        raise oidc.LoginCancelled("closed")
 
     async with aiohttp.ClientSession() as session:
         with pytest.raises(oidc.LoginCancelled):
-            await oidc.browser_login(session, open_url=fake_browser, timeout=0.3)
+            await oidc.window_login(session, open_window, timeout=5)
     assert uuid.UUID(seen["state"]).version == 4
     assert uuid.UUID(seen["nonce"]).version == 4
     assert seen["state"] != seen["nonce"]
@@ -190,17 +217,20 @@ async def test_token_request_headers_are_chromium_without_origin():
             await oidc.refresh(session, "r-old")
             call = next(iter(m.requests.values()))[0]
     h = call.kwargs["headers"]
-    assert h["User-Agent"] == UA_CHROMIUM
-    assert "tsm-app-linux" not in h["User-Agent"]
-    assert h["Accept"] == "application/json"
-    assert h["Content-Type"] == "application/x-www-form-urlencoded;charset=UTF-8"
-    assert h["Accept-Language"] == "en-US"
-    assert (h["Sec-Fetch-Site"], h["Sec-Fetch-Mode"], h["Sec-Fetch-Dest"]) == (
+    assert h["user-agent"] == UA_CHROMIUM
+    assert "tsm-app-linux" not in h["user-agent"]
+    assert h["accept"] == "application/json"
+    assert h["content-type"] == "application/x-www-form-urlencoded;charset=UTF-8"
+    assert h["accept-language"] == "en-US"
+    assert h["priority"] == "u=1, i"
+    assert h["sec-ch-ua"] == chromium.SEC_CH_UA
+    assert (h["sec-fetch-site"], h["sec-fetch-mode"], h["sec-fetch-dest"]) == (
         "cross-site",
         "cors",
         "empty",
     )
-    assert not {"Origin", "Authorization", "Cookie"} & set(h)
+    assert h["sec-fetch-storage-access"] == "active"
+    assert not {"origin", "authorization", "cookie"} & {k.lower() for k in h}
     assert call.kwargs["data"] == (
         "grant_type=refresh_token&refresh_token=r-old&client_id=desktop-app"
     )
@@ -214,13 +244,15 @@ async def test_revoke_request_is_undici_form_without_auth():
             await oidc.revoke(session, "r-old")
             call = next(iter(m.requests.values()))[0]
     h = call.kwargs["headers"]
-    assert h["User-Agent"] == "node"
-    assert h["Accept"] == "*/*"
-    assert h["Accept-Language"] == "*"
-    assert h["Sec-Fetch-Mode"] == "cors"
-    assert h["Content-Type"] == "application/x-www-form-urlencoded;charset=UTF-8"
-    assert "br" in h["Accept-Encoding"] or not oidc.HAS_BROTLI
-    assert not {"Origin", "Authorization", "Cookie"} & set(h)
+    assert h["user-agent"] == "node"
+    assert h["accept"] == "*/*"
+    assert h["accept-language"] == "*"
+    assert h["sec-fetch-mode"] == "cors"
+    assert h["content-type"] == "application/x-www-form-urlencoded;charset=UTF-8"
+    assert "br" in h["accept-encoding"] or not oidc.HAS_BROTLI
+    assert not {"origin", "authorization", "cookie", "sentry-trace", "baggage"} & {
+        k.lower() for k in h
+    }
     assert call.kwargs["data"] == (
         "client_id=desktop-app&token=r-old&token_type_hint=refresh_token"
     )
@@ -240,3 +272,122 @@ def test_logout_url_parameters():
 def test_id_token_is_kept_for_the_logout_hint():
     t = oidc.Tokens.from_response({"access_token": _jwt(CLAIMS), "id_token": "idt"})
     assert t.id_token == "idt"
+
+
+@pytest.mark.asyncio
+async def test_refresh_rotates_the_token():
+    async with aiohttp.ClientSession() as session:
+        with aioresponses() as m:
+            m.post(
+                f"{oidc.AUTH_BASE}/token",
+                payload={"access_token": _jwt(CLAIMS), "refresh_token": "r-new"},
+            )
+            tokens = await oidc.refresh(session, "r-old")
+    assert tokens.refresh_token == "r-new"
+
+
+@pytest.mark.asyncio
+async def test_network_error_on_refresh_is_transient():
+    from tsm.api.client import is_transient_error
+
+    async with aiohttp.ClientSession() as session:
+        with aioresponses() as m:
+            m.post(f"{oidc.AUTH_BASE}/token", exception=aiohttp.ClientConnectionError("down"))
+            with pytest.raises(aiohttp.ClientError) as ei:
+                await oidc.refresh(session, "r")
+    assert is_transient_error(ei.value)
+
+
+@pytest.mark.asyncio
+async def test_token_request_uses_the_live_user_agent_and_captured_order(monkeypatch):
+    from aiohttp import web
+
+    from tsm.api.http import OrderedRequest
+
+    seen: list[list[tuple[str, str]]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        seen.append([(k.decode(), v.decode()) for k, v in request.raw_headers])
+        return web.json_response({"access_token": _jwt(CLAIMS)})
+
+    app = web.Application()
+    app.router.add_post("/token", handler)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "127.0.0.1", 0).start()
+    port = runner.addresses[0][1]
+    monkeypatch.setattr(oidc, "AUTH_BASE", f"http://127.0.0.1:{port}")
+    try:
+        async with aiohttp.ClientSession(request_class=OrderedRequest) as session:
+            await oidc.refresh(session, "r", lambda: "UA-LIVE/9.9")
+    finally:
+        await runner.cleanup()
+    names = [k for k, _ in seen[0]]
+    assert names == list(oidc.chromium_token_headers())
+    assert dict(seen[0])["user-agent"] == "UA-LIVE/9.9"
+    assert not {"origin", "cookie", "authorization"} & {n.lower() for n in names}
+
+
+def _answer(seen, nonce_of=lambda n: n, id_token=None):
+    from aioresponses import CallbackResult
+
+    def body(url, **kwargs) -> CallbackResult:
+        token = id_token if id_token is not None else _jwt({"nonce": nonce_of(seen["nonce"])})
+        return CallbackResult(
+            status=200,
+            payload={"access_token": _jwt(CLAIMS), "refresh_token": "r1", "id_token": token},
+        )
+
+    return body
+
+
+async def _login_with(callback, seen) -> oidc.Tokens:
+    async with aiohttp.ClientSession() as session:
+        with aioresponses() as m:
+            m.post(f"{oidc.AUTH_BASE}/token", callback=callback)
+            return await oidc.window_login(session, _flow(seen), timeout=5)
+
+
+@pytest.mark.asyncio
+async def test_matching_nonce_is_accepted():
+    seen: dict[str, str] = {}
+    tokens = await _login_with(_answer(seen), seen)
+    assert tokens.refresh_token == "r1"
+
+
+@pytest.mark.asyncio
+async def test_nonce_mismatch_is_not_adopted():
+    seen: dict[str, str] = {}
+    with pytest.raises(oidc.OIDCError, match="Nonce mismatch"):
+        await _login_with(_answer(seen, lambda n: "other"), seen)
+
+
+@pytest.mark.asyncio
+async def test_id_token_without_nonce_or_malformed_is_not_adopted():
+    seen: dict[str, str] = {}
+    with pytest.raises(oidc.OIDCError):
+        await _login_with(_answer(seen, id_token="not-a-jwt"), seen)
+    with pytest.raises(oidc.OIDCError, match="Nonce mismatch"):
+        await _login_with(_answer(seen, id_token=_jwt({})), seen)
+
+
+def test_token_post_has_a_short_timeout_and_a_readable_error():
+    async def run() -> None:
+        async with aiohttp.ClientSession() as session:
+            with aioresponses() as m:
+                m.post(f"{oidc.AUTH_BASE}/token", exception=TimeoutError())
+                with pytest.raises(TimeoutError, match="Token request timeout"):
+                    await oidc._post_token(session, [("grant_type", "refresh_token")])
+                (call,) = m.requests[("POST", oidc.URL(f"{oidc.AUTH_BASE}/token"))]
+                timeout = call.kwargs["timeout"]
+                assert timeout.total == 30
+                assert timeout.sock_connect == 10
+
+    asyncio.run(run())
+
+
+def test_login_error_texts_for_a_token_timeout():
+    from tsm.ui.views.login import format_auth_error
+
+    msg = format_auth_error("Token request timeout: no answer from the TSM login server")
+    assert "reach TSM servers" in msg

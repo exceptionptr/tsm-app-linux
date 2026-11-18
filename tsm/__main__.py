@@ -7,7 +7,9 @@ import logging
 import logging.handlers
 import signal
 import sys
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -51,6 +53,73 @@ def _setup_logging() -> None:
         wrapper_class=structlog.stdlib.BoundLogger,
         logger_factory=structlog.stdlib.LoggerFactory(),
     )
+
+
+STARTUP_TRIES = 3
+STARTUP_RETRY_MS = 5000
+
+
+def run_startup(
+    startup: Callable[[], Coroutine[Any, Any, bool]],
+    window: Any,
+    auth_svc: Any,
+    *,
+    tries: int = STARTUP_TRIES,
+    retry_ms: int = STARTUP_RETRY_MS,
+    schedule: Callable[[int, Callable[[], None]], None] | None = None,
+    superseded: Callable[[], bool] | None = None,
+) -> None:
+    """Restore the session and open the matching window.
+
+    The result decides which window comes next, so a failure must not leave the app
+    invisible: a transient error is retried a few times, then the login opens. The
+    stored credentials stay in the keyring either way. ``superseded`` tells that a
+    login or a logout has taken over meanwhile: the chain then opens nothing.
+    """
+    from PySide6.QtCore import QTimer
+
+    from tsm.workers.bridge import AsyncBridge
+
+    if schedule is None:
+        schedule = QTimer.singleShot
+
+    def _attempt(left: int) -> None:
+        bridge = AsyncBridge()  # no parent; lives until callback fires
+
+        def _on_restore(success: bool) -> None:
+            if superseded is not None and superseded():
+                return
+            if success:
+                session = auth_svc.current_session
+                if session:
+                    window.on_authenticated(session)
+            else:
+                window.show_login()
+
+        def _on_error(message: str) -> None:
+            if superseded is not None and superseded():
+                return
+            if left > 1:
+                logging.getLogger(__name__).warning(
+                    "Startup failed (%s), trying again in %.0fs", message, retry_ms / 1000
+                )
+                schedule(
+                    retry_ms,
+                    lambda: None
+                    if superseded is not None and superseded()
+                    else _attempt(left - 1),
+                )
+            else:
+                logging.getLogger(__name__).warning(
+                    "Startup failed (%s), opening the login", message
+                )
+                window.show_login()
+
+        bridge.result_ready.connect(_on_restore)
+        bridge.error_occurred.connect(_on_error)
+        bridge.run(startup())
+
+    _attempt(tries)
 
 
 def main() -> None:
@@ -98,9 +167,7 @@ def main() -> None:
     _setup_logging()
 
     from tsm.app import create_app
-    from tsm.workers.bridge import AsyncBridge
-
-    qt_app, window, _, auth_svc = create_app(
+    qt_app, window, _, auth_svc, startup = create_app(
         [sys.argv[0]] + qt_argv,
         skip_detection=known.skip_detection,
         skip_auto_sync=known.skip_auto_sync,
@@ -122,18 +189,7 @@ def main() -> None:
     _signal_timer.timeout.connect(lambda: None)  # wake event loop for Python
     _signal_timer.start()
 
-    bridge = AsyncBridge()  # no parent; lives until callback fires
-
-    def _on_restore(success: bool) -> None:
-        if success:
-            session = auth_svc.current_session
-            if session:
-                window.on_authenticated(session)
-        else:
-            window.show_login()
-
-    bridge.result_ready.connect(_on_restore)
-    bridge.run(auth_svc.restore_session())
+    run_startup(startup, window, auth_svc, superseded=lambda: window.startup_superseded)
 
     sys.exit(qt_app.exec())
 

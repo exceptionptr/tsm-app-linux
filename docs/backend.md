@@ -6,8 +6,10 @@ The protocol itself is described in [api.md](api.md).
 
 ### AuthService (`core/services/auth.py`)
 
-- `login(remember_me, open_url, on_url)` → browser sign-in (`api/oidc.py`, PKCE on
-  a localhost port) → stores the offline refresh token in the keyring
+- `login()` → sign-in in the embedded Keycloak window (`api/oidc.py`, `ui/login_window.py`,
+  PKCE, redirect `http://localhost/auth/callback` without port) → always stores the
+  offline refresh token in the keyring. `UserSession.remember_failed` is set when the
+  keyring refused it, and the UI then warns.
 - `restore_session()` → refreshes with the stored token on start. Waits through a
   missing network or keyring (`RESTORE_RETRY_DELAYS`, about two minutes); a
   rejected token returns False at once. Sets `migrated_from_password` when only a
@@ -17,7 +19,8 @@ The protocol itself is described in [api.md](api.md).
 - `refresh_token(force)`, `seconds_until_refresh()`
 - `add_token_listener(fn)` (new token), `add_session_lost_listener(fn)` (refresh
   token rejected: session cleared, credentials deleted)
-- `logout()` → forget and revoke
+- `cancel_restore()` → makes a running `restore_session` stand down (logout, new login)
+- `logout()` → revoke (undici headers), Keycloak logout navigation in a hidden window, forget the credentials; the login window opens again
 
 ### AuctionDataService (`core/services/auction.py`)
 
@@ -55,6 +58,7 @@ Owns the socket and ties the services together for one signed-in session.
   every 30 s on failure)
 - On connect: reloads the followed realms. On a new token while disconnected:
   reconnects at once.
+- On every connect and `group_send`: `GroupSendsService` claims group sends. On every connect and after `app_update`: `AppVersion` re-reads the update feed.
 - On `addon` events: `updater.check_and_update(releases)` and a notification
 - `stop()`
 
@@ -111,7 +115,9 @@ TSMApiClient (client.py)
   download(url)   presigned, gunzips, None on 404
 
 TSMSocket (socket.py)    minimal Socket.IO v4 client on aiohttp
-oidc.py                  browser_login, refresh, revoke, Tokens
+oidc.py                  window_login, refresh, revoke, Tokens
+app_version.py           AppVersion: live official version from the update feed
+http.py                  OrderedRequest: header order and casing per channel
 ```
 
 ## Storage

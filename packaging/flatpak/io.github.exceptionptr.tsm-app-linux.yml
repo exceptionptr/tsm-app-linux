@@ -2,7 +2,11 @@
 #
 # The KDE runtime is used rather than the freedesktop one because it is built to
 # run Qt 6 applications, so the X11 libraries Qt needs at runtime are all
-# present. PySide6 comes from its wheel, which carries its own copy of Qt.
+# present. PySide6 comes from io.qt.PySide.BaseApp, which is built on
+# io.qt.qtwebengine.BaseApp: one Qt, the runtime's, with a QtWebEngine whose
+# Chromium sandbox works inside Flatpak. A PySide6 wheel would bring a second
+# Qt and an unpatched QtWebEngine that cannot sandbox here, so none is
+# installed. The sandbox stays on: nothing in this manifest turns it off.
 #
 # Build it locally with:
 #   flatpak install -y flathub org.kde.Sdk//6.11 org.kde.Platform//6.11
@@ -17,6 +21,8 @@ id: io.github.exceptionptr.tsm-app-linux
 runtime: org.kde.Platform
 runtime-version: '6.11'
 sdk: org.kde.Sdk
+base: io.qt.PySide.BaseApp
+base-version: '6.11'
 command: tsm-app
 
 finish-args:
@@ -26,6 +32,10 @@ finish-args:
   - --socket=wayland
   - --socket=fallback-x11
   - --device=dri
+  # The login window is QtWebEngine. The base app's helper starts Chromium's
+  # sandboxed processes through the Flatpak portal.
+  - --env=QTWEBENGINEPROCESS_PATH=/app/bin/QtWebEngineProcess
+  - --env=QTWEBENGINE_DICTIONARIES_PATH=/app/qtwebengine_dictionaries
   # Credentials live in the system keyring, never in a config file.
   - --talk-name=org.freedesktop.secrets
   # Tray icon and the notifications it raises.
@@ -37,6 +47,9 @@ finish-args:
   # reads Lutris and Faugus launcher configs to find them. Narrower filesystem
   # permissions cannot express "wherever the user installed the game".
   - --filesystem=host
+
+cleanup-commands:
+  - /app/cleanup-BaseApp.sh
 
 cleanup:
   - /include
@@ -55,10 +68,9 @@ modules:
       # hatch-vcs reads the version from git tags, which are not available to an
       # offline build, so it is passed in instead.
       # --no-deps because python3-deps already installed everything, and
-      # pyproject.toml asks for PySide6 while what is installed is
-      # PySide6-Essentials. Those are different distributions, so without this
-      # pip goes looking for PySide6 and fails with no index to search.
-      - SETUPTOOLS_SCM_PRETEND_VERSION=2.1.0 pip3 install --no-index --no-deps
+      # PySide6 comes from the base app. Without this pip goes looking for the
+      # remaining dependencies and fails with no index to search.
+      - SETUPTOOLS_SCM_PRETEND_VERSION=2.2.0 pip3 install --no-index --no-deps
         --no-build-isolation --prefix=${FLATPAK_DEST} .
       - install -Dm644 packaging/flatpak/io.github.exceptionptr.tsm-app-linux.desktop
         ${FLATPAK_DEST}/share/applications/io.github.exceptionptr.tsm-app-linux.desktop
@@ -71,4 +83,4 @@ modules:
     sources:
       - type: git
         url: https://github.com/exceptionptr/tsm-app-linux.git
-        tag: v2.1.0
+        tag: v2.2.0

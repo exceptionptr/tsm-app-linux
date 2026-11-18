@@ -40,7 +40,8 @@ jobs:
             https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive \
             "flathub" "org.kde.Platform//${FLATPAK_RUNTIME}" \
-            "org.kde.Sdk//${FLATPAK_RUNTIME}"
+            "org.kde.Sdk//${FLATPAK_RUNTIME}" \
+            "io.qt.PySide.BaseApp//${FLATPAK_RUNTIME}"
 
       - name: Point the manifest at this revision
         run: |

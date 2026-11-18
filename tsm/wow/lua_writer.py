@@ -26,6 +26,7 @@ import os
 import tempfile
 from collections.abc import Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -133,13 +134,23 @@ class AppDataFile:
             e.data, e.time, e.auction_house_id, e.raw = data, time, auction_house_id, False
         return True
 
-    def remove(self, keys: Iterable[str]) -> list[str]:
-        """Drop every entry for these keys. Returns the keys actually removed."""
+    def replace(
+        self, tag: str, key: str, data: str, time: int, auction_house_id: int | None = None
+    ) -> None:
+        """Drop (tag, key) and add it again, so an older timestamp wins over the stored one."""
+        self.remove([key], tag=tag)
+        self.update(tag, key, data, time, auction_house_id)
+
+    def remove(self, keys: Iterable[str], tag: str | None = None) -> list[str]:
+        """Drop every entry for these keys. Returns the keys actually removed.
+
+        With a tag only entries of that tag go: "Global" is also the APP_INFO key.
+        """
         wanted = set(keys)
         removed: set[str] = set()
         kept = []
         for e in self.entries:
-            if e.key in wanted:
+            if e.key in wanted and (tag is None or e.tag == tag):
                 removed.add(e.key)
             else:
                 kept.append(e)
@@ -224,6 +235,38 @@ def _lua_number(value: object) -> str:
     if n != n or n in (float("inf"), float("-inf")):
         return "0"
     return str(int(n)) if n.is_integer() else repr(n)
+
+
+def group_sent_at(send: dict) -> int:
+    """sentAt of a group send: floor(Date.parse(createdAt) / 1000), 0 when it does not parse."""
+    raw = send.get("createdAt")
+    if not isinstance(raw, str):
+        return 0
+    try:
+        dt = datetime.fromisoformat(raw.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return 0
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return int(dt.timestamp())
+
+
+def render_group_imports(sends: list[dict]) -> str:
+    """GROUP_IMPORTS blob in the official client's format."""
+    items = [
+        "{id="
+        + lua_string(s.get("id"))
+        + ",name="
+        + lua_string(s.get("name"))
+        + ",author="
+        + lua_string(s.get("author"))
+        + f",sentAt={group_sent_at(s)}"
+        + ",importString="
+        + lua_string(s.get("importString"))
+        + "}"
+        for s in sends
+    ]
+    return "{" + ",".join(items) + "}"
 
 
 def render_app_info(

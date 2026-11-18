@@ -4,9 +4,9 @@
 
 | Service                                    | Usage                                                |
 | ------------------------------------------ | ---------------------------------------------------- |
-| `id.tradeskillmaster.com`                  | Keycloak OIDC: browser login (PKCE), token refresh   |
+| `id.tradeskillmaster.com`                  | Keycloak OIDC: embedded login window (PKCE), token   |
 | `realm-api.tradeskillmaster.com`           | Realm and region catalogue                           |
-| `desktop-backend.tradeskillmaster.com`     | Game versions, followed realms (user-realms)         |
+| `desktop-backend.tradeskillmaster.com`     | Game versions, followed realms, group sends, version feed |
 | `addon-version.tradeskillmaster.com`       | Release channels                                     |
 | `app-backend-sockets.tradeskillmaster.com` | Socket.IO push: auction data, addon releases, news   |
 | presigned blob URLs                        | Auction data and addon zip downloads                 |
@@ -18,7 +18,7 @@ socket handshake. See [api.md](api.md).
 
 | Package       | Version                      | Purpose                                       |
 | ------------- | ---------------------------- | --------------------------------------------- |
-| `PySide6`     | latest                       | Qt6 GUI framework                             |
+| `PySide6`     | latest                       | Qt6 GUI framework, QtWebEngine (login window) |
 | `aiohttp`     | latest                       | async HTTP client (TSM API)                   |
 | `pydantic`    | latest                       | data models + validation                      |
 | `apscheduler` | `>=4.0.0a1,<5` (pre-release) | AsyncScheduler (anyio/asyncio)                |

@@ -1,3 +1,17 @@
+tsm-app (2.2.0-1) stable; urgency=medium
+
+  * Change: sign-in runs in an embedded Keycloak window (QtWebEngine) like the
+    official client 1.0.14; no browser, no Remember me.
+  * Change: the app reads the current official version from the public update
+    feed.
+  * Change: group sends are claimed and written to AppData.lua.
+  * Change: packages now bundle QtWebEngine.
+  * Fix: data pushed for a realm before the follow list was reloaded was dropped.
+  * Fix: the app quit when the login window closed; several crashes and a second
+    login window after logout.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Wed, 18 Nov 2026 12:00:00 +0000
+
 tsm-app (2.1.0-1) stable; urgency=medium
 
   * Change: requests follow the official TSM Desktop App 1.0.14 (headers, user

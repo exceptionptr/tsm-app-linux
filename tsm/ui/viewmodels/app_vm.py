@@ -20,6 +20,7 @@ class AppViewModel(QObject):
     realm_data_received = Signal(object)  # AuctionData from AuctionDataService, any thread
     connection_changed = Signal(bool)  # socket connected / disconnected, any thread
     session_lost = Signal()  # the refresh token was rejected: sign in again
+    group_send_notification = Signal(str)  # newly claimed group sends, any thread
     update_available = Signal(str)  # emitted when a newer GitHub release tag is found
 
     def __init__(self, auth_service=None, parent: QObject | None = None):
