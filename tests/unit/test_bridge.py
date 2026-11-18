@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-pytest.importorskip("PySide6.QtCore")
+pytest.importorskip("PySide6.QtCore", exc_type=ImportError)
 
 from PySide6.QtCore import QCoreApplication, QEvent  # noqa: E402
 

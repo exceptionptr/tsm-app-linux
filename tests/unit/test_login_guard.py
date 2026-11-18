@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytest.importorskip("PySide6.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
 import tsm.ui.app_window as mod  # noqa: E402
 

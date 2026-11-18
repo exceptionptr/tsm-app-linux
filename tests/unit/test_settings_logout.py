@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-pytest.importorskip("PySide6.QtWidgets")
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
 
 import tsm.workers.bridge as bridge_mod  # noqa: E402
 from tsm.ui.views.settings import SettingsDialog  # noqa: E402
