@@ -387,6 +387,7 @@ def test_token_post_has_a_short_timeout_and_a_readable_error():
 
 
 def test_login_error_texts_for_a_token_timeout():
+    pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
     from tsm.ui.views.login import format_auth_error
 
     msg = format_auth_error("Token request timeout: no answer from the TSM login server")
