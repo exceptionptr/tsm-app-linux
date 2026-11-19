@@ -4,6 +4,29 @@ All notable changes to tsm-app-linux are documented here.
 
 ---
 
+## [2.2.1] - 2026-11-19
+
+### Added
+
+- **Tray icon status badge**: green when synced, yellow when out of date, red
+  when outdated, and a yellow bolt when logged out. The tray icon also has a
+  status tooltip.
+
+### Changed
+
+- **Closing the login window keeps the app in the tray**: no intermediate page
+  and no quit. Without a system tray the app still quits.
+- The login window is taller, so error messages no longer cause a scrollbar.
+
+### Fixed
+
+- The tray icon and its Show entry no longer show an empty main window while
+  logged out; they raise or reopen the login window instead, also from
+  minimized.
+- A cancelled login no longer logs a traceback.
+
+---
+
 ## [2.2.0] - 2026-11-18
 
 ### Changed

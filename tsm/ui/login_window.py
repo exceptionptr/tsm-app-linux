@@ -30,7 +30,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QGuiApplication
 from PySide6.QtWebEngineCore import (
     QWebEngineLoadingInfo,
     QWebEnginePage,
@@ -49,10 +49,26 @@ from tsm.api.oidc import LoginCancelled
 
 logger = logging.getLogger(__name__)
 
-WINDOW_SIZE = (600, 800)
+WINDOW_SIZE = (600, 960)
+# Room kept free for the title bar and panels when the screen is shorter than the window.
+SCREEN_MARGIN = 80
+MIN_WINDOW_HEIGHT = 480
 WINDOW_BACKGROUND = "#1e1e1e"
 LOGOUT_TIMEOUT_SECONDS = 15.0
 BOOTSTRAP_BASE_URL = "file:///tsm-login/"
+
+
+def window_size(available_height: int | None) -> tuple[int, int]:
+    """The login window size, clamped to the available screen height when it is known."""
+    width, height = WINDOW_SIZE
+    if available_height is None or available_height <= 0:
+        return width, height
+    return width, max(MIN_WINDOW_HEIGHT, min(height, available_height - SCREEN_MARGIN))
+
+
+def _available_screen_height() -> int | None:
+    screen = QGuiApplication.primaryScreen()
+    return screen.availableGeometry().height() if screen is not None else None
 
 
 def bootstrap_html(url: str) -> str:
@@ -176,7 +192,7 @@ class _LoginPage(QWidget):
     def __init__(self, profile: QWebEngineProfile) -> None:
         super().__init__()
         self.setWindowTitle("TSM - Sign In")
-        self.resize(*WINDOW_SIZE)
+        self.resize(*window_size(_available_screen_height()))
         self.setStyleSheet(f"background-color: {WINDOW_BACKGROUND};")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -254,12 +270,29 @@ class ChromiumLogin(QObject):
 
         Like the official client the navigation ends the Keycloak session and
         clears its cookie in the login profile. The window stays hidden: the app's
-        own login view is what the user sees next. Raises LoginCancelled on timeout.
+        login window opens next. Raises LoginCancelled on timeout.
         """
         try:
             await asyncio.wait_for(self._navigate(url, visible=False), timeout)
         except TimeoutError as e:
             raise LoginCancelled("The logout page did not answer") from e
+
+    def focus(self) -> bool:
+        """Bring the visible login window to the front (main thread only).
+
+        Returns False and shows nothing when there is no window or when it is the
+        hidden window used for the logout navigation.
+        """
+        window = self._window
+        if window is None or not window.isVisible():
+            return False
+        if window.isMinimized():
+            window.showNormal()
+        else:
+            window.show()
+        window.raise_()
+        window.activateWindow()
+        return True
 
     def shutdown(self) -> None:
         """Delete the windows and then the profile now (aboutToQuit, main thread).

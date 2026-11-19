@@ -86,3 +86,33 @@ def test_stop_cancels_a_coroutine_in_flight_without_noise(capfd):
     r.stop()
     assert cleaned == [True]
     assert "Event loop is closed" not in capfd.readouterr().err
+
+
+def test_cancelled_login_is_delivered_without_error_log_or_traceback(runner, caplog):
+    from tsm.api.oidc import LoginCancelled
+
+    async def cancelled() -> None:
+        raise LoginCancelled("Login timed out")
+
+    errors: list[str] = []
+    bridge = AsyncBridge()
+    bridge.error_occurred.connect(errors.append)
+    with caplog.at_level("DEBUG", logger="tsm.workers.bridge"):
+        bridge.run(cancelled())
+        _pump(runner, lambda: bool(errors))
+    assert errors == ["Login timed out"]
+    records = [r for r in caplog.records if r.name == "tsm.workers.bridge"]
+    assert all(r.levelno < 40 and r.exc_info is None for r in records)
+
+
+def test_real_error_is_still_logged_with_traceback(runner, caplog):
+    async def boom() -> None:
+        raise RuntimeError("nope")
+
+    errors: list[str] = []
+    bridge = AsyncBridge()
+    bridge.error_occurred.connect(errors.append)
+    with caplog.at_level("DEBUG", logger="tsm.workers.bridge"):
+        bridge.run(boom())
+        _pump(runner, lambda: bool(errors))
+    assert any(r.levelno == 40 and r.exc_info for r in caplog.records)

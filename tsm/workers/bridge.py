@@ -9,6 +9,7 @@ from typing import Any
 
 from PySide6.QtCore import QCoreApplication, QObject, Signal, Slot
 
+from tsm.api.oidc import LoginCancelled
 from tsm.workers.async_runner import get_runner
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,10 @@ class AsyncBridge(QObject):
         try:
             result = future.result()
             self.result_ready.emit(result)
+        except LoginCancelled as exc:
+            # Expected and handled by the receiver: no traceback, no ERROR.
+            logger.info("AsyncBridge: %s", exc)
+            self.error_occurred.emit(str(exc))
         except Exception as exc:
             logger.exception("AsyncBridge caught exception")
             self.error_occurred.emit(str(exc))

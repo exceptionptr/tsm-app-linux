@@ -245,7 +245,7 @@ access grants"), so there is no way to log in without the Keycloak page. There i
 system browser and no loopback listener any more.
 
 The token requests (code exchange, refresh) use their own timeout: 30 s in total,
-10 s to connect, so a stuck connect ends in an error and the login page.
+10 s to connect, so a stuck connect ends in an error shown as a tray message.
 
 | Setting | Value |
 |---------|-------|
@@ -258,8 +258,8 @@ The window (600x800, framed, resizable, no menu, background `#1e1e1e`) loads the
 authorize URL. A request interceptor catches the redirect to the callback URL before
 it reaches the network and reads `code`, `state` and any `error`. Navigations of the
 main frame outside `https://id.tradeskillmaster.com` are blocked. Closing the window
-cancels the login; the app then shows its login page with one "Login Again" button
-and the error text, and quits when that is closed with nobody signed in. The login
+cancels the login; the app then stays in the tray with no window (it quits
+instead when no system tray is available). A tray click opens the login window again. The login
 gives up after 10 minutes.
 
 Remember me works like the official client: there is no choice of our own. The refresh
@@ -377,8 +377,8 @@ GET {base}/logout?client_id=desktop-app
 
 Keycloak answers 302 to the redirect URI, which is caught like the login callback
 and ends the Keycloak session in the window's profile. This runs in a hidden window
-(15 s timeout, skipped without an id token) and the app then shows its login page,
-which opens the Keycloak window again with a fresh state, nonce and PKCE. The official
+(15 s timeout, skipped without an id token) and the app then opens the login window,
+which shows the Keycloak page again with a fresh state, nonce and PKCE. The official
 client shows the Keycloak login page in the same window instead; this app adds no UI.
 
 ### Access token claims

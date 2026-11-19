@@ -78,7 +78,8 @@ def create_app(
     qt_app.setOrganizationName("tsm-app")
     # The app lives in the tray and the login window is the only window while
     # signing in: closing it must not end the program (it did, and took the
-    # token request in flight with it). Quitting is explicit (AppWindow, login page).
+    # token request in flight with it). Quitting is explicit (AppWindow: tray menu,
+    # or the quit fallback when there is no system tray).
     qt_app.setQuitOnLastWindowClosed(False)
     # Names the app to the desktop: without it Qt falls back to the interpreter,
     # so the window carries no usable identity and KDE had nothing to put in
@@ -190,6 +191,7 @@ def create_app(
         backup_service=backup_svc,
         updater_service=updater_svc,
         auction_service=auction_svc,
+        focus_login=chromium_login.focus,
     )
 
     # Start scheduler once the user is authenticated

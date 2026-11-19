@@ -28,6 +28,48 @@ def test_callback_clears_window_and_future_before_resolving(monkeypatch):
     assert obj._window is None and obj._future is None
 
 
+def test_focus_without_window_returns_false():
+    obj = SimpleNamespace(_window=None)
+    assert login_window.ChromiumLogin.focus(obj) is False  # type: ignore[arg-type]
+
+
+def test_focus_hidden_window_is_not_shown():
+    window = MagicMock()
+    window.isVisible.return_value = False
+    obj = SimpleNamespace(_window=window)
+
+    assert login_window.ChromiumLogin.focus(obj) is False  # type: ignore[arg-type]
+    window.show.assert_not_called()
+    window.raise_.assert_not_called()
+    window.activateWindow.assert_not_called()
+
+
+def test_focus_visible_window_is_raised():
+    window = MagicMock()
+    window.isVisible.return_value = True
+    window.isMinimized.return_value = False
+    obj = SimpleNamespace(_window=window)
+
+    assert login_window.ChromiumLogin.focus(obj) is True  # type: ignore[arg-type]
+    window.show.assert_called_once()
+    window.showNormal.assert_not_called()
+    window.raise_.assert_called_once()
+    window.activateWindow.assert_called_once()
+
+
+def test_focus_minimized_window_is_restored():
+    window = MagicMock()
+    window.isVisible.return_value = True
+    window.isMinimized.return_value = True
+    obj = SimpleNamespace(_window=window)
+
+    assert login_window.ChromiumLogin.focus(obj) is True  # type: ignore[arg-type]
+    window.showNormal.assert_called_once()
+    window.show.assert_not_called()
+    window.raise_.assert_called_once()
+    window.activateWindow.assert_called_once()
+
+
 def _accept(page, url: str, main: bool = True) -> bool:
     nav = login_window.QWebEnginePage.NavigationType.NavigationTypeTyped
     return login_window._GuardedPage.acceptNavigationRequest(page, url, nav, main)  # type: ignore[arg-type]

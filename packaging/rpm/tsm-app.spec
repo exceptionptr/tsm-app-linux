@@ -1,5 +1,5 @@
 Name:           tsm-app
-Version:        2.2.0
+Version:        2.2.1
 Release:        1%{?dist}
 Summary:        TradeSkillMaster Desktop App for Linux
 
@@ -77,6 +77,16 @@ ep.write_text(''.join(lines))
 /usr/lib/tsm-app/
 
 %changelog
+* Thu Nov 19 2026 exceptionptr <https://github.com/exceptionptr> - 2.2.1-1
+- Add: tray icon status badge (green synced, yellow out of date, red outdated,
+  yellow bolt when logged out) and a status tooltip
+- Change: closing the login window keeps the app in the tray; without a system
+  tray the app still quits
+- Change: the login window is taller so error messages do not cause a scrollbar
+- Fix: the tray icon and its Show entry no longer show an empty main window
+  while logged out; they raise or reopen the login window instead
+- Fix: a cancelled login no longer logs a traceback
+
 * Wed Nov 18 2026 exceptionptr <https://github.com/exceptionptr> - 2.2.0-1
 - Change: sign-in runs in an embedded Keycloak window (QtWebEngine) like the
   official client 1.0.14; no browser, no Remember me

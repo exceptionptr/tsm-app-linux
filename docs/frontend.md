@@ -15,7 +15,6 @@ AppWindow (QMainWindow)
        ├── GitHub HoverIconButton
        └── Settings HoverIconButton → SettingsDialog
 
-LoginView (QDialog)           shown before AppWindow on first run
 SettingsDialog (QDialog)      opened from status bar settings button
 ```
 
@@ -27,7 +26,6 @@ SettingsDialog (QDialog)      opened from status bar settings button
 | AddonVersionsView    | views/addon_versions.py (494 ln)    | `RealmViewModel.addons_updated`                  | download/install/delete via `AsyncBridge`                       |
 | BackupsView          | views/backups.py (276 ln)           | `AppViewModel.backup_notification`               | `stats_updated(str)`                                            |
 | AccountingExportView | views/accounting_export.py (516 ln) | (none, reads SavedVariables directly)            | CSV export                                                      |
-| LoginView            | views/login.py                      | (none)                                           | `login_successful`                                              |
 | SettingsDialog       | views/settings.py (357 ln)          | (none)                                           | `SettingsViewModel.saved`                                       |
 
 ## Realm grouping (`views/realm_grouping.py`, 110 lines)

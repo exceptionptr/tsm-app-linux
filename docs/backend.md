@@ -13,7 +13,7 @@ The protocol itself is described in [api.md](api.md).
 - `restore_session()` → refreshes with the stored token on start. Waits through a
   missing network or keyring (`RESTORE_RETRY_DELAYS`, about two minutes); a
   rejected token returns False at once. Sets `migrated_from_password` when only a
-  password from the old username/password login is found, so the login view can explain why.
+  password from the old username/password login is found, so the app can explain why in a tray message.
 - `access_token()` → the current access token, refreshed first when it expires
   within 90 s. Registered as the API client's token provider.
 - `refresh_token(force)`, `seconds_until_refresh()`

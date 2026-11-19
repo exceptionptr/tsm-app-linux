@@ -23,10 +23,15 @@ class _Bridge:
 
 
 def _fake_window() -> SimpleNamespace:
+    auth = MagicMock()
+    auth.migrated_from_password = False
     return SimpleNamespace(
-        _auth_service=MagicMock(),
+        _auth_service=auth,
         _login_pending=False,
         _startup_superseded=False,
+        _migration_info_shown=False,
+        _tray=MagicMock(),
+        _app_vm=SimpleNamespace(authenticated=False),
         _on_login_result=MagicMock(),
         _on_login_error=MagicMock(),
     )
@@ -36,6 +41,7 @@ def _fake_window() -> SimpleNamespace:
 def _bridge(monkeypatch):
     _Bridge.created.clear()
     monkeypatch.setattr(mod, "AsyncBridge", _Bridge)
+    monkeypatch.setattr(mod.QSystemTrayIcon, "isSystemTrayAvailable", lambda: True)
 
 
 def test_a_second_start_while_a_login_is_pending_is_a_no_op():
@@ -49,15 +55,13 @@ def test_a_second_start_while_a_login_is_pending_is_a_no_op():
 def test_a_new_login_may_start_once_the_answer_arrived():
     w = _fake_window()
     mod.AppWindow._start_login(w)
-    w._show_login_page = MagicMock()
-    mod.AppWindow._on_login_error(w, "closed")
+    mod.AppWindow._on_login_error(w, "The login window was closed")
     mod.AppWindow._start_login(w)
     assert len(_Bridge.created) == 2
 
 
 def test_the_real_handlers_clear_the_pending_flag(monkeypatch):
     w = _fake_window()
-    w._show_login_page = MagicMock()
     w._login_pending = True
     mod.AppWindow._on_login_error(w, "boom")
     assert w._login_pending is False

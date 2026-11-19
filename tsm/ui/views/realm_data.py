@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from tsm.ui._freshness import FRESHNESS_COLORS, realm_freshness
 from tsm.ui.components.collapsible_group import CollapsibleGroup
 from tsm.ui.components.hover_button import HoverIconButton
 from tsm.ui.components.shared_header import CONTENTS, STRETCH, SharedTableHeader
@@ -37,35 +38,9 @@ _ASSETS = Path(__file__).parent.parent / "assets"
 
 logger = logging.getLogger(__name__)
 
-_GREEN = "#4caf50"
-_YELLOW = "#ffc107"
-_RED = "#f44336"
-
-# Realm data (AUCTIONDB_NON_COMMODITY_DATA) updates ~hourly
-_REALM_GREEN = 2 * 3600  # < 2h  -> green
-_REALM_YELLOW = 6 * 3600  # < 6h  -> yellow, else red
-
-# Region data (AUCTIONDB_REGION_STAT) updates ~daily (MAX_DATA_AGE = 86400)
-_REGION_GREEN = 26 * 3600  # < 26h -> green
-_REGION_YELLOW = 50 * 3600  # < 50h -> yellow, else red
-
 
 def _dot_color(status: str, last_updated: int, is_region: bool) -> str:
-    if status == "Updating...":
-        return _YELLOW
-    if status == "Outdated":
-        return _RED
-    # "Up to date"
-    if not last_updated:
-        return _YELLOW
-    age = time.time() - last_updated
-    green_t = _REGION_GREEN if is_region else _REALM_GREEN
-    yellow_t = _REGION_YELLOW if is_region else _REALM_YELLOW
-    if age < green_t:
-        return _GREEN
-    if age < yellow_t:
-        return _YELLOW
-    return _RED
+    return FRESHNESS_COLORS[realm_freshness(status, last_updated, is_region)]
 
 
 def _make_dot_cell(status: str, last_updated: int, is_region: bool) -> QWidget:
