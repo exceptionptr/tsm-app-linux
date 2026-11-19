@@ -68,7 +68,7 @@ tsm/
     components/       HoverIconButton, TSMStatusBar, ProgressWidget, WoWTooltip
     viewmodels/       AppViewModel, RealmViewModel, SettingsViewModel
     views/            RealmDataView, AddonVersionsView, BackupsView,
-                      AccountingExportView, LoginView, SettingsDialog
+                      AccountingExportView, SettingsDialog
     styles/           Dark theme QSS loader
 ```
 
@@ -94,7 +94,8 @@ socket connect / app_update → AppVersion re-reads the update feed
 
 ```
 Start without a session, or logout → Keycloak login window opens directly
-  (LoginView only after cancel or error: error text + "Login Again")
+  (closing it leaves the app in the tray; a tray click opens it again;
+   other errors show a tray message)
 AuthService.login()
   → oidc.window_login(): embedded QtWebEngine window, redirect
     http://localhost/auth/callback (no port) caught in the window, code + PKCE
@@ -103,5 +104,5 @@ AuthService.login()
   → AppViewModel.authenticated_changed → JobScheduler.start()
 SyncController refresh loop → AuthService.refresh_token() 90 s before expiry
   → token listeners → socket reconnects if it was down
-Refresh rejected → session_lost → back to LoginView
+Refresh rejected → session_lost → login window opens again
 ```

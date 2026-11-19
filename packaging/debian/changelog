@@ -1,3 +1,17 @@
+tsm-app (2.2.1-1) stable; urgency=medium
+
+  * Add: tray icon status badge (green synced, yellow out of date, red
+    outdated, yellow bolt when logged out) and a status tooltip.
+  * Change: closing the login window keeps the app in the tray; without a
+    system tray the app still quits.
+  * Change: the login window is taller so error messages do not cause a
+    scrollbar.
+  * Fix: the tray icon and its Show entry no longer show an empty main window
+    while logged out; they raise or reopen the login window instead.
+  * Fix: a cancelled login no longer logs a traceback.
+
+ -- exceptionptr <https://github.com/exceptionptr>  Thu, 19 Nov 2026 12:00:00 +0000
+
 tsm-app (2.2.0-1) stable; urgency=medium
 
   * Change: sign-in runs in an embedded Keycloak window (QtWebEngine) like the

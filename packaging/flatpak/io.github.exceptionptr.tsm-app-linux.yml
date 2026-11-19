@@ -70,7 +70,7 @@ modules:
       # --no-deps because python3-deps already installed everything, and
       # PySide6 comes from the base app. Without this pip goes looking for the
       # remaining dependencies and fails with no index to search.
-      - SETUPTOOLS_SCM_PRETEND_VERSION=2.2.0 pip3 install --no-index --no-deps
+      - SETUPTOOLS_SCM_PRETEND_VERSION=2.2.1 pip3 install --no-index --no-deps
         --no-build-isolation --prefix=${FLATPAK_DEST} .
       - install -Dm644 packaging/flatpak/io.github.exceptionptr.tsm-app-linux.desktop
         ${FLATPAK_DEST}/share/applications/io.github.exceptionptr.tsm-app-linux.desktop
@@ -83,4 +83,4 @@ modules:
     sources:
       - type: git
         url: https://github.com/exceptionptr/tsm-app-linux.git
-        tag: v2.2.0
+        tag: v2.2.1

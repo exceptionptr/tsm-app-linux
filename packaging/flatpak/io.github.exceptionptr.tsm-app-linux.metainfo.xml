@@ -77,6 +77,17 @@
   <content_rating type="oars-1.1"/>
 
   <releases>
+    <release version="2.2.1" date="2026-11-19">
+      <description>
+        <ul>
+          <li>Shows the sync status as a badge on the tray icon, with a status tooltip</li>
+          <li>Closing the sign-in window keeps the app in the tray</li>
+          <li>Makes the sign-in window taller so error messages do not need a scrollbar</li>
+          <li>Fixes the tray icon showing an empty window while signed out</li>
+          <li>Fixes a cancelled sign-in logging an error trace</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.2.0" date="2026-11-18">
       <description>
         <ul>

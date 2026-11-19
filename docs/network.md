@@ -119,7 +119,7 @@ and LLMNR (UDP 5355) multicast queries on the local link. Their origin
 
 ---
 
-## This app (2.2.0) on the wire
+## This app (2.2.1) on the wire
 
 | Destination | When | What |
 |-------------|------|------|
