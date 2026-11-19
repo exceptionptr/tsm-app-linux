@@ -657,6 +657,16 @@ class AuctionDataService:
     async def _flush(self, path: Path) -> None:
         await asyncio.sleep(WRITE_DEBOUNCE_SECONDS)
         st = self._state(path)
+        try:
+            await self._flush_locked(path, st)
+        finally:
+            # A write queued while this task was past its swap saw a live flush and spawned
+            # none; hand it to a fresh task. The failed batch was already dropped, so a
+            # persistent write failure cannot loop.
+            if st.pending or st.removals or st.tag_removals:
+                st.flush = self._spawn(self._flush(path))
+
+    async def _flush_locked(self, path: Path, st: _FileState) -> None:
         async with st.lock:
             writes, st.pending = st.pending, []
             removals, st.removals = st.removals, set()
@@ -694,6 +704,9 @@ class AuctionDataService:
         """Wait for every queued download and write (tests and shutdown)."""
         while self._tasks:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
+            # Awaiting only finished tasks never yields, so their done callbacks (which drop
+            # them from _tasks) would not run: give the loop one turn.
+            await asyncio.sleep(0)
 
     # ------------------------------------------------------------------ #
     # Pruning

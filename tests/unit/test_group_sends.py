@@ -292,3 +292,32 @@ async def test_connect_and_group_send_event_claim():
     await _settle()
     assert groups.calls == ["claim", "claim"]
     await sync.stop()
+
+
+@pytest.mark.asyncio
+async def test_write_queued_during_an_apply_is_not_stranded(tmp_path, monkeypatch):
+    import asyncio
+    import threading
+
+    svc, auction, _client, base, _store, _notes = _make(tmp_path)
+    entered = threading.Event()
+    release = threading.Event()
+    real_save = AppDataFile.save
+
+    def slow_save(self):
+        entered.set()
+        release.wait(timeout=10)
+        real_save(self)
+
+    monkeypatch.setattr(AppDataFile, "save", slow_save)
+    assert auction.set_group_imports("_retail_", [_send("g1")]) == 1
+    while not entered.is_set():
+        await asyncio.sleep(0)
+    # the first flush is past its swap and inside apply: queue a second write now
+    path = auction._targets("_retail_")[0]
+    auction._queue_write(path, auction_mod._Write("APP_INFO", "Global", "{}", 7, None))
+    release.set()
+    await auction.flush_all()
+    f = _appdata(base, "_retail_")
+    assert f.last_update("GROUP_IMPORTS", "Global") == 1735787045
+    assert f.last_update("APP_INFO", "Global") == 7
