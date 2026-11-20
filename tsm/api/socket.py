@@ -44,6 +44,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 
+from tsm.api import trace
 from tsm.api.http import NODE_SSL
 from tsm.api.official import UA_XHR
 
@@ -340,13 +341,16 @@ class TSMSocket:
             if resp.status != 200:
                 raise await _http_error(f"polling GET ({'poll' if sid else 'open'})", resp)
             self._log_peer("poll" if sid else "open", resp)
-            return await resp.text()
+            text = await resp.text()
+            trace.log_frame("<-", "poll", text)
+            return text
 
     async def _poll_post(
         self, session: aiohttp.ClientSession, token: str, sid: str, body: str
     ) -> None:
         headers = self._poll_headers(token)
         headers["Content-Type"] = "text/plain;charset=UTF-8"
+        trace.log_frame("->", "poll", body)
         async with session.post(
             self._polling_url(sid),
             data=body.encode("utf-8"),
@@ -406,11 +410,13 @@ class TSMSocket:
                 max_msg_size=0,
             )
             self._ws = ws
+            trace.log_frame("->", "ws", "2probe")
             await ws.send_str("2probe")
             while True:
                 msg = await ws.receive(timeout=PROBE_TIMEOUT)
                 if msg.type != aiohttp.WSMsgType.TEXT:
                     raise ConnectionError(f"websocket closed during probe ({msg.type.name})")
+                trace.log_frame("<-", "ws", msg.data)
                 if msg.data == "3probe":
                     return ws
         except (aiohttp.ClientError, TimeoutError, ConnectionError, OSError) as e:
@@ -475,6 +481,7 @@ class TSMSocket:
                     elif ws is not None:
                         # Polling is paused (the last poll has ended): switch over.
                         try:
+                            trace.log_frame("->", "ws", "5")
                             await ws.send_str("5")
                         except (aiohttp.ClientError, ConnectionError, OSError) as e:
                             logger.warning("Websocket upgrade failed, staying on polling: %s", e)
@@ -547,6 +554,10 @@ class TSMSocket:
             logger.debug("Closing the polling session failed: %s", e)
 
     async def _websocket_loop(self, ws: aiohttp.ClientWebSocketResponse, state: _State) -> bool:
+        async def send(text: str) -> None:
+            trace.log_frame("->", "ws", text)
+            await ws.send_str(text)
+
         while True:
             try:
                 msg = await ws.receive(timeout=state.idle_timeout)
@@ -559,5 +570,6 @@ class TSMSocket:
                 raise ws.exception() or ConnectionError("websocket error")
             if msg.type != aiohttp.WSMsgType.TEXT:
                 continue
-            if await self._handle_text(msg.data, state, ws.send_str):
+            trace.log_frame("<-", "ws", msg.data)
+            if await self._handle_text(msg.data, state, send):
                 return state.joined

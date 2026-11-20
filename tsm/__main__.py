@@ -17,7 +17,7 @@ _LOG_DIR = Path.home() / ".local" / "share" / "tsm-app" / "logs"
 _LOG_FILE = _LOG_DIR / "tsm-app.log"
 
 
-def _setup_logging() -> None:
+def _setup_logging(debug: bool = False) -> None:
     _LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     fmt = logging.Formatter(
@@ -41,7 +41,8 @@ def _setup_logging() -> None:
 
     buf_handler = get_log_buffer()
 
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler, stderr_handler, buf_handler])
+    level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(level=level, handlers=[file_handler, stderr_handler, buf_handler])
 
     structlog.configure(
         processors=[
@@ -149,6 +150,11 @@ def main() -> None:
         action="store_true",
         help="Do not schedule the periodic backup job",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Log at DEBUG level",
+    )
     known, qt_argv = parser.parse_known_args()
 
     if known.version:
@@ -164,7 +170,7 @@ def main() -> None:
 
         sys.exit(run_self_test())
 
-    _setup_logging()
+    _setup_logging(debug=known.debug)
 
     from tsm.app import create_app
     qt_app, window, _, auth_svc, startup = create_app(

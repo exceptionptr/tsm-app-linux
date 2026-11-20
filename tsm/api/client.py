@@ -31,6 +31,7 @@ from typing import Any
 import aiohttp
 from aiohttp.compression_utils import HAS_BROTLI
 
+from tsm.api import trace
 from tsm.api.http import AUTO, NODE_SSL, UNDICI_SSL, OrderedRequest, raw_url
 from tsm.api.official import UA_NODE_FETCH, UA_UNDICI
 from tsm.api.types import GameVersionInfo, Realm, Region, UserRealm
@@ -186,6 +187,8 @@ class TSMApiClient:
         build = undici_headers if undici else node_fetch_headers
         for attempt in range(MAX_RETRIES):
             headers = build(await self._token())
+            shown_url = f"{url} params={params}" if params else url
+            trace.log_request(method, shown_url, headers, json_body)
             try:
                 async with session.request(
                     method,
@@ -195,6 +198,10 @@ class TSMApiClient:
                     headers=headers,
                     ssl=UNDICI_SSL if undici else NODE_SSL,
                 ) as resp:
+                    if trace.enabled():
+                        # aiohttp caches the body, so the reads below still work.
+                        body = await resp.text()
+                        trace.log_response(method, url, resp.status, resp.headers, body)
                     if resp.status >= 400:
                         msg = resp.reason or ""
                         with contextlib.suppress(Exception):
@@ -361,6 +368,7 @@ class TSMApiClient:
         delay = 1.0
         last: BaseException | None = None
         for attempt in range(1, attempts + 1):
+            trace.log_request("GET", url, headers)
             try:
                 async with session.get(
                     raw_url(url),
@@ -368,6 +376,8 @@ class TSMApiClient:
                     ssl=tls,
                     timeout=aiohttp.ClientTimeout(total=120),
                 ) as resp:
+                    size = f"<blob, {resp.content_length} bytes>"
+                    trace.log_response("GET", url, resp.status, resp.headers, size)
                     if resp.status == 404:
                         return None
                     if resp.status == 200:
