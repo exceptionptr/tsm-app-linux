@@ -1,6 +1,6 @@
 # TSM Linux Support A Complete History
 
-_Personal record compiled March 2026, updated November 2026_
+_Personal record compiled March 2026, updated November 2026 (project archived)_
 
 ---
 
@@ -140,6 +140,12 @@ The conversation was friendly and professional. No threats were made. I complied
 
 ---
 
+### April 7, 2026 The app goes live again
+
+After the conversation in March I looked closely at how the TSM team had dealt with the community and with Linux support over the years (see the timeline above and the sections below). That made me decide to put the app back online: on April 7, 2026 I made the repository public again.
+
+---
+
 ### April 9, 2026 Sapu asks again
 
 Sapu in a Discord message: _"Did you make this public again?"_
@@ -176,6 +182,12 @@ Sapu in a Discord message: _"Did you make this public again?"_
 This confirms that TSM can identify which accounts use a third-party client. How it does so is unknown.
 
 **Official app and stale data (reported November 17, 2026).** One of the users who got the e-mail replied that the official app does not provide updated data either, even though it says "up to date", which matches the sync outage described above. The same user asked when the community will build its own database and data sharing. No such project exists yet and this app does not provide one; it only writes the data TSM's servers push to the user's own account. The question is recorded here as a request from the community, not as a plan.
+
+---
+
+### November 21, 2026 The project is archived
+
+I am archiving the repository. I no longer want to see dozens of users' accounts banned every day, only to keep fighting TSM's countermeasures. TSM's team spends its time working against a tiny app that hardly anyone uses, and opinions, bug reports and patches about it are suppressed in the community spaces TSM controls. This is not worth the cost to the users. No further releases, fixes or patches will follow. Anyone who needs TSM on Linux should use the official app.
 
 ---
 
@@ -240,4 +252,4 @@ The frustration documented here is not with the people, and it is not with the p
 
 ---
 
-_Last updated: November 17, 2026_
+_Last updated: November 21, 2026_

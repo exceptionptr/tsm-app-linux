@@ -113,6 +113,55 @@ addon contents left the machine in this session. `/local-machine-name` is a
 read: it asks the server for a stored display name of a system, and the
 `systemIds` list was empty.
 
+That capture only covers startup and the UI actions above. The official client
+sends more on other triggers, see the next section.
+
+### What the official client uploads (SavedVariables)
+
+Evidence: `~/.config/tradeskillmaster/logs/main.log` of the official client
+(entries "Uploading snapshot for ..." and "Snapshot uploaded successfully for
+.../WTF/Account/<account folder>/SavedVariables/TradeSkillMaster.lua"), the
+worker scripts in `resources/assets/scripts-dist/` of the AppImage, and TSM's
+privacy policy ("TSM addon data uploaded by the Desktop App").
+
+| Worker | Trigger | Input |
+|--------|---------|-------|
+| `uploadSnapshotProcess.js` | App start (all game versions and accounts with a `TradeSkillMaster.lua`) and when the file changes | `wowPath`, WoW account folder name, game version, game type, access token, `systemId` (device id) |
+| `watchWowDBProcess.js` | Always, while logged in | Watches the SavedVariables folders of every game version and account |
+| `uploadBackupProcess.js` | After a local backup, Premium only | The backup patch file of the SavedVariables |
+
+What the uploaded data contains, per the policy and the addon source
+(`TradeSkillMasterDB`, `TradeSkillMaster_AppHelperDB`):
+
+- WoW account folder name, character names, realms, factions, guilds
+- gold balances and history, ledger of sales, purchases, income and expenses
+  (can include names of other players traded with)
+- professions, groups, operations, TSM settings
+- auction house scans with the scanning character, Black Market scan
+- addon error reports and addon usage events (analytics)
+
+Snapshot upload on the wire (captured with a proxy, official 1.0.14, after a
+game reload):
+
+| Step | Request |
+|------|---------|
+| 1 | `POST desktop-backend /sv-snapshots/uploads` (empty body, bearer token): answer `{"id":"<uuid>","url":"<presigned PUT url>"}` (201), URL valid 2 h on the `tsm-desktop-sv-snapshots-production` bucket, path `<userId>/<id>` |
+| 2 | `PUT <presigned url>`: gzip body, about 139 KB (about 860 KB as JSON) |
+| 3 | `POST desktop-backend /sv-snapshots` with `{"id":"<uuid>"}` (202), confirms the upload |
+
+The JSON in the body has the keys `account` (WoW account folder name),
+`gameType`, `tsmDB` (the whole `TradeSkillMasterDB`, about 270 keys, scoped
+keys such as `c@<character> - <realm>@...`, `g@`, `s@`, `f@`, `r@`, `p@`),
+`appHelperDB` (`blackMarket`, `region`, `errorReports`, `analytics`,
+`fullScan`, `groupImports`), `saveAge` and `systemId`. Character names appear
+in the keys and in the values. Mind the proxy set-up: the node workers only go
+through the proxy with `NODE_USE_ENV_PROXY=1`; the socket and the pricing blob
+downloads did not show up in that capture.
+
+This app sends none of it. It only reads the SavedVariables locally (backups,
+accounting export, realm names) and never uploads them, so no account folder
+name and no character name leaves the machine.
+
 Name resolution: during the capture the process also issued mDNS (UDP 5353)
 and LLMNR (UDP 5355) multicast queries on the local link. Their origin
 (presumably the Chromium network stack) was not examined.
@@ -163,6 +212,18 @@ Differences from the official client that a server can observe:
   tied to accounts; other users report that a new account receives data again.
 - AppData timestamps are identical in both clients, so the data is not just
   withheld from this app.
+- Hypothesis, contradicted on 2026-11-20: the server may push realm data only for
+  accounts that have uploaded a SavedVariables snapshot recently. This fits the
+  advice to close WoW and the app, restart the app, then start WoW, because the
+  upload happens at app start and on file changes. Against it: the official
+  client uploaded snapshots during the outage and still received no
+  `realm_auctiondb`. Test: capture the official client (proxy) around a game
+  reload and check whether the upload is followed by realm events.
+  Result: the official client logged in, uploaded a snapshot after a reload
+  and was still not served. The addon status tooltip about 20 minutes later
+  read "App Synced 19 Min Ago", "AuctionDB Realm Data is 7 Hr 29 Min Old",
+  "AuctionDB Region Data is 22 Hr 30 Min Old". So the upload does not trigger
+  the push; the outage stays on the server side.
 
 ---
 

@@ -6,6 +6,21 @@
 
 TradeSkillMaster Desktop App Linux port. Authenticates with the TSM API, downloads auction data, and writes `AppData.lua` for the TSM addon running under Wine/Lutris/Steam.
 
+## This project is archived
+
+**This repository is archived and no longer maintained. Do not use this app.**
+
+I am done. I no longer want to see dozens of accounts of this app's users banned by TSM
+every day, only to fight TSM's countermeasures in return. TSM's people spend their time working
+against a tiny app that hardly anyone uses, and opinions, bug reports and patches about it
+are suppressed in the community spaces TSM controls. That is not a fight worth my time, and
+it is costing users their accounts.
+
+If you use Linux, use the official TSM desktop app from
+[tradeskillmaster.com/download](https://tradeskillmaster.com/download). The full story,
+including how TSM has handled Linux support and its community over the years, is in
+[docs/history.md](docs/history.md).
+
 ## Status and risk: read this first
 
 **Using this app can get your TSM account disabled.** Since November 2026 users
@@ -22,6 +37,7 @@ What happened, in order:
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2016 to 2018                 | The old desktop app was open source (GPLv3, Bitbucket). A Linux pull request was declined because the app ran under Wine. TSM went closed source afterwards.                                                        |
 | March 2026                   | This project was first published. TSM asked privately that it not be distributed. The repository was made private and the AUR package removed.                                                                      |
+| 7 April 2026                 | The repository was made public again, after the maintainer looked at how TSM had handled community and Linux support in the past.                                                                                  |
 | April 2026                   | TSM asked whether the repository had been made public again.                                                                                                                                                        |
 | November 2026                | TSM released a new desktop app with a Keycloak login and a push socket. This app was moved to that protocol (2.0.x, see `docs/api.md`).                                                                             |
 | Around 9 to 14 November 2026 | Auction data stopped arriving for some accounts, in this app and in the official app alike (the server only sent addon and news events). Other users reported that new accounts worked. The cause is on TSM's side. |

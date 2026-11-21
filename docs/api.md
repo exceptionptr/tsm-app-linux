@@ -28,7 +28,7 @@ which this app used up to 1.1.16. That API is documented in the git history
 
 The official client also has `.dev` variants of every host for its staging
 build, and uses desktop-backend for features this app does not use
-(`/backups`, `/sv-snapshots`, `/local-machine-name`). App updates are used only to read the current version (see "App version feed"). Client
+(`/backups`, `/sv-snapshots`, `/local-machine-name`; the SavedVariables upload is described in `docs/network.md`, "What the official client uploads"). App updates are used only to read the current version (see "App version feed"). Client
 methods exist for `/backups` and `/local-machine-name`, but nothing calls them.
 
 Everything is HTTPS with a valid certificate.
